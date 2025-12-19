@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation'
 import { formatPrice } from '@/lib/utils'
 import Link from 'next/link'
 
+import { OrderItem} from "@prisma/client";
+
 export default async function OrderConfirmationPage({
                                                         params,
                                                     }: {
@@ -36,7 +38,7 @@ export default async function OrderConfirmationPage({
                     <div className="border-t border-neutral-200 pt-6 mb-6">
                         <h2 className="text-[9pt] font-bold uppercase mb-4">Items</h2>
                         <div className="space-y-3">
-                            {order.items.map((item) => (
+                            {order.items.map((item: OrderItem) => (
                                 <div key={item.id} className="flex justify-between text-sm">
                                     <div>
                                         <div className="font-bold">{item.productName}</div>
