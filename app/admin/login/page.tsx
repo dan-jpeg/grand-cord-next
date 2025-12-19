@@ -1,6 +1,17 @@
 import { LoginForm } from '@/components/admin/login-form'
 
-export default function LoginPage() {
+import { auth } from '@/lib/auth'
+import { redirect } from 'next/navigation'
+
+export default async function LoginPage() {
+
+
+    const session = await auth()
+
+    if (!session) {
+        redirect('/admin/login')
+    }
+
     return (
         <div className="min-h-screen flex items-center justify-center bg-neutral-50">
             <div className="w-full max-w-md px-8">

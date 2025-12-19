@@ -26,48 +26,64 @@ type ProductFormData = {
 export async function createProduct(data: ProductFormData) {
     const slug = data.slug || slugify(data.name)
 
-    // Create product in Stripe
-    const stripeProduct = await stripe.products.create({
-        name: data.name,
-        description: data.description || undefined,
-        images: data.images.length > 0 ? [data.images[0]] : undefined,
-        metadata: {
-            slug,
-            designerName: data.designerName || '',
-            material: data.material || '',
-            color: data.color || '',
-        },
-    })
+    try {
+        // Check if slug exists
+        const existing = await prisma.product.findUnique({
+            where: { slug }
+        })
 
-    // Create price in Stripe
-    await stripe.prices.create({
-        product: stripeProduct.id,
-        unit_amount: Math.round(data.price * 100), // Convert to cents
-        currency: 'usd',
-    })
+        if (existing) {
+            throw new Error(`A product with slug "${slug}" already exists. Please use a different name or slug.`)
+        }
 
-    // Create product in database
-    const product = await prisma.product.create({
-        data: {
+        // Create product in Stripe
+        const stripeProduct = await stripe.products.create({
             name: data.name,
-            slug,
-            description: data.description,
-            designerName: data.designerName,
-            material: data.material,
-            color: data.color,
-            colorHex: data.colorHex,
-            price: data.price,
-            published: data.published,
-            images: data.images,
-            stripeProductId: stripeProduct.id,
-            sizes: {
-                create: data.sizes,
+            description: data.description || undefined,
+            images: data.images.length > 0 ? [data.images[0]] : undefined,
+            metadata: {
+                slug,
+                designerName: data.designerName || '',
+                material: data.material || '',
+                color: data.color || '',
             },
-        },
-    })
+        })
 
-    revalidatePath('/admin/products')
-    redirect('/admin/products')
+        // Create price in Stripe
+        await stripe.prices.create({
+            product: stripeProduct.id,
+            unit_amount: Math.round(data.price * 100),
+            currency: 'usd',
+        })
+
+        // Create product in database
+        const product = await prisma.product.create({
+            data: {
+                name: data.name,
+                slug,
+                description: data.description,
+                designerName: data.designerName,
+                material: data.material,
+                color: data.color,
+                colorHex: data.colorHex,
+                price: data.price,
+                published: data.published,
+                images: data.images,
+                stripeProductId: stripeProduct.id,
+                sizes: {
+                    create: data.sizes,
+                },
+            },
+        })
+
+        revalidatePath('/admin/products')
+        redirect('/admin/products')
+    } catch (error) {
+        if (error instanceof Error) {
+            throw new Error(error.message)
+        }
+        throw new Error('Failed to create product')
+    }
 }
 
 export async function updateProduct(id: string, data: ProductFormData) {
