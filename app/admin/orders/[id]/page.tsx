@@ -3,7 +3,7 @@ import { formatPrice } from '@/lib/utils'
 import { notFound } from 'next/navigation'
 import { OrderStatusForm } from '@/components/admin/order-status-form'
 
-import { OrderItem  } from "@prisma/client";
+import { OrderItem } from "@prisma/client";
 
 export default async function OrderDetailPage({
                                                   params,
