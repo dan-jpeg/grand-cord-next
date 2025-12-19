@@ -16,7 +16,7 @@ export default async function AdminLayout({
         <div className="min-h-screen bg-neutral-50">
             <nav className="bg-white border-b border-neutral-200">
                 <div className="max-w-7xl mx-auto px-4 py-4">
-                    <h1 className="text-xl font-bold">Admin Dashboard</h1>
+                    <h1 className="text-sm font-bold">Admin Dashboard</h1>
                 </div>
             </nav>
             <main className="max-w-7xl mx-auto p-8">{children}</main>
