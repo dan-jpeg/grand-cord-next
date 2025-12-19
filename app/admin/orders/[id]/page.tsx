@@ -1,135 +1,123 @@
 import { prisma } from '@/lib/prisma'
 import { formatPrice } from '@/lib/utils'
-import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import { OrderStatusForm } from '@/components/admin/order-status-form'
 
-type OrderStatus = 'PENDING' | 'PAID' | 'SHIPPED' | 'CANCELLED'
-
-export default async function OrdersPage({
-                                             searchParams,
-                                         }: {
-    searchParams: Promise<{ status?: OrderStatus }>
+export default async function OrderDetailPage({
+                                                  params,
+                                              }: {
+    params: Promise<{ id: string }>
 }) {
-    const { status } = await searchParams
+    const { id } = await params
 
-    const orders = await prisma.order.findMany({
-        where: status ? { status } : undefined,
+    const order = await prisma.order.findUnique({
+        where: { id },
         include: {
             items: true,
         },
-        orderBy: {
-            createdAt: 'desc',
-        },
     })
 
-    const statusCounts = await Promise.all([
-        prisma.order.count({ where: { status: 'PAID' } }),
-        prisma.order.count({ where: { status: 'SHIPPED' } }),
-        prisma.order.count({ where: { status: 'PENDING' } }),
-        prisma.order.count({ where: { status: 'CANCELLED' } }),
-    ])
+    if (!order) {
+        notFound()
+    }
 
-    const [paidCount, shippedCount, pendingCount, cancelledCount] = statusCounts
-
-    return (
-        <div className="max-w-7xl mx-auto px-6 py-8">
-            <h2 className="text-2xl font-bold mb-8">Orders</h2>
-
-            {/* Status Filter Tabs */}
-            <div className="flex gap-4 mb-6 border-b border-neutral-200">
-                <StatusTab href="/admin/orders" label="All" count={orders.length} active={!status} />
-                <StatusTab href="/admin/orders?status=PAID" label="To Fulfill" count={paidCount} active={status === 'PAID'} />
-                <StatusTab href="/admin/orders?status=SHIPPED" label="Shipped" count={shippedCount} active={status === 'SHIPPED'} />
-                <StatusTab href="/admin/orders?status=PENDING" label="Pending" count={pendingCount} active={status === 'PENDING'} />
-                <StatusTab href="/admin/orders?status=CANCELLED" label="Cancelled" count={cancelledCount} active={status === 'CANCELLED'} />
-            </div>
-
-            {orders.length === 0 ? (
-                <div className="bg-white border border-neutral-200 p-12 text-center">
-                    <p className="text-neutral-600">No orders {status ? `with status "${status}"` : 'yet'}</p>
-                </div>
-            ) : (
-                <div className="bg-white border border-neutral-200">
-                    <table className="w-full">
-                        <thead className="border-b border-neutral-200">
-                        <tr>
-                            <th className="text-left p-4 font-medium">Order</th>
-                            <th className="text-left p-4 font-medium">Customer</th>
-                            <th className="text-left p-4 font-medium">Items</th>
-                            <th className="text-left p-4 font-medium">Total</th>
-                            <th className="text-left p-4 font-medium">Status</th>
-                            <th className="text-left p-4 font-medium">Date</th>
-                            <th className="text-right p-4 font-medium">Actions</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {orders.map((order) => (
-                            <tr key={order.id} className="border-b border-neutral-200 last:border-0">
-                                <td className="p-4">
-                                    <div className="font-medium">{order.orderNumber}</div>
-                                </td>
-                                <td className="p-4 text-neutral-600">{order.email}</td>
-                                <td className="p-4">{order.items.length} items</td>
-                                <td className="p-4 font-medium">{formatPrice(order.total)}</td>
-                                <td className="p-4">
-                                    <StatusBadge status={order.status} />
-                                </td>
-                                <td className="p-4 text-neutral-600">
-                                    {new Date(order.createdAt).toLocaleDateString()}
-                                </td>
-                                <td className="p-4">
-                                    <Link
-                                        href={`/admin/orders/${order.id}`}
-                                        className="text-sm underline hover:no-underline text-right block"
-                                    >
-                                        View Details
-                                    </Link>
-                                </td>
-                            </tr>
-                        ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-        </div>
-    )
-}
-
-function StatusTab({
-                       href,
-                       label,
-                       count,
-                       active,
-                   }: {
-    href: string
-    label: string
-    count: number
-    active: boolean
-}) {
-    return (
-        <Link
-            href={href}
-            className={`px-4 py-3 font-medium border-b-2 transition-colors ${
-                active
-                    ? 'border-black'
-                    : 'border-transparent hover:border-neutral-300'
-            }`}
-        >
-            {label} ({count})
-        </Link>
-    )
-}
-
-function StatusBadge({ status }: { status: string }) {
-    const colors = {
-        PENDING: 'bg-yellow-100 text-yellow-800',
-        PAID: 'bg-blue-100 text-blue-800',
-        SHIPPED: 'bg-green-100 text-green-800',
-        CANCELLED: 'bg-red-100 text-red-800',
+    const shippingAddress = order.shippingAddress as {
+        name: string
+        address: string
+        city: string
+        state: string
+        zip: string
+        country: string
     }
 
     return (
-        <span className={`inline-block px-2 py-1 text-xs font-medium ${colors[status as keyof typeof colors]}`}>
-      {status.toLowerCase()}
-    </span>
+        <div className="max-w-5xl mx-auto px-6 py-8">
+            <div className="mb-8">
+                <h2 className="text-2xl font-bold mb-2">Order {order.orderNumber}</h2>
+                <p className="text-neutral-600">
+                    Placed on {new Date(order.createdAt).toLocaleDateString()} at{' '}
+                    {new Date(order.createdAt).toLocaleTimeString()}
+                </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Main Content */}
+                <div className="lg:col-span-2 space-y-6">
+                    {/* Order Items */}
+                    <div className="bg-white border border-neutral-200 p-6">
+                        <h3 className="font-bold mb-4">Items</h3>
+                        <div className="space-y-4">
+                            {order.items.map((item) => (
+                                <div key={item.id} className="flex justify-between">
+                                    <div>
+                                        <div className="font-medium">{item.productName}</div>
+                                        <div className="text-sm text-neutral-600">
+                                            Size: {item.size} • Qty: {item.quantity}
+                                        </div>
+                                    </div>
+                                    <div className="font-medium">{formatPrice(item.price * item.quantity)}</div>
+                                </div>
+                            ))}
+                            <div className="border-t border-neutral-200 pt-4 flex justify-between font-bold">
+                                <span>Total</span>
+                                <span>{formatPrice(order.total)}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Customer Info */}
+                    <div className="bg-white border border-neutral-200 p-6">
+                        <h3 className="font-bold mb-4">Customer</h3>
+                        <div className="space-y-2">
+                            <div>
+                                <div className="text-sm text-neutral-600">Email</div>
+                                <div>{order.email}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Shipping Address */}
+                    <div className="bg-white border border-neutral-200 p-6">
+                        <h3 className="font-bold mb-4">Shipping Address</h3>
+                        <div>
+                            <div>{shippingAddress.name}</div>
+                            <div>{shippingAddress.address}</div>
+                            <div>
+                                {shippingAddress.city}, {shippingAddress.state} {shippingAddress.zip}
+                            </div>
+                            <div>{shippingAddress.country}</div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Sidebar */}
+                <div className="space-y-6">
+                    {/* Status Management */}
+                    <div className="bg-white border border-neutral-200 p-6">
+                        <h3 className="font-bold mb-4">Order Status</h3>
+                        <OrderStatusForm order={order} />
+                    </div>
+
+                    {/* Payment Info */}
+                    <div className="bg-white border border-neutral-200 p-6">
+                        <h3 className="font-bold mb-4">Payment</h3>
+                        <div className="space-y-2 text-sm">
+                            <div>
+                                <div className="text-neutral-600">Stripe Payment ID</div>
+                                <div className="font-mono text-xs break-all">{order.stripePaymentIntentId}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Notes */}
+                    {order.notes && (
+                        <div className="bg-white border border-neutral-200 p-6">
+                            <h3 className="font-bold mb-4">Notes</h3>
+                            <p className="text-sm text-neutral-600">{order.notes}</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
     )
 }

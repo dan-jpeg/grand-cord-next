@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Product {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  description     String?
+  designerName    String?
+  material        String?
+  color           String?
+  colorHex        String?
+  price           Float
+  images          String[]
+  published       Boolean  @default(false)
+  stripeProductId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sizes       ProductSize[]
+  collections CollectionProduct[]
+
+  @@index([slug])
+  @@index([published])
+}
+
+model ProductSize {
+  id        String @id @default(cuid())
+  productId String
+  size      String // 'XS', 'S', 'M', 'L', 'XL', 'XXL'
+  stock     Int    @default(0)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, size])
+  @@index([productId])
+}
+
+model Collection {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products CollectionProduct[]
+
+  @@index([slug])
+}
+
+model CollectionProduct {
+  collectionId String
+  productId    String
+  order        Int    @default(0)
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, productId])
+  @@index([collectionId])
+  @@index([productId])
+}
+
+model Order {
+  id                    String      @id @default(cuid())
+  orderNumber           String      @unique
+  email                 String
+  status                OrderStatus @default(PENDING)
+  total                 Float
+  shippingAddress       Json
+  trackingNumber        String?
+  trackingUrl           String?
+  stripePaymentIntentId String
+  notes                 String?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  items OrderItem[]
+
+  @@index([email])
+  @@index([status])
+  @@index([orderNumber])
+  @@index([createdAt])
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  CANCELLED
+}
+
+model OrderItem {
+  id          String @id @default(cuid())
+  orderId     String
+  productId   String
+  productName String
+  productSlug String
+  size        String
+  quantity    Int
+  price       Float
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model BlogPost {
+  id          String    @id @default(cuid())
+  title       String
+  slug        String    @unique
+  content     String
+  excerpt     String?
+  published   Boolean   @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([slug])
+  @@index([published])
+  @@index([publishedAt])
+}
+
+model AdminUser {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}

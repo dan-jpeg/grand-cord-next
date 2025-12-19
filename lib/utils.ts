@@ -6,10 +6,8 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatPrice(price: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(price)
+  const rounded = price % 1 === 0 ? Math.round(price) : price.toFixed(2)
+  return `${rounded} USD`
 }
 
 export function generateOrderNumber(): string {
