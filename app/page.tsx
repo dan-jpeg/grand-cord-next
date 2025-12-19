@@ -2,6 +2,9 @@ import { prisma } from '@/lib/prisma'
 import { ProductCard } from '@/components/store/product-card'
 import { CatalogHeader } from '@/components/store/catalog-header'
 
+
+export const dynamic = 'force-dynamic'
+
 import Image from 'next/image'
 import heroImage from '../public/hero.png'
 
