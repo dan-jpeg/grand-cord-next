@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { formatPrice } from '@/lib/utils'
 import Link from 'next/link'
 
-import { OrderItem} from "@prisma/client";
+import { OrderItem } from "@prisma/client";
 
 export default async function OrderConfirmationPage({
                                                         params,
