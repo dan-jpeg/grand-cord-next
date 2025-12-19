@@ -1,7 +1,18 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth'
+import { redirect } from 'next/navigation'
+
+
 
 export default async function AdminDashboard() {
+
+    const session = await auth()
+
+    if (!session) {
+        redirect('/admin/login')
+    }
+
     const [productCount, orderCount, paidOrders] = await Promise.all([
         prisma.product.count(),
         prisma.order.count(),
