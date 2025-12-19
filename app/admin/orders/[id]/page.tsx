@@ -3,6 +3,8 @@ import { formatPrice } from '@/lib/utils'
 import { notFound } from 'next/navigation'
 import { OrderStatusForm } from '@/components/admin/order-status-form'
 
+import { OrderItem  } from "@prisma/client";
+
 export default async function OrderDetailPage({
                                                   params,
                                               }: {
@@ -47,7 +49,7 @@ export default async function OrderDetailPage({
                     <div className="bg-white border border-neutral-200 p-6">
                         <h3 className="font-bold mb-4">Items</h3>
                         <div className="space-y-4">
-                            {order.items.map((item) => (
+                            {order.items.map((item: OrderItem) => (
                                 <div key={item.id} className="flex justify-between">
                                     <div>
                                         <div className="font-medium">{item.productName}</div>
