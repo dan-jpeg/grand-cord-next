@@ -26,6 +26,25 @@ type OrderData = {
 }
 
 export async function createCheckoutSession(data: OrderData) {
+    // Check stock availability before creating order
+    for (const item of data.items) {
+        const productSize = await prisma.productSize.findFirst({
+            where: {
+                productId: item.productId,
+                size: item.size,
+            },
+        })
+
+        if (!productSize) {
+            throw new Error(`Size ${item.size} not found for ${item.productName}`)
+        }
+
+        if (productSize.stock < item.quantity) {
+            throw new Error(`Not enough stock for ${item.productName} (${item.size}). Only ${productSize.stock} available.`)
+        }
+    }
+
+    // Create order
     const order = await prisma.order.create({
         data: {
             orderNumber: generateOrderNumber(),
@@ -40,6 +59,22 @@ export async function createCheckoutSession(data: OrderData) {
         },
     })
 
+    // Reduce stock for each item
+    for (const item of data.items) {
+        await prisma.productSize.updateMany({
+            where: {
+                productId: item.productId,
+                size: item.size,
+            },
+            data: {
+                stock: {
+                    decrement: item.quantity,
+                },
+            },
+        })
+    }
+
+    // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
         line_items: data.items.map((item) => ({

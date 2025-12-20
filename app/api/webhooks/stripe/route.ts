@@ -26,7 +26,6 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
     }
 
-    // Handle the event
     switch (event.type) {
         case 'checkout.session.completed':
             const session = event.data.object as Stripe.Checkout.Session
@@ -44,6 +43,47 @@ export async function POST(req: Request) {
                     console.log(`✅ Order ${session.metadata.orderNumber} marked as PAID`)
                 } catch (error) {
                     console.error('Error updating order:', error)
+                }
+            }
+            break
+
+        case 'checkout.session.expired':
+            const expiredSession = event.data.object as Stripe.Checkout.Session
+
+            if (expiredSession.metadata?.orderId) {
+                try {
+                    // Get order with items
+                    const order = await prisma.order.findUnique({
+                        where: { id: expiredSession.metadata.orderId },
+                        include: { items: true },
+                    })
+
+                    if (order && order.status === 'PENDING') {
+                        // Restore stock
+                        for (const item of order.items) {
+                            await prisma.productSize.updateMany({
+                                where: {
+                                    productId: item.productId,
+                                    size: item.size,
+                                },
+                                data: {
+                                    stock: {
+                                        increment: item.quantity,
+                                    },
+                                },
+                            })
+                        }
+
+                        // Cancel order
+                        await prisma.order.update({
+                            where: { id: order.id },
+                            data: { status: 'CANCELLED' },
+                        })
+
+                        console.log(`♻️ Stock restored for expired order ${order.orderNumber}`)
+                    }
+                } catch (error) {
+                    console.error('Error restoring stock:', error)
                 }
             }
             break
