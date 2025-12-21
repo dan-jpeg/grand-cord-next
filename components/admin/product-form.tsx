@@ -3,9 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createProduct, updateProduct } from '@/app/admin/products/actions'
-import { UploadDropzone } from '@/lib/uploadthing'
+import { ImageManager, type ImageData } from '@/components/admin/image-manager'
 import type { Product, ProductSize } from '@prisma/client'
-import Image from 'next/image'
 
 type ProductWithSizes = Product & {
     sizes: ProductSize[]
@@ -24,7 +23,29 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
     const [designerName, setDesignerName] = useState(product?.designerName || '')
     const [price, setPrice] = useState(product?.price || 0)
     const [published, setPublished] = useState(product?.published || false)
-    const [images, setImages] = useState<string[]>(product?.images || [])
+
+    // Parse existing images from JSON or create default structure
+    const [images, setImages] = useState<ImageData[]>(() => {
+        if (!product?.images) return []
+
+        const rawImages = product.images as any
+
+        // If it's already the new format
+        if (Array.isArray(rawImages) && rawImages[0]?.url) {
+            return rawImages as ImageData[]
+        }
+
+        // If it's old format (string array), convert
+        if (Array.isArray(rawImages)) {
+            return rawImages.map((url: string, index: number) => ({
+                url,
+                isMobilePrimary: index === 0,
+                isDesktopPrimary: index === 0,
+            }))
+        }
+
+        return []
+    })
 
     const [material, setMaterial] = useState(product?.material || '')
     const [color, setColor] = useState(product?.color || '')
@@ -55,10 +76,6 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
         setSizes(newSizes)
     }
 
-    function removeImage(index: number) {
-        setImages(images.filter((_, i) => i !== index))
-    }
-
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         setIsSubmitting(true)
@@ -82,13 +99,12 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
         } else {
             await createProduct(data)
         }
-
-        // Don't set isSubmitting to false - redirect will happen
     }
 
     return (
         <form onSubmit={handleSubmit} className="space-y-8">
             <div className="bg-white border border-neutral-200 p-6 space-y-6">
+                {/* ... all your other form fields stay the same ... */}
                 <div>
                     <label htmlFor="name" className="block text-sm font-medium mb-2">
                         Product Name *
@@ -210,39 +226,7 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
             {/* Images Section */}
             <div className="bg-white border border-neutral-200 p-6">
                 <h3 className="font-medium mb-4">Product Images</h3>
-
-                {images.length > 0 && (
-                    <div className="grid grid-cols-4 gap-4 mb-4">
-                        {images.map((url, index) => (
-                            <div key={index} className="relative aspect-square border border-neutral-200">
-                                <Image
-                                    src={url}
-                                    alt={`Product ${index + 1}`}
-                                    fill
-                                    className="object-cover"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => removeImage(index)}
-                                    className="absolute top-2 right-2 bg-red-600 text-white w-6 h-6 flex items-center justify-center text-sm hover:bg-red-700"
-                                >
-                                    ×
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                <UploadDropzone
-                    endpoint="productImage"
-                    onClientUploadComplete={(res) => {
-                        const newUrls = res.map((file) => file.url)
-                        setImages([...images, ...newUrls])
-                    }}
-                    onUploadError={(error: Error) => {
-                        alert(`Upload error: ${error.message}`)
-                    }}
-                />
+                <ImageManager images={images} onChange={setImages}/>
             </div>
 
             {/* Sizes Section */}

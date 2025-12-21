@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { formatPrice } from '@/lib/utils'
 import { ProductActions } from '@/components/admin/product-actions'
 
+export const dynamic = 'force-dynamic' // Add this line
+
 export default async function ProductsPage() {
     const products = await prisma.product.findMany({
         include: {

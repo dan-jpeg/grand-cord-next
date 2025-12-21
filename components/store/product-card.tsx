@@ -1,11 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import Image from 'next/image'
 import { formatPrice } from '@/lib/utils'
 import type { Product, ProductSize } from '@prisma/client'
+
+type ImageData = {
+    url: string
+    isMobilePrimary: boolean
+    isDesktopPrimary: boolean
+}
 
 type ProductWithSizes = Product & {
     sizes: ProductSize[]
@@ -13,19 +19,35 @@ type ProductWithSizes = Product & {
 
 export function ProductCard({ product, index }: { product: ProductWithSizes; index: number }) {
     const [isHovered, setIsHovered] = useState(false)
+    const [isMobile, setIsMobile] = useState(false)
+
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 768)
+        checkMobile()
+        window.addEventListener('resize', checkMobile)
+        return () => window.removeEventListener('resize', checkMobile)
+    }, [])
+
+    // Parse images from JSON
+    const images = (product.images as any) as ImageData[]
+
+    // Get appropriate image based on device
+    const displayImage = isMobile
+        ? images.find(img => img.isMobilePrimary)?.url || images[0]?.url
+        : images.find(img => img.isDesktopPrimary)?.url || images[0]?.url
 
     return (
         <div className="group">
             <Link
                 href={`/products/${product.slug}`}
-                className="block relative mb-6"
+                className="block relative "
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
             >
-                <div className="relative">  {/* Removed aspect-square */}
-                    {product.images[0] ? (
+                <div className="relative">
+                    {displayImage ? (
                         <Image
-                            src={product.images[0]}
+                            src={displayImage}
                             alt={product.name}
                             width={3587}
                             height={4400}
@@ -48,29 +70,29 @@ export function ProductCard({ product, index }: { product: ProductWithSizes; ind
                 </div>
             </Link>
 
-            <div className=" pl-[12px] opacity-90 pr-[3rem]">
-                <div className="flex items-start justify-between  text-sm">
-                    <span className="font-bold">{formatPrice(product.price)}</span>
-                    <span className="font-bold uppercase text-[9pt] ">
-            {product.name}
-          </span>
+            <div className="pl-[12px] bg-gray-100/20 pb-5 pt-3 opacity-90 pr-[3rem]">
+                <div className="flex py-2 items-start justify-between text-sm">
+                    <span className="font-bold  ">{formatPrice(product.price)}</span>
+                    <span className="font-bold uppercase text-[8pt]">
+                        {product.name}
+                    </span>
                 </div>
 
                 <div className="flex items-end pt-6 opacity-90 justify-between gap-4">
                     <div className="flex-1">
                         {product.material && (
-                            <p className="text-[9pt] font-bold  italic lowercase mt-0.5">
+                            <p className="text-[8pt] font-bold italic lowercase mt-0.5">
                                 {product.material}
                             </p>
                         )}
                         {product.color && (
-                            <p className="text-[9pt] font-bold  lowercase mt-0.5">
+                            <p className="text-[8pt] font-bold lowercase mt-0.5">
                                 {product.color}
                             </p>
                         )}
                     </div>
                     {product.designerName && (
-                        <p className="text-[9pt] mt-12 ">
+                        <p className="text-[8pt] mt-12">
                             {product.designerName}
                         </p>
                     )}

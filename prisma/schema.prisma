@@ -16,7 +16,7 @@ model Product {
   color           String?
   colorHex        String?
   price           Float
-  images          String[]
+  images          Json     @default("[]") // Change from String[] to Json
   published       Boolean  @default(false)
   stripeProductId String?
   createdAt       DateTime @default(now())

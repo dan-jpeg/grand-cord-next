@@ -6,6 +6,12 @@ import { useRouter } from 'next/navigation'
 import { useCart } from '@/contexts/cart-context'
 import type { Product, ProductSize } from '@prisma/client'
 
+type ImageData = {
+    url: string
+    isMobilePrimary: boolean
+    isDesktopPrimary: boolean
+}
+
 type ProductWithSizes = Product & {
     sizes: ProductSize[]
 }
@@ -14,6 +20,10 @@ export function ProductDetail({ product }: { product: ProductWithSizes }) {
     const router = useRouter()
     const { addItem } = useCart()
     const [selectedSize, setSelectedSize] = useState<string>('')
+
+    // Parse images from JSON
+    const images = (product.images as any) as ImageData[]
+    const displayImage = images.find(img => img.isDesktopPrimary)?.url || images[0]?.url
 
     const availableSizes = product.sizes
         .filter(s => s.stock > 0)
@@ -34,12 +44,10 @@ export function ProductDetail({ product }: { product: ProductWithSizes }) {
             productSlug: product.slug,
             size: selectedSize,
             price: product.price,
-            image: product.images[0],
+            image: displayImage, // Use the display image URL
         })
 
         alert('Added to cart!')
-        // Optional: redirect to cart
-        // router.push('/cart')
     }
 
     return (
@@ -47,10 +55,10 @@ export function ProductDetail({ product }: { product: ProductWithSizes }) {
             <div className="w-full max-w-4xl">
                 {/* Product Image */}
                 <div className="bg-neutral-100 mb-8 flex items-center justify-center">
-                    {product.images[0] ? (
+                    {displayImage ? (
                         <div className="relative w-full max-w-md">
                             <Image
-                                src={product.images[0]}
+                                src={displayImage}
                                 alt={product.name}
                                 width={3587}
                                 height={4400}

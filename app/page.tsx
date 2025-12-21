@@ -49,22 +49,22 @@ export default async function HomePage() {
 
                 <div className="h-24"/>
 
-                <div className="grid grid-cols-1 gap-x-1.5 gap-y-16 pb-8 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-x-1.5 gap-y-16 pb-0 md:grid-cols-2 lg:grid-cols-3">
                     {products.map((product, index) => (
                         <ProductCard key={product.id} product={product} index={index}/>
                     ))}
                 </div>
-                <div className="grid grid-cols-1 gap-x-1.5 gap-y-16 pb-8 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-x-1.5 gap-y-16 pb-0 md:grid-cols-2 lg:grid-cols-3">
                     {products.map((product, index) => (
                         <ProductCard key={product.id} product={product} index={index}/>
                     ))}
                 </div>
-                <div className="grid grid-cols-1 gap-x-1.5 gap-y-16 pb-8 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-x-1.5 gap-y-16 pb-0 md:grid-cols-2 lg:grid-cols-3">
                     {products.map((product, index) => (
                         <ProductCard key={product.id} product={product} index={index}/>
                     ))}
                 </div>
-                <div className="grid grid-cols-1 gap-x-1.5 gap-y-16 pb-8 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-x-1.5 gap-y-16 pb-0 md:grid-cols-2 lg:grid-cols-3">
                     {products.map((product, index) => (
                         <ProductCard key={product.id} product={product} index={index}/>
                     ))}
