@@ -30,10 +30,14 @@ model Product {
 }
 
 model ProductSize {
-  id        String @id @default(cuid())
+  id        String   @id @default(cuid())
   productId String
-  size      String // 'XS', 'S', 'M', 'L', 'XL', 'XXL'
-  stock     Int    @default(0)
+  size      String
+  available Int      @default(0) // Can be sold
+  committed Int      @default(0) // Reserved for orders
+  total     Int      @default(0) // Total physical inventory (available + committed)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 

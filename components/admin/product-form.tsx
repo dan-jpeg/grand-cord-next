@@ -52,29 +52,41 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
     const [colorHex, setColorHex] = useState(product?.colorHex || '')
 
     // Sizes state
-    const [sizes, setSizes] = useState<{ size: string; stock: number }[]>(
+    // In the sizes state definition
+    // Sizes state
+    const [sizes, setSizes] = useState<{
+        size: string
+        available: number
+    }[]>(
         product?.sizes.length
-            ? product.sizes.map((s) => ({ size: s.size, stock: s.stock }))
-            : [{ size: 'M', stock: 0 }]
+            ? product.sizes.map((s) => ({
+                size: s.size,
+                available: s.available
+            }))
+            : [{ size: 'M', available: 0 }]
     )
+
+    function updateSize(index: number, field: 'size' | 'available', value: string | number) {
+        const newSizes = [...sizes]
+        newSizes[index] = { ...newSizes[index], [field]: value }
+        setSizes(newSizes)
+    }
 
     function addSize() {
         const usedSizes = sizes.map((s) => s.size)
         const availableSize = AVAILABLE_SIZES.find((s) => !usedSizes.includes(s))
         if (availableSize) {
-            setSizes([...sizes, { size: availableSize, stock: 0 }])
+            setSizes([...sizes, { size: availableSize, available: 0 }])
         }
     }
+
+
 
     function removeSize(index: number) {
         setSizes(sizes.filter((_, i) => i !== index))
     }
 
-    function updateSize(index: number, field: 'size' | 'stock', value: string | number) {
-        const newSizes = [...sizes]
-        newSizes[index] = { ...newSizes[index], [field]: value }
-        setSizes(newSizes)
-    }
+
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
@@ -232,12 +244,12 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
             {/* Sizes Section */}
             <div className="bg-white border border-neutral-200 p-6">
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-medium">Sizes & Stock</h3>
+                    <h3 className="font-medium">Inventory by Size</h3>
                     <button
                         type="button"
                         onClick={addSize}
                         disabled={sizes.length >= AVAILABLE_SIZES.length}
-                        className="text-sm underline hover:no-underline disabled:opacity-50 disabled:no-underline"
+                        className="text-sm underline hover:no-underline disabled:opacity-50"
                     >
                         Add Size
                     </button>
@@ -252,26 +264,26 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
                                 className="px-4 py-3 border border-neutral-300 focus:outline-none focus:border-black"
                             >
                                 {AVAILABLE_SIZES.map((size) => (
-                                    <option key={size} value={size}>
-                                        {size}
-                                    </option>
+                                    <option key={size} value={size}>{size}</option>
                                 ))}
                             </select>
 
-                            <input
-                                type="number"
-                                min="0"
-                                value={sizeItem.stock}
-                                onChange={(e) => updateSize(index, 'stock', Number(e.target.value))}
-                                placeholder="Stock"
-                                className="flex-1 px-4 py-3 border border-neutral-300 focus:outline-none focus:border-black"
-                            />
+                            <div className="flex-1">
+                                <label className="block text-xs mb-1">Available</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={sizeItem.available}
+                                    onChange={(e) => updateSize(index, 'available', Number(e.target.value))}
+                                    className="w-full px-4 py-3 border border-neutral-300 focus:outline-none focus:border-black"
+                                />
+                            </div>
 
                             <button
                                 type="button"
                                 onClick={() => removeSize(index)}
                                 disabled={sizes.length === 1}
-                                className="text-sm text-red-600 underline hover:no-underline disabled:opacity-50 disabled:no-underline"
+                                className="text-sm text-red-600 underline hover:no-underline disabled:opacity-50"
                             >
                                 Remove
                             </button>

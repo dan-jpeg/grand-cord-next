@@ -62,7 +62,7 @@ export default async function OrderConfirmationPage({
                     </div>
 
                     <Link
-                        href="/"
+                        href="/public"
                         className="block text-center bg-black text-white py-3 text-[9pt] uppercase font-bold hover:bg-neutral-800 transition-colors"
                     >
                         Continue Shopping

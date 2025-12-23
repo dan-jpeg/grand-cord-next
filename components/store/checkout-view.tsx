@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '@/contexts/cart-context'
 import { formatPrice } from '@/lib/utils'
-import { createCheckoutSession } from '@/app/checkout/actions'
+import { createCheckoutSession } from '@/app/(store)/checkout/actions'
 import { loadStripe } from '@stripe/stripe-js'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)

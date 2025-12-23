@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { formatPrice } from '@/lib/utils'
-import { lookupOrder } from '@/app/cart/order-status/actions'
+import { lookupOrder } from '@/app/(store)/cart/order-status/actions'
 import type { Order, OrderItem } from '@prisma/client'
 
 type OrderWithItems = Order & {

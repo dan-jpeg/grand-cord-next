@@ -37,7 +37,7 @@ export function ProductCard({ product, index }: { product: ProductWithSizes; ind
         : images.find(img => img.isDesktopPrimary)?.url || images[0]?.url
 
     return (
-        <div className="group">
+        <div className="group  py-[6px]  border-black/20 ">
             <Link
                 href={`/products/${product.slug}`}
                 className="block relative "
@@ -81,12 +81,12 @@ export function ProductCard({ product, index }: { product: ProductWithSizes; ind
                 <div className="flex items-end pt-6 opacity-90 justify-between gap-4">
                     <div className="flex-1">
                         {product.material && (
-                            <p className="text-[8pt] font-bold italic lowercase mt-0.5">
+                            <p className="text-[8pt] font-bold  lowercase mt-0.5">
                                 {product.material}
                             </p>
                         )}
                         {product.color && (
-                            <p className="text-[8pt] font-bold lowercase mt-0.5">
+                            <p className="text-[8pt] font-bold lowercase mt-0.2">
                                 {product.color}
                             </p>
                         )}

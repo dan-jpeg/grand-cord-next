@@ -1,10 +1,27 @@
 import type { Metadata } from 'next'
+import localFont from 'next/font/local'
 import './globals.css'
 import { CartProvider } from '@/contexts/cart-context'
 import { Navigation } from '@/components/store/navigation'
 
+const alteHaas = localFont({
+    src: [
+        {
+            path: '../public/fonts/AlteHaasGroteskRegular.ttf',
+            weight: '400',
+            style: 'normal',
+        },
+        {
+            path: '../public/fonts/AlteHaasGroteskBold.ttf',
+            weight: '700',
+            style: 'normal',
+        },
+    ],
+    variable: '--font-alte',
+})
+
 export const metadata: Metadata = {
-    title: 'Store',
+    title: 'Grand Cord',
     description: 'Custom e-commerce store',
 }
 
@@ -14,13 +31,10 @@ export default function RootLayout({
     children: React.ReactNode
 }) {
     return (
-        <html lang="en">
+        <html lang="en" className={alteHaas.variable}>
         <body>
         <CartProvider>
-            <Navigation />
-            <main className="pt-16">{/* pt-16 accounts for fixed nav */}
-                {children}
-            </main>
+            {children}
         </CartProvider>
         </body>
         </html>

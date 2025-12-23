@@ -26,7 +26,7 @@ export function ProductDetail({ product }: { product: ProductWithSizes }) {
     const displayImage = images.find(img => img.isDesktopPrimary)?.url || images[0]?.url
 
     const availableSizes = product.sizes
-        .filter(s => s.stock > 0)
+        .filter(s => s.available > 0)  // Changed from s.stock to s.available
         .sort((a, b) => {
             const order = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
             return order.indexOf(a.size) - order.indexOf(b.size)

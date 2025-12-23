@@ -1,78 +1,69 @@
-import Link from 'next/link'
-import { prisma } from '@/lib/prisma'
-import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-
-
+import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import Link from 'next/link'
 
 export default async function AdminDashboard() {
-
     const session = await auth()
 
     if (!session) {
         redirect('/admin/login')
     }
 
-    const [productCount, orderCount, paidOrders] = await Promise.all([
-        prisma.product.count(),
-        prisma.order.count(),
-        prisma.order.count({ where: { status: 'PAID' } }),
-    ])
+    const ordersCount = await prisma.order.count({ where: { status: 'PAID' } })
 
     return (
-        <div className="max-w-7xl mx-auto px-6 py-8">
-            <h2 className="text-2xl font-bold mb-8">Dashboard</h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-                <div className="bg-white p-6 border border-neutral-200">
-                    <div className="text-sm text-neutral-600 mb-2">Products</div>
-                    <div className="text-3xl font-bold">{productCount}</div>
-                </div>
-
-                <div className="bg-white p-6 border border-neutral-200">
-                    <div className="text-sm text-neutral-600 mb-2">Orders to Fulfill</div>
-                    <div className="text-3xl font-bold">{paidOrders}</div>
-                </div>
-
-                <div className="bg-white p-6 border border-neutral-200">
-                    <div className="text-sm text-neutral-600 mb-2">Total Orders</div>
-                    <div className="text-3xl font-bold">{orderCount}</div>
+        <>
+            {/* Header */}
+            <div className="absolute top-6 left-8">
+                <div className="text-[9pt] font-bold leading-none">
+                    GRAND-CORD
+                    <br />
+                    EDITOR
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Navigation */}
+            <div className="absolute top-1/2 left-0 right-0 -translate-y-1/2 flex  justify-between px-12">
                 <Link
                     href="/admin/products"
-                    className="bg-white p-6 border border-neutral-200 hover:border-black transition-colors"
+                    className="text-[9pt] font-bold uppercase hover:underline"
                 >
-                    <h3 className="font-bold mb-2">Products</h3>
-                    <p className="text-sm text-neutral-600">Manage your product catalog</p>
+                    INVENTORY
                 </Link>
-
+                <Link
+                    href="/admin/products"
+                    className="text-[9pt] font-bold uppercase hover:underline"
+                >
+                    CATALOG
+                </Link>
                 <Link
                     href="/admin/orders"
-                    className="bg-white p-6 border border-neutral-200 hover:border-black transition-colors"
+                    className="text-[9pt] font-bold uppercase hover:underline"
                 >
-                    <h3 className="font-bold mb-2">Orders</h3>
-                    <p className="text-sm text-neutral-600">View and fulfill orders</p>
+                    ORDERS {ordersCount > 0 && `(${ordersCount} to fulfill)`}
                 </Link>
-
                 <Link
-                    href="/admin/collections"
-                    className="bg-white p-6 border border-neutral-200 hover:border-black transition-colors"
+                    href="/admin/orders"
+                    className="text-[9pt] font-bold uppercase hover:underline"
                 >
-                    <h3 className="font-bold mb-2">Collections</h3>
-                    <p className="text-sm text-neutral-600">Organize products</p>
-                </Link>
-
-                <Link
-                    href="/admin/blog"
-                    className="bg-white p-6 border border-neutral-200 hover:border-black transition-colors"
-                >
-                    <h3 className="font-bold mb-2">Blog</h3>
-                    <p className="text-sm text-neutral-600">Manage blog posts</p>
+                    PAYMENTS
                 </Link>
             </div>
-        </div>
+
+            {/* Footer */}
+            <div className="absolute bottom-6 left-0 right-0 flex justify-between px-12 items-center">
+                <div className="text-[9pt] font-bold uppercase">
+                    MORE
+                    <span className="ml-2">▼</span>
+                </div>
+                <Link
+                    href="/"
+                    className="text-[9pt] font-bold uppercase hover:underline flex items-center gap-2"
+                >
+                    <span>▶</span> TO PUBLIC SITE
+                </Link>
+            </div>
+        </>
     )
 }

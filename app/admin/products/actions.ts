@@ -23,9 +23,12 @@ type ProductFormData = {
     }[]
     sizes: {
         size: string
-        stock: number
+        available: number
     }[]
 }
+
+// In createProduct and updateProduct:
+
 
 export async function createProduct(data: ProductFormData) {
     const slug = data.slug || slugify(data.name)
@@ -74,20 +77,20 @@ export async function createProduct(data: ProductFormData) {
             images: JSON.parse(JSON.stringify(data.images)),
             stripeProductId: stripeProduct.id,
             sizes: {
-                create: data.sizes,
+                create: data.sizes.map(s => ({  // Changed from uniqueSizes to data.sizes
+                    size: s.size,
+                    available: s.available,
+                    committed: 0,
+                    total: s.available,
+                })),
             },
         },
     })
-
     revalidatePath('/admin/products')
     redirect('/admin/products')
 }
 
 export async function updateProduct(id: string, data: ProductFormData) {
-    await prisma.productSize.deleteMany({
-        where: { productId: id },
-    })
-
     // Get existing product to check for Stripe product ID
     const existingProduct = await prisma.product.findUnique({
         where: { id },
@@ -99,7 +102,7 @@ export async function updateProduct(id: string, data: ProductFormData) {
             await stripe.products.update(existingProduct.stripeProductId, {
                 name: data.name,
                 description: data.description || undefined,
-                images: data.images.length > 0 ? [data.images[0].url] : undefined, // Extract URL only
+                images: data.images.length > 0 ? [data.images[0].url] : undefined,
                 metadata: {
                     slug: data.slug || slugify(data.name),
                     designerName: data.designerName || '',
@@ -108,7 +111,6 @@ export async function updateProduct(id: string, data: ProductFormData) {
                 },
             })
 
-            // If price changed, create new price (Stripe prices are immutable)
             if (data.price !== existingProduct.price) {
                 await stripe.prices.create({
                     product: existingProduct.stripeProductId,
@@ -118,28 +120,45 @@ export async function updateProduct(id: string, data: ProductFormData) {
             }
         } catch (error) {
             console.error('Error updating Stripe product:', error)
-            // Continue with database update even if Stripe fails
         }
     }
 
-    const product = await prisma.product.update({
-        where: { id },
-        data: {
-            name: data.name,
-            slug: data.slug || slugify(data.name),
-            description: data.description,
-            designerName: data.designerName,
-            material: data.material,
-            color: data.color,
-            colorHex: data.colorHex,
-            price: data.price,
-            published: data.published,
-            images: JSON.parse(JSON.stringify(data.images)), // Force JSON serialization
-            sizes: {
-                create: data.sizes,
+    // Filter out duplicate sizes (keep only unique size values)
+    const uniqueSizes = data.sizes.filter((size, index, self) =>
+        index === self.findIndex(s => s.size === size.size)
+    )
+
+    // Use transaction to delete and create sizes
+    await prisma.$transaction([
+        // Delete existing sizes
+        prisma.productSize.deleteMany({
+            where: { productId: id },
+        }),
+        // Update product and create new sizes
+        prisma.product.update({
+            where: { id },
+            data: {
+                name: data.name,
+                slug: data.slug || slugify(data.name),
+                description: data.description,
+                designerName: data.designerName,
+                material: data.material,
+                color: data.color,
+                colorHex: data.colorHex,
+                price: data.price,
+                published: data.published,
+                images: JSON.parse(JSON.stringify(data.images)),
+                sizes: {
+                    create: uniqueSizes.map(s => ({
+                        size: s.size,
+                        available: s.available,
+                        committed: 0,
+                        total: s.available,
+                    })),
+                },
             },
-        },
-    })
+        }),
+    ])
 
     revalidatePath('/admin/products')
     revalidatePath(`/admin/products/${id}/edit`)

@@ -24,18 +24,12 @@ export function ProductActions({ productId }: { productId: string }) {
 
     return (
         <div className="flex items-center justify-end gap-2">
-            <Link
-                href={`/admin/products/${productId}/edit`}
-                className="text-sm underline hover:no-underline"
-            >
-                Edit
-            </Link>
             <button
                 onClick={handleDelete}
                 disabled={isDeleting}
-                className="text-sm text-red-600 underline hover:no-underline disabled:opacity-50"
+                className="text-sm text-red-600 hover:cursor-pointer disabled:opacity-50"
             >
-                {isDeleting ? 'Deleting...' : 'Delete'}
+                {isDeleting ? 'Deleting...' : 'X'}
             </button>
         </div>
     )

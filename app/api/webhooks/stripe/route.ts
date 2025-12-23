@@ -52,14 +52,13 @@ export async function POST(req: Request) {
 
             if (expiredSession.metadata?.orderId) {
                 try {
-                    // Get order with items
                     const order = await prisma.order.findUnique({
                         where: { id: expiredSession.metadata.orderId },
                         include: { items: true },
                     })
 
                     if (order && order.status === 'PENDING') {
-                        // Restore stock
+                        // Move stock from committed back to available
                         for (const item of order.items) {
                             await prisma.productSize.updateMany({
                                 where: {
@@ -67,7 +66,10 @@ export async function POST(req: Request) {
                                     size: item.size,
                                 },
                                 data: {
-                                    stock: {
+                                    committed: {
+                                        decrement: item.quantity,
+                                    },
+                                    available: {
                                         increment: item.quantity,
                                     },
                                 },
