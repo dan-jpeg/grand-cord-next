@@ -71,7 +71,7 @@ export function ProductCard({ product, index }: { product: ProductWithSizes; ind
             </Link>
 
             <div className="pl-[12px] bg-gray-100/20 pb-5 pt-3 opacity-90 pr-[3rem]">
-                <div className="flex py-2 items-start justify-between text-sm">
+                <div className="flex card-div py-2 items-start justify-between text-[11px]">
                     <span className="font-bold  ">{formatPrice(product.price)}</span>
                     <span className="font-bold uppercase text-[8pt]">
                         {product.name}
@@ -86,7 +86,7 @@ export function ProductCard({ product, index }: { product: ProductWithSizes; ind
                             </p>
                         )}
                         {product.color && (
-                            <p className="text-[8pt] font-bold lowercase mt-0.2">
+                            <p className="text-[8pt]  font-bold lowercase mt-0.2">
                                 {product.color}
                             </p>
                         )}

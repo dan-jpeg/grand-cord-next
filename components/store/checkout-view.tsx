@@ -133,7 +133,7 @@ export function CheckoutView() {
                                     />
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-2  gap-4">
                                     <div>
                                         <label htmlFor="city" className="block text-[9pt] mb-2">
                                             City *
