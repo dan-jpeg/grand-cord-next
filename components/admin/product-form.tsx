@@ -32,7 +32,12 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
 
         // If it's already the new format
         if (Array.isArray(rawImages) && rawImages[0]?.url) {
-            return rawImages as ImageData[]
+            return rawImages.map((img: any, index: number) => ({
+                url: img.url,
+                isMobilePrimary: img.isMobilePrimary ?? (index === 0),
+                isDesktopPrimary: img.isDesktopPrimary ?? (index === 0),
+                isCartPrimary: img.isCartPrimary ?? (index === 0), // Add this
+            }))
         }
 
         // If it's old format (string array), convert
@@ -41,6 +46,7 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
                 url,
                 isMobilePrimary: index === 0,
                 isDesktopPrimary: index === 0,
+                isCartPrimary: index === 0, // Add this
             }))
         }
 

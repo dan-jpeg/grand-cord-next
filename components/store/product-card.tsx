@@ -11,6 +11,7 @@ type ImageData = {
     url: string
     isMobilePrimary: boolean
     isDesktopPrimary: boolean
+    isCartPrimary: boolean
 }
 
 type ProductWithSizes = Product & {
@@ -37,10 +38,10 @@ export function ProductCard({ product, index }: { product: ProductWithSizes; ind
         : images.find(img => img.isDesktopPrimary)?.url || images[0]?.url
 
     return (
-        <div className="group  py-[6px]  border-black/20 ">
+        <div className="group py-[6px] border-black/20">
             <Link
                 href={`/products/${product.slug}`}
-                className="block relative "
+                className="block relative"
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
             >
@@ -72,7 +73,7 @@ export function ProductCard({ product, index }: { product: ProductWithSizes; ind
 
             <div className="pl-[12px] bg-gray-100/20 pb-5 pt-3 opacity-90 pr-[3rem]">
                 <div className="flex card-div py-2 items-start justify-between text-[11px]">
-                    <span className="font-bold  ">{formatPrice(product.price)}</span>
+                    <span className="font-bold">{formatPrice(product.price)}</span>
                     <span className="font-bold uppercase text-[8pt]">
                         {product.name}
                     </span>
@@ -81,12 +82,12 @@ export function ProductCard({ product, index }: { product: ProductWithSizes; ind
                 <div className="flex items-end pt-6 opacity-90 justify-between gap-4">
                     <div className="flex-1">
                         {product.material && (
-                            <p className="text-[8pt] font-bold  lowercase mt-0.5">
+                            <p className="text-[8pt] font-bold lowercase mt-0.5">
                                 {product.material}
                             </p>
                         )}
                         {product.color && (
-                            <p className="text-[8pt]  font-bold lowercase mt-0.2">
+                            <p className="text-[8pt] font-bold lowercase mt-0.2">
                                 {product.color}
                             </p>
                         )}

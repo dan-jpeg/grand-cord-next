@@ -8,6 +8,7 @@ export type ImageData = {
     url: string
     isMobilePrimary: boolean
     isDesktopPrimary: boolean
+    isCartPrimary: boolean
 }
 
 export function ImageManager({
@@ -31,9 +32,10 @@ export function ImageManager({
             if (res) {
                 const newImages = res.map((file, index) => ({
                     url: file.url,
-                    // First image uploaded (and first overall) is both mobile and desktop primary
+                    // First image uploaded (and first overall) is mobile, desktop, and cart primary
                     isMobilePrimary: images.length === 0 && index === 0,
                     isDesktopPrimary: images.length === 0 && index === 0,
+                    isCartPrimary: images.length === 0 && index === 0,
                 }))
                 onChange([...images, ...newImages])
             }
@@ -47,9 +49,7 @@ export function ImageManager({
     function toggleMobilePrimary() {
         if (selectedIndex === null) return
         const updated = [...images]
-        // Set all to false first
         updated.forEach(img => img.isMobilePrimary = false)
-        // Set selected to true
         updated[selectedIndex].isMobilePrimary = true
         onChange(updated)
     }
@@ -57,10 +57,16 @@ export function ImageManager({
     function toggleDesktopPrimary() {
         if (selectedIndex === null) return
         const updated = [...images]
-        // Set all to false first
         updated.forEach(img => img.isDesktopPrimary = false)
-        // Set selected to true
         updated[selectedIndex].isDesktopPrimary = true
+        onChange(updated)
+    }
+
+    function toggleCartPrimary() {
+        if (selectedIndex === null) return
+        const updated = [...images]
+        updated.forEach(img => img.isCartPrimary = false)
+        updated[selectedIndex].isCartPrimary = true
         onChange(updated)
     }
 
@@ -68,13 +74,14 @@ export function ImageManager({
         if (selectedIndex === null) return
         const updated = images.filter((_, i) => i !== selectedIndex)
 
-        // If we removed the primary images, make the first image primary
         if (updated.length > 0) {
             const hasMobilePrimary = updated.some(img => img.isMobilePrimary)
             const hasDesktopPrimary = updated.some(img => img.isDesktopPrimary)
+            const hasCartPrimary = updated.some(img => img.isCartPrimary)
 
             if (!hasMobilePrimary) updated[0].isMobilePrimary = true
             if (!hasDesktopPrimary) updated[0].isDesktopPrimary = true
+            if (!hasCartPrimary) updated[0].isCartPrimary = true
         }
 
         onChange(updated)
@@ -139,6 +146,11 @@ export function ImageManager({
                                                 D
                                             </div>
                                         )}
+                                        {image.isCartPrimary && (
+                                            <div className="bg-black text-white px-1 text-[8px] font-bold">
+                                                C
+                                            </div>
+                                        )}
                                     </div>
                                 </button>
                             ))}
@@ -180,6 +192,19 @@ export function ImageManager({
                                     <div className="w-2 h-8 bg-current" />
                                 </div>
                                 <span className="text-xs font-bold uppercase">Desktop Primary</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={toggleCartPrimary}
+                                className={`w-full flex items-center gap-3 p-3 border transition-colors ${
+                                    images[selectedIndex].isCartPrimary
+                                        ? 'border-black bg-black text-white'
+                                        : 'border-neutral-300 hover:bg-neutral-100'
+                                }`}
+                            >
+                                <div className="w-6 h-6 border-2 border-current" />
+                                <span className="text-xs font-bold uppercase">Cart Primary</span>
                             </button>
 
                             <button

@@ -10,6 +10,8 @@ export type CartItem = {
     quantity: number
     price: number
     image?: string
+    material?: string
+    color?: string
 }
 
 type CartContextType = {
@@ -115,4 +117,3 @@ export function useCart() {
     }
     return context
 }
-

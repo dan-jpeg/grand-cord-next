@@ -8,7 +8,7 @@ export default function StoreLayout({
     return (
         <>
             <Navigation />
-            <main className="pt-16">
+            <main className="">
                 {children}
             </main>
         </>

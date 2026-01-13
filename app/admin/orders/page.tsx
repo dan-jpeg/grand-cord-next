@@ -1,8 +1,8 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import Link from 'next/link'
-import { OrdersList } from '@/components/admin/orders-list'
+import { AdminNav } from '@/components/admin/admin-nav'
+import { OrdersTable } from '@/components/admin/orders-table'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,18 +19,11 @@ export default async function AdminOrdersPage() {
     })
 
     return (
-        <div className="absolute inset-0 bg-white p-8 overflow-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-8 pb-4 border-b border-black">
-                <div className="flex items-center gap-4">
-                    <Link href="/admin" className="text-[9pt] font-bold hover:underline">
-                        ← BACK
-                    </Link>
-                    <h1 className="text-[9pt] font-bold uppercase">ORDERS</h1>
-                </div>
+        <div className="absolute inset-0 bg-white overflow-auto">
+            <AdminNav active="orders" />
+            <div className="w-full px-16 py-12">
+                <OrdersTable orders={orders} />
             </div>
-
-            <OrdersList orders={orders} />
         </div>
     )
 }

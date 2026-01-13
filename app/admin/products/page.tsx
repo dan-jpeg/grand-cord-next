@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { ProductRow } from '@/components/admin/product-row'
+import {AdminNav} from "@/components/admin/admin-nav";
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +20,9 @@ export default async function AdminProductsPage() {
     })
 
     return (
+
         <div className="absolute inset-0 bg-white p-8 overflow-auto">
+            <AdminNav active="inventory" />
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-6">

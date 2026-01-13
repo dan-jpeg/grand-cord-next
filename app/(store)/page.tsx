@@ -19,7 +19,7 @@ export default async function HomePage() {
         <div className="min-h-screen bg-white">
             {/* Hero Section */}
             <section className="relative hidden md:flex w-full">
-                <div className="w-full bg-neutral-200 h-[60vh] flex items-center justify-center grayscale">
+                <div className="w-full bg-neutral-200 h-[60vh] flex opacity-0 items-center justify-center grayscale">
 
                     <Image
                         src={heroImage}
