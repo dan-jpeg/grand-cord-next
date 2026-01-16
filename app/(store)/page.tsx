@@ -2,7 +2,6 @@ import { prisma } from '@/lib/prisma'
 import { ProductCard } from '@/components/store/product-card'
 import { CatalogHeader } from '@/components/store/catalog-header'
 
-
 export const dynamic = 'force-dynamic'
 
 import Image from 'next/image'
@@ -20,7 +19,6 @@ export default async function HomePage() {
             {/* Hero Section */}
             <section className="relative hidden md:flex w-full">
                 <div className="w-full bg-neutral-200 h-[60vh] flex opacity-0 items-center justify-center grayscale">
-
                     <Image
                         src={heroImage}
                         alt="Hero"
@@ -43,8 +41,8 @@ export default async function HomePage() {
             <div className="h-40" />
             <div className="h-16" />
 
-            {/* Catalog Section */}
-            <section className="py-24">
+            {/* Catalog Section - ADD ID HERE */}
+            <section id="catalog" className="py-24">
                 <CatalogHeader productCount={products.length}/>
 
                 <div className="h-24"/>

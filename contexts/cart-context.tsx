@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react'
 
 export type CartItem = {
     productId: string
@@ -29,6 +29,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined)
 export function CartProvider({ children }: { children: ReactNode }) {
     const [items, setItems] = useState<CartItem[]>([])
     const [isHydrated, setIsHydrated] = useState(false)
+    const addingRef = useRef(false)
 
     // Load cart from localStorage on mount
     useEffect(() => {
@@ -47,20 +48,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }, [items, isHydrated])
 
     const addItem = (newItem: Omit<CartItem, 'quantity'>) => {
-        setItems((currentItems) => {
-            // Check if item with same product and size already exists
+        setItems(currentItems => {
             const existingIndex = currentItems.findIndex(
-                (item) => item.productId === newItem.productId && item.size === newItem.size
+                item =>
+                    item.productId === newItem.productId &&
+                    item.size === newItem.size
             )
 
-            if (existingIndex > -1) {
-                // Increment quantity
-                const updated = [...currentItems]
-                updated[existingIndex].quantity += 1
-                return updated
+            if (existingIndex !== -1) {
+                return currentItems.map((item, i) =>
+                    i === existingIndex
+                        ? { ...item, quantity: item.quantity + 1 }
+                        : item
+                )
             }
 
-            // Add new item
             return [...currentItems, { ...newItem, quantity: 1 }]
         })
     }

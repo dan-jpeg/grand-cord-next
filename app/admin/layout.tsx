@@ -26,7 +26,7 @@ export default async function AdminLayout({
     }
 
     return (
-        <div className="min-h-screen max-w-screen-2xl max bg-white">
+        <div className="relative min-h-screen w-full bg-white">
             {children}
         </div>
     )

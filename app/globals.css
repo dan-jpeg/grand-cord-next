@@ -10,6 +10,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  --font-family-alte: 'Alte Haas Grotesk', sans-serif;
+  --font-family-reformat: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -33,19 +36,58 @@
   font-style: normal;
 }
 
+@font-face {
+  font-family: 'Reformat A Mono Test';
+  src: url('../public/fonts/ReformatAMonoTest-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+
+.font-mono {
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+}
+
+.font-alte {
+  font-family: "Alte Haas Grotesk", sans-serif;
+}
+
+.font-reformat {
+  font-family: "Reformat A Mono Test", monospace;
+}
+
+@font-face {
+  font-family: 'ReformatMono';
+  src: url('../public/fonts/ReformatAMonoTest-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Hide scrollbar - ONLY on body */
 html,
 body {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 html::-webkit-scrollbar,
 body::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
+  display: none;
 }
 
-body {
-  font-family: var(--font-alte), sans-serif;
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
 
+html {
+  scroll-behavior: smooth;
+}

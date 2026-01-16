@@ -15,16 +15,18 @@ export function ProductRow({ product }: { product: ProductWithSizes }) {
     const totalInventory = product.sizes.reduce((sum, s) => sum + s.total, 0)
 
     return (
-        <div>
+        <div className="border-b border-black">
             {/* Product Row - Clickable */}
             <Link href={`/admin/products/${product.id}/edit`}>
-                <div className="grid grid-cols-12 gap-4 text-[8pt] mb-2 my-4 hover:bg-neutral-50 transition-colors cursor-pointer">
+                <div className="grid grid-cols-12 gap-4 items-center px-4 py-3 border-r border-l-[2px] hover:border-b-[2px] hover:border-l-[3px] border-b border-black transition-border text-[8pt] cursor-pointer">
                     <div className="col-span-3 font-bold uppercase">{product.name}</div>
                     <div className="col-span-1 text-right font-mono">{formatPrice(product.price)}</div>
-                    <div className="col-span-1 pl-12 text-neutral-600">{product.published ? 'PUBLISHED' : 'DRAFT'}</div>
+                    <div className="col-span-1 text-neutral-600 uppercase text-[7pt]">
+                        {product.published ? 'PUBLISHED' : 'DRAFT'}
+                    </div>
                     <div className="col-span-2 text-right">
                         <span className="text-neutral-600">AVAIL</span>{' '}
-                        <span className="font-mono  font-bold">{totalAvailable}</span>
+                        <span className="font-mono font-bold">{totalAvailable}</span>
                     </div>
                     <div className="col-span-2 text-right">
                         <span className="text-neutral-600">COMM</span>{' '}
@@ -41,11 +43,12 @@ export function ProductRow({ product }: { product: ProductWithSizes }) {
             </Link>
 
             {/* Sizes Row */}
-            <div className="grid grid-cols-12 gap-4 pl-8 text-[8pt]">
+            <div className="grid grid-cols-12 gap-4 px-4 py-2 text-[8pt] bg-neutral-50/50">
+                <div className="col-span-3"></div>
                 {product.sizes.map((size) => (
                     <div
                         key={size.id}
-                        className={`col-span-2 font-mono ${
+                        className={`col-span-1.5 font-mono ${
                             size.available === 0 ? 'text-red-600' : 'text-neutral-600'
                         }`}
                     >
@@ -55,9 +58,6 @@ export function ProductRow({ product }: { product: ProductWithSizes }) {
                     </div>
                 ))}
             </div>
-
-            {/* Divider */}
-            <div className="h-px bg-neutral-200 mt-4" />
         </div>
     )
 }

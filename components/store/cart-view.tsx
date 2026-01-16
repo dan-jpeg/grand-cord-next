@@ -18,7 +18,7 @@ export function CartView() {
                     <h1 className="text-[9pt] mb-2">Your cart is empty.</h1>
                     <div className="flex flex-col gap-4 items-center">
                         <Link
-                            href="/"
+                            href="/#catalog"
                             className="inline-block px-2 py-1 italic text-[9pt] hover:bg-yellow-200 text-sm transition-colors"
                         >
                             RETURN
@@ -86,7 +86,7 @@ export function CartView() {
                                     <span className="text-[18pt] font-bold">{formatPrice(totalPrice)} usd</span>
                                     <Link
                                         href="/checkout"
-                                        className="text-[18pt] font-bold  underline decoration-3 underline-offset-4 hover:no-underline ml-12"
+                                        className="text-[18pt] font-bold  underline decoration-3 cursor-none underline-offset-4 hover:bg-slate-200 px-2 hover:no-underline ml-12"
                                     >
                                         Checkout
                                     </Link>

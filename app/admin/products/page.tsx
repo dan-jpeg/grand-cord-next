@@ -1,9 +1,8 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import Link from 'next/link'
-import { ProductRow } from '@/components/admin/product-row'
-import {AdminNav} from "@/components/admin/admin-nav";
+import { AdminNav } from "@/components/admin/admin-nav"
+import { ProductsTable } from '@/components/admin/products-table'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,30 +19,10 @@ export default async function AdminProductsPage() {
     })
 
     return (
-
-        <div className="absolute inset-0 bg-white p-8 overflow-auto">
+        <div className="absolute inset-0 bg-white overflow-auto">
             <AdminNav active="inventory" />
-            {/* Header */}
-            <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-6">
-                    <Link href="/admin" className="text-[9pt] font-bold hover:underline">
-                        ← BACK
-                    </Link>
-                    <h1 className="text-[9pt] font-bold uppercase">INVENTORY</h1>
-                </div>
-                <Link
-                    href="/admin/products/new"
-                    className="bg-black text-white px-3 py-1 text-[9pt] font-bold uppercase hover:bg-neutral-800"
-                >
-                    + ADD PRODUCT
-                </Link>
-            </div>
-
-            {/* Products Table */}
-            <div className="space-y-6">
-                {products.map((product) => (
-                    <ProductRow key={product.id} product={product} />
-                ))}
+            <div className="w-full px-16 py-12">
+                <ProductsTable products={products} />
             </div>
         </div>
     )

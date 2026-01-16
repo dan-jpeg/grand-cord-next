@@ -1,6 +1,6 @@
 'use client'
 
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { formatPrice } from '@/lib/utils'
 import { useCart } from '@/contexts/cart-context'
@@ -26,7 +26,7 @@ const getSizeNumber = (size: string): number => {
 }
 
 export function CartItemText({ item, index, hoveredIndex, onHover }: CartItemTextProps) {
-    const { updateQuantity, removeItem } = useCart()
+    const { removeItem } = useCart()
     const isHovered = hoveredIndex === index
 
     return (
@@ -46,7 +46,7 @@ export function CartItemText({ item, index, hoveredIndex, onHover }: CartItemTex
 
             <Link
                 href={`/products/${item.productSlug}`}
-                className="block hover:underline"
+                className="block hover:bg-slate-200 mr-5"
             >
                 <h3 className="text-[10pt] -mb-1 font-bold uppercase">{item.productName}</h3>
             </Link>
@@ -57,21 +57,19 @@ export function CartItemText({ item, index, hoveredIndex, onHover }: CartItemTex
                 <div className="font-bold">{formatPrice(item.price)}</div>
             </div>
 
-            {/* Remove Button - Appears on Hover */}
-            <AnimatePresence>
-                {isHovered && (
-                    <motion.button
-                        initial={{ opacity: 0, y: -5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -5 }}
-                        transition={{ duration: 0.2 }}
-                        onClick={() => removeItem(item.productId, item.size)}
-                        className="text-[10pt] underline hover:no-underline mt-1"
-                    >
-                        Remove
-                    </motion.button>
-                )}
-            </AnimatePresence>
+            {/* Remove Button - Always reserve space, fade in/out */}
+            <div className="mt-3 h-6">
+                <motion.button
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: isHovered ? 1 : 0 }}
+                    transition={{ duration: 0.2 }}
+                    onClick={() => removeItem(item.productId, item.size)}
+                    className="text-[10pt] underline px-2 hover:no-underline hover:bg-slate-200"
+                    style={{ pointerEvents: isHovered ? 'auto' : 'none' }}
+                >
+                    Remove
+                </motion.button>
+            </div>
         </motion.div>
     )
 }

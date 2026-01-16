@@ -30,11 +30,10 @@ const getSizeNumber = (size: string): number => {
     return sizeMap[size] ?? 0
 }
 
-export function ProductDetail({ product }: { product: ProductWithSizes }) {
+export function ProductDetailAlt({ product }: { product: ProductWithSizes }) {
     const { addItem } = useCart()
     const [selectedSize, setSelectedSize] = useState<string>('')
-    const isAddingRef = useRef(false)
-
+    const [justAdded, setJustAdded] = useState(false)
     const scrollContainerRef = useRef<HTMLDivElement>(null)
 
     const images = product.images as ImageData[]
@@ -56,14 +55,7 @@ export function ProductDetail({ product }: { product: ProductWithSizes }) {
         const handleWheel = (e: WheelEvent) => {
             if (!scrollContainerRef.current) return
             e.preventDefault()
-
-            const container = scrollContainerRef.current
-            const delta = e.deltaY
-
-            container.scrollBy({
-                top: delta,
-                behavior: 'smooth'
-            })
+            scrollContainerRef.current.scrollTop += e.deltaY
         }
 
         window.addEventListener('wheel', handleWheel, { passive: false })
@@ -84,66 +76,79 @@ export function ProductDetail({ product }: { product: ProductWithSizes }) {
             color: product.color || undefined,
         })
 
-        setSelectedSize('')
+        setJustAdded(true)
+        setTimeout(() => {
+            setJustAdded(false)
+            setSelectedSize('')
+        }, 1200)
     }
 
     return (
-        <div className="h-screen overflow-hidden flex justify-center">
-            <div className="flex w-full max-w-[1400px]">
-                {/* LEFT — TEXT */}
-                <div className="w-1/2 flex flex-col justify-between px-6 lg:px-24 pt-32 pb-40">
-                    {/* Header */}
-                    <div className="mb-6">
-                        <Link href="/#catalog" className="inline-block mb-2">
-                            <div className="text-[9pt]">
-                                catalog / {product.name}
-                            </div>
-                        </Link>
-                        <div className="border-t-3 border-black" />
-                    </div>
-
-                    {/* Description + meta */}
-                    <div className="flex-1 flex gap-8 overflow-visible">
-                        <div className="flex-[3] text-[9pt] leading-tight font-mono space-y-6 text-justify">
-                            {product.description ? (
-                                <div className="whitespace-pre-wrap">
-                                    {product.description}
+        <div className="h-screen overflow-hidden bg-white flex justify-center">
+            <div className="h-screen overflow-hidden relative bg-white w-full max-w-[1512px]">
+                {/* Left Side - Absolutely Positioned Text Content */}
+                <div
+                    className="absolute left-0 top-0 h-screen w-[45%] z-50 flex flex-col justify-between pointer-events-none">
+                    <div className="pl-24 pt-32 pb-12 pointer-events-auto">
+                        {/* Header */}
+                        <div className="mb-8">
+                            <Link href="/#catalog" className="inline-block mb-2">
+                                <div className="text-[14pt] opacity-20 hover:opacity-90 font-bold tracking-tight">
+                                    catalog / {product.name}
                                 </div>
-                            ) : (
-                                <>
-                                    <p>
-                                        Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.
-                                    </p>
-                                    <p>
-                                        Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor.
-                                    </p>
-                                </>
-                            )}
+                            </Link>
+                            <div className=" mt-2"/>
                         </div>
 
-                        <div className="flex-[2] flex justify-end overflow-visible">
-                            <div className="text-[9pt] text-right space-y-0">
+                        {/* Two column layout: Description + Meta */}
+                        <div className="flex font-mono  mb-12">
+                            {/* Left column - Description */}
+                            <div className="flex-[3] pr-30   text-[9pt] font-mono leading-tight space-y-6 text-justify">
+                                {product.description ? (
+                                    <div className="whitespace-pre-wrap">
+                                        {product.description}
+                                    </div>
+                                ) : (
+                                    <>
+                                        <p className="font-mono">
+                                            Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex
+                                            sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis
+                                            convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus
+                                            fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada
+                                            lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti
+                                            sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.
+                                        </p>
+                                        <p>
+                                            Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex
+                                            sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis
+                                            convallis. Tempus leo eu aenean sed diam urna tempor.
+                                        </p>
+
+                                    </>
+                                )}
+                            </div>
+
+                            {/* Right column - Product meta */}
+                            <div className="flex-[2] text-[9pt] text-right space-y-1">
                                 {product.material && (
-                                    <div className="lowercase font-bold whitespace-nowrap">{product.material}</div>
+                                    <div className="font-mono lowercase text-[10pt] font-bold">{product.material}</div>
                                 )}
                                 {product.color && (
-                                    <div className="lowercase font-bold whitespace-nowrap mb-20">{product.color}</div>
+                                    <div className="lowercase font-bold mb-8">{product.color}</div>
                                 )}
                                 {product.designerName && (
-                                    <div className="whitespace-nowrap mb-[100px]">{product.designerName}</div>
+                                    <div>{product.designerName}</div>
                                 )}
-                                <div className="font-bold whitespace-nowrap">
-                                    {formatPrice(product.price)}
-                                </div>
+                                <div className="font-bold mt-8">{formatPrice(product.price)}</div>
                             </div>
                         </div>
                     </div>
 
-                    {/* SIZE PICKER */}
-                    <div className="w-full pb-40 space-y-2">
+                    {/* Bottom - Size Picker */}
+                    <div className="w-full pb-40 pl-26 space-y-2">
                         {/* Size Header Row */}
                         <div className="flex items-center mb-4 gap-20">
-                            <div className="flex-1 border-t-3 border-black" />
+                            <div className="flex-1 border-t-3 border-black"/>
                             <div className="text-[9pt] uppercase font-bold mt-1 whitespace-nowrap">
                                 SELECT SIZE
                             </div>
@@ -192,14 +197,13 @@ export function ProductDetail({ product }: { product: ProductWithSizes }) {
                     </div>
                 </div>
 
-                {/* RIGHT — IMAGES with snap scrolling */}
+                {/* Right Side - Scrollable Images (Full Width) */}
                 <div
                     ref={scrollContainerRef}
-                    className="w-1/2 h-screen overflow-y-scroll"
+                    className="w-full h-screen pl-[440px] overflow-y-scroll "
                     style={{
                         scrollbarWidth: 'none',
                         msOverflowStyle: 'none',
-                        scrollSnapType: 'y mandatory',
                     }}
                 >
                     <style jsx>{`
@@ -208,31 +212,20 @@ export function ProductDetail({ product }: { product: ProductWithSizes }) {
                         }
                     `}</style>
 
-                    {/* Spacer at top */}
-                    <div className="h-40" />
-
-                    {imageArray.map((img, index) => (
-                        <div
-                            key={index}
-                            className="snap-start"
-                            style={{ scrollMarginTop: '10rem' }}
-                        >
-                            <Image
-                                src={img}
-                                alt={`${product.name} ${index + 1}`}
-                                width={3587}
-                                height={4400}
-                                className="w-full h-auto"
-                                priority={index === 0}
-                            />
-                            {index < imageArray.length - 1 && (
-                                <div className="h-40" />
-                            )}
-                        </div>
-                    ))}
-
-                    {/* Spacer at bottom */}
-                    <div className="h-[600px]" />
+                    <div className="space-y-20">
+                        {imageArray.map((img, index) => (
+                            <div key={index} className="w-full">
+                                <Image
+                                    src={img}
+                                    alt={`${product.name} ${index + 1}`}
+                                    width={3587}
+                                    height={4400}
+                                    className="w-full h-auto"
+                                    priority={index === 0}
+                                />
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
         </div>
