@@ -5,13 +5,24 @@ import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { useCart, type CartItem } from '@/contexts/cart-context'
 import Image from 'next/image'
+import { usePathname } from 'next/navigation'
 
 export function Navigation() {
     const { totalItems, items } = useCart()
+    const pathname = usePathname()
     const [lastItem, setLastItem] = useState<CartItem | null>(null)
     const [show, setShow] = useState(false)
     const [isCartHovered, setIsCartHovered] = useState(false)
+    const [isMobile, setIsMobile] = useState(false)
     const prevTotalItems = useRef(0)
+
+    // Check if mobile
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 1024)
+        checkMobile()
+        window.addEventListener('resize', checkMobile)
+        return () => window.removeEventListener('resize', checkMobile)
+    }, [])
 
     // Only trigger notification when totalItems INCREASES
     useEffect(() => {
@@ -33,9 +44,14 @@ export function Navigation() {
         prevTotalItems.current = totalItems
     }, [totalItems, items])
 
+    // Hide navigation on mobile cart page
+    if (isMobile && pathname === '/cart') {
+        return null
+    }
+
     return (
-        <nav className="fixed top-0   left-0 right-0 border-black z-50">
-            <div className="mx-auto px-8 py-4 flex items-center justify-between">
+        <nav className="fixed top-0  left-0 right-0 border-black z-50">
+            <div className="mx-auto px-8 py-12 md:py-4 flex items-center justify-between">
                 <Link href="/" className="z-50 text-[9pt] font-bold uppercase hover:underline">
                     ⚉
                 </Link>

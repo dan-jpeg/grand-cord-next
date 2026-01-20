@@ -5,15 +5,17 @@ import { useRouter } from 'next/navigation'
 import { useCart } from '@/contexts/cart-context'
 import { formatPrice } from '@/lib/utils'
 import { createCheckoutSession } from '@/app/(store)/checkout/actions'
-import { loadStripe } from '@stripe/stripe-js'
+import { CartItemTextStatic } from '@/components/store/cart-item-static'
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
+type CheckoutVariant = 'minimal' | 'original'
 
 export function CheckoutView() {
     const router = useRouter()
     const { items, totalPrice, clearCart } = useCart()
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [orderPlaced, setOrderPlaced] = useState(false)
+    const [isMobile, setIsMobile] = useState(false)
+    const [variant] = useState<CheckoutVariant>('minimal') // Change to 'original' to switch
 
     // Form state
     const [email, setEmail] = useState('')
@@ -29,6 +31,13 @@ export function CheckoutView() {
             router.push('/cart')
         }
     }, [items, router, orderPlaced])
+
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 1024)
+        checkMobile()
+        window.addEventListener('resize', checkMobile)
+        return () => window.removeEventListener('resize', checkMobile)
+    }, [])
 
     if (items.length === 0) {
         return null
@@ -67,7 +76,6 @@ export function CheckoutView() {
 
             clearCart()
 
-            // Redirect to Stripe Checkout
             window.location.href = url
         } catch (error) {
             console.error('Checkout error:', error)
@@ -77,6 +85,138 @@ export function CheckoutView() {
         }
     }
 
+    // Minimal variant
+    if (variant === 'minimal') {
+        return (
+            <div className="min-h-screen bg-white flex flex-col items-center justify-center py-16 px-6">
+                {/* Cart Items - Desktop Only */}
+                {!isMobile && (
+                    <div className="absolute top-8 right-8 flex gap-16">
+                        {items.slice(0, 3).map((item, index) => (
+                            <div key={`${item.productId}-${item.size}`} className="pl-[36px]">
+                                <CartItemTextStatic item={item} index={index} />
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Form Container */}
+                <div className="w-full max-w-[400px] border border-black p-12">
+                    <form onSubmit={handleSubmit} className="space-y-8">
+                        {/* Contact Information */}
+                        <div>
+                            <div className="font-bold text-[10pt] mb-4">Contact Information:</div>
+                            <div>
+                                <div className="font-bold text-[10pt] -mb-1">Email:</div>
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full border-b border-black bg-transparent focus:outline-none text-[10pt] pb-1"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        {/* Shipping Information */}
+                        <div>
+                            <div className="font-bold text-[10pt] mb-4">Shipping Information:</div>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="font-bold text-[10pt] -mb-1">Full Name:</div>
+                                    <input
+                                        type="text"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        className="w-full border-b border-black bg-transparent focus:outline-none text-[10pt] pb-1"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <div className="font-bold text-[10pt] -mb-1">Address:</div>
+                                    <input
+                                        type="text"
+                                        value={address}
+                                        onChange={(e) => setAddress(e.target.value)}
+                                        className="w-full border-b border-black bg-transparent focus:outline-none text-[10pt] pb-1"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div>
+                                        <div className="font-bold text-[10pt] -mb-1">City:</div>
+                                        <input
+                                            type="text"
+                                            value={city}
+                                            onChange={(e) => setCity(e.target.value)}
+                                            className="w-full border-b border-black bg-transparent focus:outline-none text-[10pt] pb-1"
+                                            required
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <div className="font-bold text-[10pt] -mb-1">State:</div>
+                                        <input
+                                            type="text"
+                                            value={state}
+                                            onChange={(e) => setState(e.target.value)}
+                                            className="w-full border-b border-black bg-transparent focus:outline-none text-[10pt] pb-1"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div>
+                                        <div className="font-bold text-[10pt] -mb-1">Zip Code:</div>
+                                        <input
+                                            type="text"
+                                            value={zip}
+                                            onChange={(e) => setZip(e.target.value)}
+                                            className="w-full border-b border-black bg-transparent focus:outline-none text-[10pt] pb-1"
+                                            required
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <div className="font-bold text-[10pt] -mb-1">Country:</div>
+                                        <input
+                                            type="text"
+                                            value={country}
+                                            onChange={(e) => setCountry(e.target.value)}
+                                            className="w-full border-b border-black bg-transparent focus:outline-none text-[10pt] pb-1"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* All Fields Required */}
+                        <div className="text-center text-[9pt] pt-12 pb-6">
+                            (all fields required)
+                        </div>
+
+                        {/* Submit Button */}
+                        <div className="flex justify-end">
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="text-[10pt] underline hover:no-underline hover:bg-slate-200 px-2 disabled:opacity-50 transition-opacity"
+                            >
+                                {isSubmitting ? 'Processing...' : 'Continue to Payment'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        )
+    }
+
+    // Original variant
     return (
         <div className="min-h-screen bg-white">
             <div className="max-w-6xl mx-auto px-8 py-16">
@@ -133,7 +273,7 @@ export function CheckoutView() {
                                     />
                                 </div>
 
-                                <div className="grid grid-cols-2  gap-4">
+                                <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label htmlFor="city" className="block text-[9pt] mb-2">
                                             City *

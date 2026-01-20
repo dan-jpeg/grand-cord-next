@@ -6,10 +6,28 @@ import { formatPrice } from '@/lib/utils'
 import Link from 'next/link'
 import { CartPhoto } from '@/components/store/cart-photo'
 import { CartItemText } from '@/components/store/cart-item-text'
+import { CartViewMobile } from '@/components/store/cart-view-mobile'
+import { useEffect, useRef } from 'react'
 
 export function CartView() {
     const { items, totalPrice } = useCart()
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+    const [isMobile, setIsMobile] = useState(false)
+
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 1024)
+        checkMobile()
+        window.addEventListener('resize', checkMobile)
+        return () => window.removeEventListener('resize', checkMobile)
+    }, [])
+
+    // Render mobile version on small screens
+    if (isMobile) {
+        return <CartViewMobile />
+    }
+
+
+
 
     if (items.length === 0) {
         return (
@@ -37,12 +55,12 @@ export function CartView() {
 
     return (
         <div className="min-h-screen bg-white">
-            {/* Main Content - Split View with Grids */}
-            <div className=" min-h-screen flex items-start justify-center">
-                {/* Left Side - Images Grid (3 columns + 1 empty) */}
-                <div className="flex-1 flex justify-end pr-[2px]">
-                    <div className="w-full max-w-4xl py-12 px-8">
-                        <div className="grid grid-cols-4 gap-6">
+            {/* Main Content - Responsive Layout */}
+            <div className="min-h-screen flex flex-col md:flex-row items-start justify-center">
+                {/* Left Side / Top on Mobile - Images Grid */}
+                <div className="w-full md:flex-1 md:flex md:justify-end md:pr-[2px]">
+                    <div className="w-full md:max-w-4xl py-12 px-8">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                             {items.map((item, index) => (
                                 <CartPhoto
                                     key={`${item.productId}-${item.size}-img`}
@@ -56,18 +74,17 @@ export function CartView() {
                     </div>
                 </div>
 
-                {/* Center Divider - Two 1px lines with 4px gap */}
-                {/* Center Divider - Two 1px lines with 4px gap */}
-                <div className="flex-shrink-0 flex justify-center min-h-screen">
+                {/* Center Divider - Hidden on Mobile */}
+                <div className="hidden md:flex flex-shrink-0 justify-center min-h-screen">
                     <div className="w-px bg-black"/>
                     <div className="w-[4px]"/>
                     <div className="w-px bg-black"/>
                 </div>
 
-                {/* Right Side - Item Text Grid (3 columns + 1 empty) */}
-                <div className="flex-1  flex justify-start pl-[2px]">
-                    <div className="w-full  max-w-4xl py-12 px-8">
-                        <div className="grid pl-12 grid-cols-4 gap-6">
+                {/* Right Side / Bottom on Mobile - Item Text Grid */}
+                <div className="w-full md:flex-1 md:flex md:justify-start md:pl-[2px]">
+                    <div className="w-full md:max-w-4xl py-12 px-8">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 md:pl-12">
                             {items.map((item, index) => (
                                 <CartItemText
                                     key={`${item.productId}-${item.size}-text`}
@@ -77,16 +94,17 @@ export function CartView() {
                                     onHover={setHoveredIndex}
                                 />
                             ))}
-
-                            {/* Checkout Section - [empty][subtotal + checkout][empty] */}
-                            <div className="col-start-2 col-span-2 mt-12">
-                                <div className="flex items-center justify-between whitespace-nowrap">
+                            {/* force new row */}
+                            <div className="md:col-span-4" />
+                            {/* Checkout Section */}
+                            <div className="md:col-start-2 md:col-span-2 mt-12">
+                                <div className="flex flex-col md:flex-row items-start md:items-center justify-between md:whitespace-nowrap gap-4 md:gap-0">
                                     <span className="text-[18pt] font-bold">Subtotal</span>
-                                    <span className="text-[18pt] mx-4">——</span>
+                                    <span className="hidden md:inline text-[18pt] mx-4">——</span>
                                     <span className="text-[18pt] font-bold">{formatPrice(totalPrice)} usd</span>
                                     <Link
                                         href="/checkout"
-                                        className="text-[18pt] font-bold  underline decoration-3 cursor-none underline-offset-4 hover:bg-slate-200 px-2 hover:no-underline ml-12"
+                                        className="text-[18pt] font-bold underline decoration-3 cursor-none underline-offset-4 hover:bg-slate-200 px-2 hover:no-underline md:ml-12"
                                     >
                                         Checkout
                                     </Link>
