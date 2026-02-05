@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.2.0",
-    "@prisma/client": "^7.2.0",
+    "@prisma/client": "^5.8.1",
     "@stripe/stripe-js": "^8.6.0",
     "@uploadthing/react": "^7.3.3",
     "bcryptjs": "^3.0.3",
@@ -35,10 +35,11 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "baseline-browser-mapping": "^2.9.19",
+    "dotenv": "^17.2.3",
     "dotenv-cli": "^11.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",
-    "prisma": "^6.19.2",
+    "prisma": "^5.8.1",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5"
