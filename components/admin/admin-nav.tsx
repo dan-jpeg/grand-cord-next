@@ -27,7 +27,7 @@ export function AdminNav({ active, variant = 'top-left' }: AdminNavProps) {
                     Inventory
                 </Link>
                 <Link
-                    href="/admin/products"
+                    href="/"
                     className={active === 'catalog' ? 'underline decoration-2 underline-offset-3' : 'hover:underline hover:decoration-2 hover:underline-offset-3'}
                 >
                     Catalog

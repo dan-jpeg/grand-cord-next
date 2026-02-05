@@ -3,20 +3,41 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
-import { useCart, type CartItem } from '@/contexts/cart-context'
+import { useCart } from '@/contexts/cart-context'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 
 export function Navigation() {
-    const { totalItems, items } = useCart()
+
+    const BACKSPACE_SPEED = 300
+    const TYPE_SPEED = 120
+    const EMPTY_PAUSE = 190
+    const POST_BLINK_PAUSE = 200
+    const FINAL_HIDE_DELAY = 250
+
+    const { totalItems } = useCart()
     const pathname = usePathname()
-    const [lastItem, setLastItem] = useState<CartItem | null>(null)
-    const [show, setShow] = useState(false)
+
     const [isCartHovered, setIsCartHovered] = useState(false)
     const [isMobile, setIsMobile] = useState(false)
+
+    const [displayNumber, setDisplayNumber] = useState('')
+    const [showCursor, setShowCursor] = useState(false)
+    const [cursorBlinkCount, setCursorBlinkCount] = useState(0)
+
     const prevTotalItems = useRef(0)
 
-    // Check if mobile
+    const animationRef = useRef<{
+        interval?: NodeJS.Timeout
+        timeout?: NodeJS.Timeout
+    }>({})
+
+    const clearAnimation = () => {
+        if (animationRef.current.interval) clearInterval(animationRef.current.interval)
+        if (animationRef.current.timeout) clearTimeout(animationRef.current.timeout)
+    }
+
+    // Detect mobile
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth < 1024)
         checkMobile()
@@ -24,105 +45,140 @@ export function Navigation() {
         return () => window.removeEventListener('resize', checkMobile)
     }, [])
 
-    // Only trigger notification when totalItems INCREASES
+    // Initialize count
     useEffect(() => {
-        if (totalItems > prevTotalItems.current && items.length > 0) {
-            const newest = items[items.length - 1]
-            setLastItem(newest)
-            setShow(true)
-
-            // Auto-hide after 3 seconds
-            const timer = setTimeout(() => {
-                setShow(false)
-            }, 3000)
-
+        if (prevTotalItems.current === 0 && totalItems > 0) {
+            setDisplayNumber(totalItems.toString())
             prevTotalItems.current = totalItems
-            return () => clearTimeout(timer)
+        }
+    }, [])
+
+    // Typewriter animation
+    useEffect(() => {
+        clearAnimation()
+
+        const oldValue = prevTotalItems.current.toString()
+        const newValue = totalItems.toString()
+
+        // Decrease or no change → snap update
+        if (totalItems <= prevTotalItems.current) {
+            setDisplayNumber(newValue)
+            setShowCursor(false)
+            prevTotalItems.current = totalItems
+            return
         }
 
-        // Always update ref to track current value
-        prevTotalItems.current = totalItems
-    }, [totalItems, items])
+        setShowCursor(true)
+        setCursorBlinkCount(0)
+        setDisplayNumber(oldValue)
 
-    // Hide navigation on mobile cart page
-    if (isMobile && pathname === '/cart') {
-        return null
-    }
+        let index = oldValue.length
+
+        // BACKSPACE
+        animationRef.current.interval = setInterval(() => {
+            index--
+            setDisplayNumber(oldValue.slice(0, Math.max(index, 0)))
+
+            if (index <= 0) {
+                clearInterval(animationRef.current.interval)
+
+                // Pause at empty state
+                animationRef.current.timeout = setTimeout(() => {
+                    // TYPE
+                    let typeIndex = 0
+                    animationRef.current.interval = setInterval(() => {
+                        typeIndex++
+                        setDisplayNumber(newValue.slice(0, typeIndex))
+
+                        if (typeIndex >= newValue.length) {
+                            clearInterval(animationRef.current.interval)
+
+                            // Post-type blink (2x)
+                            animationRef.current.timeout = setTimeout(() => {
+                                setCursorBlinkCount(1)
+                            }, POST_BLINK_PAUSE)
+                        }
+                    }, TYPE_SPEED)
+                }, EMPTY_PAUSE)
+            }
+        }, BACKSPACE_SPEED)
+
+        prevTotalItems.current = totalItems
+        return clearAnimation
+    }, [totalItems])
+
+    // Hide nav on mobile cart page OR on homepage
+    if (isMobile && pathname === '/cart') return null
+    if (pathname === '/') return null
+
+    const cursor = (
+        <AnimatePresence>
+            {showCursor && (
+                <motion.span
+                    key={cursorBlinkCount}
+                    initial={{ opacity: 1 }}
+                    animate={{ opacity: [1, 1, 0, 0, 1] }}
+                    transition={{
+                        duration: 1.7,
+                        times: [0, 0.25, 0.35, 0.85, 1],
+                        ease: 'linear',
+                        repeat: cursorBlinkCount > 0 ? cursorBlinkCount - 1 : Infinity,
+                    }}
+                    onAnimationComplete={() => {
+                        if (cursorBlinkCount > 0) {
+                            setTimeout(() => {
+                                setCursorBlinkCount(0)
+                                setShowCursor(false)
+                            }, FINAL_HIDE_DELAY)
+                        }
+                    }}
+                    className="inline-block font-mono font-semibold w-[2.5px] h-[16px] bg-black ml-[2px]"
+                />
+            )}
+        </AnimatePresence>
+    )
 
     return (
-        <nav className="fixed top-0  left-0 right-0 border-black z-50">
-            <div className="mx-auto px-8 py-12 md:py-4 flex items-center justify-between">
+        <nav className="fixed top-0 left-0 right-0 z-20">
+            {/* Desktop */}
+            <div className="hidden lg:flex mx-auto px-8 py-12 md:py-4 items-center justify-between">
                 <Link href="/" className="z-50 text-[9pt] font-bold uppercase hover:underline">
                     ⚉
                 </Link>
 
-                <div className="flex items-center gap-4">
-                    {/* Add to cart notification */}
-                    <AnimatePresence>
-                        {show && lastItem && (
-                            <motion.div
-                                initial={{opacity: 0, x: 20}}
-                                animate={{opacity: 1, x: 0}}
-                                exit={{opacity: 0, x: 20}}
-                                transition={{
-                                    type: 'spring',
-                                    stiffness: 260,
-                                    damping: 20
-                                }}
-                                className="flex items-center gap-1 text-[8pt]"
-                            >
-                                <span className="font-bold">+</span>
-                                <span className="bg-slate-200/70 hover:bg-yellow-300/60 rounded-full px-1 py-0 font-bold uppercase relative">
-                                    {lastItem.productName}
-                                </span>
-                                <Image
-                                    src="/crate-open.svg"
-                                    alt="Added"
-                                    width={24}
-                                    height={24}
-                                    className="w-5 h-4"
-                                />
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+                <Link
+                    href="/cart"
+                    className="relative px-2 rounded-full flex items-center gap-2"
+                    onMouseEnter={() => setIsCartHovered(true)}
+                    onMouseLeave={() => setIsCartHovered(false)}
+                >
 
-                    {/* Cart icon with hover animation */}
-                    <Link
-                        href="/cart"
-                        className="relative hover:bg-yellow-200/30 px-2 rounded-full flex items-center gap-2 transition-opacity"
-                        onMouseEnter={() => setIsCartHovered(true)}
-                        onMouseLeave={() => setIsCartHovered(false)}
-                    >
-                        <div className="relative w-5 h-5 overflow-visible">
-                            <AnimatePresence mode="wait">
-                                {isCartHovered && (
-                                    <motion.div
-                                        initial={{ y: -4, opacity: 0 }}
-                                        animate={{ y: 0, opacity: 1 }}
-                                        exit={{ y: -4, opacity: 0 }}
-                                        transition={{
-                                            type: 'spring',
-                                            stiffness: 900,
-                                            damping: 40,
-                                        }}
-                                        className="absolute inset-0"
-                                    >
-                                        <Image
-                                            src="/crate-open.svg"
-                                            alt="Cart"
-                                            width={20}
-                                            height={20}
-                                            className="w-5 h-5"
-                                        />
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-                        {totalItems > 0 && (
-                            <span className="text-[9pt] font-bold">({totalItems})</span>
-                        )}
-                    </Link>
-                </div>
+                    {totalItems > 0 && (
+                        <span className="inline-flex items-center min-w-[20px] text-[9pt] font-bold tabular-nums">
+                            {displayNumber}
+                            {cursor}
+                        </span>
+                    )}
+                </Link>
+            </div>
+
+            {/* Mobile */}
+            <div className="flex lg:hidden mx-auto px-10 py-4 h-[64px] bg-[#FCFDF0] items-center justify-between">
+                <Link href="/" className="text-[9pt] font-bold opacity-10 uppercase">
+                    ⚉
+                </Link>
+
+                <Link
+                    href="/cart"
+                    className="flex items-center gap-2"
+                    onMouseEnter={() => setIsCartHovered(true)}
+                    onMouseLeave={() => setIsCartHovered(false)}
+                >
+                    <span className="inline-flex items-center min-w-[16px] text-[9pt] font-bold tabular-nums">
+                        {displayNumber}
+                        {cursor}
+                    </span>
+                </Link>
             </div>
         </nav>
     )

@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { notFound } from 'next/navigation'
 import { ProductDetail } from '@/components/store/product-detail'
 import {ProductDetailAlt} from "@/components/store/product-detail-alt";
+import {ProductDetailBen} from "@/components/store/product-detail-ben";
 
 export default async function ProductPage({
                                               params,
@@ -19,5 +20,5 @@ export default async function ProductPage({
         notFound()
     }
 
-    return <ProductDetail product={product} />
+    return <ProductDetailBen product={product} />
 }

@@ -2,6 +2,7 @@
 @import "uploadthing/tw/v4";
 @source "../node_modules/@uploadthing/react/dist";
 
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -13,6 +14,7 @@
 
   --font-family-alte: 'Alte Haas Grotesk', sans-serif;
   --font-family-reformat: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+  --font-family-inter: 'Inter', sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -21,6 +23,24 @@
     --foreground: #ededed;
   }
 }
+
+
+@font-face {
+  font-family: 'Inter';
+  src: url('../public/fonts/Inter-VariableFont_opsz,wght.ttf') format('truetype-variations');
+  font-weight: 100 900; /* supports all weights from 100-900 */
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('../public/fonts/Inter-Italic-VariableFont_opsz,wght.ttf') format('truetype-variations');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
 
 @font-face {
   font-family: 'Alte Haas Grotesk';
@@ -57,6 +77,10 @@
   font-family: "Reformat A Mono Test", monospace;
 }
 
+.font-inter {
+  font-family: "Inter", sans-serif;
+}
+
 @font-face {
   font-family: 'ReformatMono';
   src: url('../public/fonts/ReformatAMonoTest-Bold.woff2') format('woff2');
@@ -90,4 +114,8 @@ body::-webkit-scrollbar {
 
 html {
   scroll-behavior: smooth;
+}
+
+html, body {
+  overscroll-behavior: none;
 }

@@ -27,8 +27,9 @@ export type CartItem = {
   quantity: number
   price: number
   image?: string
+  material?: string
+  color?: string
 }
-
 // Shipping address
 export type ShippingAddress = {
   name: string
@@ -45,4 +46,9 @@ export type AdminStats = {
   totalRevenue: number
   pendingOrders: number
   lowStockProducts: number
+}
+
+export type CatalogSectionProps = {
+  products: ProductWithSizes[]
+  mobileLayout: '1x1' | '2x2' | '3x3'
 }

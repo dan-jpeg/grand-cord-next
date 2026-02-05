@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatPrice(price: number): string {
   const rounded = price % 1 === 0 ? Math.round(price) : price.toFixed(2)
-  return `${rounded} USD`
+  return `${rounded} `
 }
 
 export function generateOrderNumber(): string {
