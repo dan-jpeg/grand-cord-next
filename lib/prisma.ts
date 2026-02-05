@@ -1,13 +1,20 @@
+// lib/prisma.ts
 import { PrismaClient } from '@prisma/client'
 
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined }
+/**
+ * Use a global variable to preserve the Prisma client across hot reloads in development
+ * and across serverless invocations in production.
+ */
+declare global {
+    // eslint-disable-next-line no-var
+    var prisma: PrismaClient | undefined
+}
 
-export const prisma =
-    globalForPrisma.prisma ??
+export const prisma: PrismaClient =
+    globalThis.prisma ??
     new PrismaClient({
-      log: ['query', 'info', 'warn', 'error'],
-      __internal: { usePreparedStatements: false } as any,
+        log: ['query', 'info', 'warn', 'error'], // optional
     })
 
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+// Do not disconnect in serverless, only reuse the client
+if (process.env.NODE_ENV !== 'production') globalThis.prisma = prisma
