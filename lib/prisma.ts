@@ -1,20 +1,18 @@
-// lib/prisma.ts
 import { PrismaClient } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
 
-/**
- * Use a global variable to preserve the Prisma client across hot reloads in development
- * and across serverless invocations in production.
- */
-declare global {
-    // eslint-disable-next-line no-var
-    var prisma: PrismaClient | undefined
+const globalForPrisma = globalThis as unknown as {
+    prisma: PrismaClient | undefined
 }
 
-export const prisma: PrismaClient =
-    globalThis.prisma ??
-    new PrismaClient({
-        log: ['query', 'info', 'warn', 'error'], // optional
-    })
+const adapter = new PrismaPg({
+    connectionString: process.env.DATABASE_URL!
+})
 
-// Do not disconnect in serverless, only reuse the client
-if (process.env.NODE_ENV !== 'production') globalThis.prisma = prisma
+export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter })
+
+if (process.env.NODE_ENV !== 'production') {
+    globalForPrisma.prisma = prisma
+}
+
+export default prisma
