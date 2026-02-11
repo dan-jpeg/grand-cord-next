@@ -6,6 +6,7 @@ import { StockKey } from './stock-key'
 import { ProductStockCard } from './product-stock-card'
 import { STOCK_THRESHOLDS } from '@/lib/constants'
 import type { Product, ProductSize } from '@prisma/client'
+import { matchesProductSearch } from '@/lib/product-search'
 
 type ProductWithSizes = Product & {
     sizes: ProductSize[]
@@ -45,10 +46,8 @@ export function ProductsTable({ products }: { products: ProductWithSizes[] }) {
     const filteredProducts = useMemo(() => {
         let filtered = products
 
-        if (search) {
-            filtered = filtered.filter((product) =>
-                product.name.toLowerCase().includes(search.toLowerCase())
-            )
+        if (search.trim()) {
+            filtered = filtered.filter((product) => matchesProductSearch(product, search))
         }
 
         if (stockFilter !== 'ALL') {
@@ -104,6 +103,29 @@ export function ProductsTable({ products }: { products: ProductWithSizes[] }) {
 
             {/* Main Content - Centered */}
             <div className="w-full max-w-[900px] space-y-4">
+                <div className="flex items-center justify-between mb-4 text-[8pt]">
+                    <div className="flex-1 relative">
+                        <input
+                            type="text"
+                            value={search}
+                            onChange={(e) => {
+                                setSearch(e.target.value)
+                                setCurrentPage(1)
+                            }}
+                            className="absolute inset-0 opacity-0 cursor-default"
+                            autoFocus
+                        />
+
+                        <div className="pointer-events-none">
+                            {search ? (
+                                <div className="font-bold">■ {search}</div>
+                            ) : (
+                                <div>■ Start Typing to Search By Keyword, Item Code, Color, Material, or Designer</div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
                 {/* Stock View - Tight Grid */}
                 {viewMode === 'stock' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-0 ">

@@ -272,8 +272,14 @@ export function CatalogNav({
         setIsSearchOpen(true)
         setIsExpanded(true)
     }
+    const scrollToCatalogTop = () => {
+        document.getElementById('catalog')?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+        })
+    }
     const showingBreadcrumb = !isSearchOpen && searchQuery
-    const isDesktopSearchMode = isDesktop && !!searchQuery.trim()
+    const isDesktopSearchMode = isDesktop && !!searchQuery.trim() && !isSearchOpen
     const showMainContent = isDesktop
         ? !isDesktopSearchMode
         : isExpanded || (!isDesktop && isMobileSearchLocked && isSearchOpen)
@@ -286,7 +292,7 @@ export function CatalogNav({
         >
             <div className={`flex flex-col pl-4 pr-10 lg:pr-[2vw] lg:pl-[calc(5vw+0px)] pt-6 relative transition-all ${
                 isDesktop && isStuck && !isDesktopSearchMode ? 'lg:border-b-[0.5px]' : ''
-            } ${isDesktopSearchMode ? 'gap-0 pb-0' : 'gap-3 pb-6'}`}>
+            } ${isDesktopSearchMode ? 'gap-4 pb-0' : 'gap-3 pb-6'}`}>
                 {/* Header Row */}
                 <div className="flex items-center justify-between relative z-10 w-full">
                     <button onClick={handleToggleExpand}>
@@ -308,7 +314,7 @@ export function CatalogNav({
 
                 {/* Desktop Search Breadcrumb Strip */}
                 {isDesktop && isDesktopSearchMode && (
-                    <div className="-mx-[calc(5vw+16px)] -mr-[2vw] bg-[#FCFDF0] px-[calc(5vw+16px)] pr-[2vw] py-2 text-[9pt] z-10">
+                    <div className="-mx-[calc(5vw+16px)] -mr-[2vw] bg-[#FCFDF0] px-[calc(5vw+16px)] pr-[2vw] py-4 text-[9pt] z-10">
                         {isSearchOpen ? (
                             <div className="flex items-center gap-2">
                                 <span aria-hidden className="font-bold">▸</span>
@@ -320,7 +326,12 @@ export function CatalogNav({
                                     onBlur={handleSearchBlur}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
-                                            ;(e.currentTarget as HTMLInputElement).blur()
+                                            scrollToCatalogTop()
+                                            if (isDesktop) {
+                                                setIsSearchOpen(false)
+                                            } else {
+                                                ;(e.currentTarget as HTMLInputElement).blur()
+                                            }
                                         }
                                     }}
                                     placeholder=""
@@ -374,7 +385,12 @@ export function CatalogNav({
                                         onBlur={handleSearchBlur}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
-                                                ;(e.currentTarget as HTMLInputElement).blur()
+                                                scrollToCatalogTop()
+                                                if (isDesktop) {
+                                                    setIsSearchOpen(false)
+                                                } else {
+                                                    ;(e.currentTarget as HTMLInputElement).blur()
+                                                }
                                             }
                                         }}
                                         placeholder=""

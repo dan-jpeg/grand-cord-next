@@ -8,6 +8,7 @@ import type { Product, ProductSize } from '@prisma/client'
 
 type ProductWithSizes = Product & {
     sizes: ProductSize[]
+    keywords?: string[]
 }
 
 const AVAILABLE_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
@@ -21,6 +22,7 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
     const [name, setName] = useState(product?.name || '')
     const [slug, setSlug] = useState(product?.slug || '')
     const [description, setDescription] = useState(product?.description || '')
+    const [keywordsInput, setKeywordsInput] = useState((product?.keywords || []).join(', '))
     const [designerNames, setDesignerNames] = useState<string[]>(
         product?.designerNames?.length ? product.designerNames : ['']
     )
@@ -133,6 +135,10 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
             name,
             slug: slug || undefined,
             description: description || undefined,
+            keywords: keywordsInput
+                .split(/[,\n]/)
+                .map((keyword: string) => keyword.trim())
+                .filter(Boolean),
             designerNames: designerNames.map((name) => name.trim()).filter(Boolean).slice(0, MAX_DESIGNERS),
             material: material || undefined,
             color: color || undefined,
@@ -182,6 +188,23 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
                     />
                     <p className="text-xs text-neutral-600 mt-1">
                         Leave blank to auto-generate from product name
+                    </p>
+                </div>
+
+                <div>
+                    <label htmlFor="keywords" className="block text-sm font-medium mb-2">
+                        Keywords
+                    </label>
+                    <textarea
+                        id="keywords"
+                        value={keywordsInput}
+                        onChange={(e) => setKeywordsInput(e.target.value)}
+                        rows={3}
+                        placeholder="e.g. oversized, winter, outerwear, cotton"
+                        className="w-full px-4 py-3 border border-neutral-300 focus:outline-none focus:border-black"
+                    />
+                    <p className="text-xs text-neutral-600 mt-1">
+                        Comma-separated search keywords used in both store and admin product search.
                     </p>
                 </div>
 

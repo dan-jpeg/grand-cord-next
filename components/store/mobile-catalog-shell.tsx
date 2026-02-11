@@ -5,6 +5,7 @@ import { MobileHero } from '@/components/store/mobile-hero'
 import { CatalogSection } from '@/components/store/catalog-section'
 import { CatalogNavWrapper } from '@/components/store/catalog-nav-wrapper'
 import type { Product, ProductSize } from '@prisma/client'
+import { matchesProductSearch } from '@/lib/product-search'
 
 type ProductWithSizes = Product & { sizes: ProductSize[] }
 
@@ -14,13 +15,7 @@ export function MobileCatalogShell({ products }: { products: ProductWithSizes[] 
 
     const filteredProducts = useMemo(() => {
         if (!searchQuery) return products
-        const q = searchQuery.toLowerCase()
-        return products.filter(p =>
-            p.name.toLowerCase().includes(q) ||
-            p.designerNames.some((designer) => designer.toLowerCase().includes(q)) ||
-            p.color?.toLowerCase().includes(q) ||
-            p.material?.toLowerCase().includes(q)
-        )
+        return products.filter((product) => matchesProductSearch(product, searchQuery))
     }, [products, searchQuery])
 
     return (

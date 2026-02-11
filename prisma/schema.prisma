@@ -12,6 +12,7 @@ model Product {
   name            String
   slug            String   @unique
   description     String?
+  keywords        String[] @default([])
   designerNames   String[] @default([])
   material        String?
   color           String?

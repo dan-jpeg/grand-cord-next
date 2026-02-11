@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { ProductCard } from './product-card'
 import { CatalogNav } from './catalog-nav'
 import type { Product, ProductSize } from '@prisma/client'
+import { matchesProductSearch } from '@/lib/product-search'
 
 type ProductWithSizes = Product & {
     sizes: ProductSize[]
@@ -27,13 +28,7 @@ export function CatalogSection({
     const filteredProducts = useMemo(() => {
         if (!searchQuery.trim()) return products
 
-        const query = searchQuery.toLowerCase()
-        return products.filter(product =>
-            product.name.toLowerCase().includes(query) ||
-            product.designerNames.some((designer) => designer.toLowerCase().includes(query)) ||
-            product.material?.toLowerCase().includes(query) ||
-            product.color?.toLowerCase().includes(query)
-        )
+        return products.filter((product) => matchesProductSearch(product, searchQuery))
     }, [products, searchQuery])
 
     const gridClasses = useMemo(() => {
