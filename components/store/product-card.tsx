@@ -39,6 +39,7 @@ export function ProductCard({
 
     const images = product.images as unknown as ImageData[]
     const designerLabel = formatDesignerNames(product.designerNames)
+    const keepDesignerSingleLine = product.designerNames.length < 3
     const displayImage = isMobile
         ? images.find(img => img.isMobilePrimary)?.url || images[0]?.url
         : images.find(img => img.isDesktopPrimary)?.url || images[0]?.url
@@ -116,7 +117,7 @@ export function ProductCard({
                         <div className="text-left pl-[5vw] ">
                             <p className="font-medium text-[11pt]">{product.name}</p>
                             {designerLabel && (
-                                <p className="       mt-4">
+                                <p className={`mt-4 ${keepDesignerSingleLine ? 'whitespace-nowrap' : ''}`}>
                                     {designerLabel}
                                 </p>
                             )}
@@ -195,7 +196,7 @@ export function ProductCard({
                         <p className="">{product.name}</p>
 
                         {designerLabel && (
-                            <p className=" mt-12">{designerLabel}</p>
+                            <p className={`mt-12 ${keepDesignerSingleLine ? 'whitespace-nowrap' : ''}`}>{designerLabel}</p>
                         )}
                     </div>
                 </div>

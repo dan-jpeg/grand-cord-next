@@ -314,7 +314,7 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                 </div>
 
                 {/* Mobile Images */}
-                <div className=" -mx-12  my-4 scale-110 h-[60vh] snap-y snap-mandatory scroll-smooth">
+                <div className=" -mx-12  my-4 scale-105ç h-[59vh] snap-y snap-mandatory scroll-smooth">
                     {imageArray.map((img, index) => (
                         <div key={index} className="w-full snap-start snap-always">
                             {img ? (

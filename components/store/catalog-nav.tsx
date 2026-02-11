@@ -98,6 +98,15 @@ export function CatalogNav({
             const currentScrollY = window.scrollY
             const isScrollingUp = currentScrollY < lastScrollY
 
+            // Keep nav closed and stable while showing mobile search results.
+            if (isMobileSearchLocked) {
+                setShowLayout(false)
+                setIsExpanded(false)
+                wasLockedRef.current = isLocked
+                setLastScrollY(currentScrollY)
+                return
+            }
+
             // If manually opened while at top (isLocked), keep it open
             if (manuallyOpenedRef.current && isLocked) {
                 setLastScrollY(currentScrollY)
@@ -124,7 +133,7 @@ export function CatalogNav({
 
         window.addEventListener('scroll', handleScroll, { passive: true })
         return () => window.removeEventListener('scroll', handleScroll)
-    }, [lastScrollY, isDesktop, isLocked])
+    }, [lastScrollY, isDesktop, isLocked, isMobileSearchLocked])
 
     // Layout fade-out at bottom
     useEffect(() => {
@@ -242,7 +251,10 @@ export function CatalogNav({
         if (!isDesktop && v.trim()) setIsMobileSearchLocked(true)
     }
     const handleSearchBlur = () => {
-        if (isDesktop) return
+        if (isDesktop) {
+            setIsSearchOpen(false)
+            return
+        }
         if (searchQuery.trim()) {
             setIsSearchOpen(false)
             setIsExpanded(false)
@@ -261,13 +273,20 @@ export function CatalogNav({
         setIsExpanded(true)
     }
     const showingBreadcrumb = !isSearchOpen && searchQuery
-    const showMainContent = isDesktop || isExpanded || (!isDesktop && isMobileSearchLocked && isSearchOpen)
+    const isDesktopSearchMode = isDesktop && !!searchQuery.trim()
+    const showMainContent = isDesktop
+        ? !isDesktopSearchMode
+        : isExpanded || (!isDesktop && isMobileSearchLocked && isSearchOpen)
 
     return (
-        <div ref={navRef} className="bg-transparent lg:bg-white w-full min-h-[120px]" data-catalog-nav>
-            <div className={`flex flex-col gap-3 pl-4  pr-10 lg:pr-[2vw] lg:pl-[calc(5vw+0px)] pt-6 pb-6 relative transition-all ${
-                isDesktop && isStuck ? 'lg:border-b-[0.5px]' : ''
-            }`}>
+        <div
+            ref={navRef}
+            className={`bg-transparent lg:bg-white w-full ${isDesktopSearchMode ? 'min-h-0' : 'min-h-[120px]'}`}
+            data-catalog-nav
+        >
+            <div className={`flex flex-col pl-4 pr-10 lg:pr-[2vw] lg:pl-[calc(5vw+0px)] pt-6 relative transition-all ${
+                isDesktop && isStuck && !isDesktopSearchMode ? 'lg:border-b-[0.5px]' : ''
+            } ${isDesktopSearchMode ? 'gap-0 pb-0' : 'gap-3 pb-6'}`}>
                 {/* Header Row */}
                 <div className="flex items-center justify-between relative z-10 w-full">
                     <button onClick={handleToggleExpand}>
@@ -282,7 +301,35 @@ export function CatalogNav({
 
                 {/* Mobile Search Breadcrumb */}
                 {!isDesktop && showingBreadcrumb && !isExpanded && (
-                    <button onClick={editSearch} className="text-[9pt] font-bold text-left z-10">▸ {searchQuery}</button>
+                    <div className="-ml-4 -mr-10 pl-4 pr-10 py-2 bg-[#FCFDF0] z-10">
+                        <button onClick={editSearch} className="text-[9pt] font-bold text-left">▸ {searchQuery}</button>
+                    </div>
+                )}
+
+                {/* Desktop Search Breadcrumb Strip */}
+                {isDesktop && isDesktopSearchMode && (
+                    <div className="-mx-[calc(5vw+16px)] -mr-[2vw] bg-[#FCFDF0] px-[calc(5vw+16px)] pr-[2vw] py-2 text-[9pt] z-10">
+                        {isSearchOpen ? (
+                            <div className="flex items-center gap-2">
+                                <span aria-hidden className="font-bold">▸</span>
+                                <input
+                                    autoFocus
+                                    className="bg-transparent text-[9pt] outline-none z-10 w-full"
+                                    value={searchQuery}
+                                    onChange={(e) => handleSearchChange(e.target.value)}
+                                    onBlur={handleSearchBlur}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            ;(e.currentTarget as HTMLInputElement).blur()
+                                        }
+                                    }}
+                                    placeholder=""
+                                />
+                            </div>
+                        ) : (
+                            <button onClick={editSearch} className="hover:underline">▸ {searchQuery}</button>
+                        )}
+                    </div>
                 )}
 
                 {/* Main Content Area */}
@@ -292,9 +339,12 @@ export function CatalogNav({
                             initial={isDesktop ? false : { opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: 'auto' }}
                             exit={{ opacity: 0, height: 0 }}
-                            className="flex flex-col gap-3 overflow-hidden"
+                            transition={!isDesktop ? { duration: 0 } : undefined}
+                            className={`flex flex-col gap-3 ${
+                                !isDesktop && isSearchOpen ? 'overflow-visible' : 'overflow-hidden'
+                            }`}
                         >
-                            {(!isMobileSearchLocked || isDesktop) && (
+                            {(!isMobileSearchLocked || isDesktop) && !isDesktopSearchMode && (
                                 <div className="flex flex-col gap-3 text-[9pt] z-10">
                                     <Link href="/sample" className="hover:underline">Sample</Link>
                                     <button onClick={() => setIsSearchOpen(!isSearchOpen)} className="text-left hover:underline">Search</button>
@@ -302,7 +352,11 @@ export function CatalogNav({
                             )}
 
                             {isSearchOpen && (
-                                <div className="flex items-center gap-2">
+                                <div
+                                    className={`flex items-center gap-2 ${
+                                        !isDesktop ? '-ml-4 -mr-10 pl-4 pr-10 py-2 bg-[#FCFDF0]' : ''
+                                    }`}
+                                >
                                     {isMobileSearchLocked && !isDesktop && (
                                         <span
                                             aria-hidden
@@ -314,7 +368,7 @@ export function CatalogNav({
                                     )}
                                     <input
                                         autoFocus
-                                        className="bg-transparent text-[9pt] outline-none z-10"
+                                        className="bg-transparent text-[9pt] outline-none z-10 w-full min-w-0"
                                         value={searchQuery}
                                         onChange={(e) => handleSearchChange(e.target.value)}
                                         onBlur={handleSearchBlur}
@@ -328,7 +382,7 @@ export function CatalogNav({
                                 </div>
                             )}
 
-                            {showingBreadcrumb && (
+                            {!isDesktop && showingBreadcrumb && (
                                 <div className="text-[9pt] z-10">
                                     <button onClick={editSearch} className="hover:underline">▸ {searchQuery}</button>
                                 </div>
@@ -339,7 +393,7 @@ export function CatalogNav({
 
                 {/* Layout Switcher */}
                 <AnimatePresence>
-                    {showLayout && !isDesktop && !isMobileSearchLocked && (
+                    {showLayout && !isDesktop && !isMobileSearchLocked && !isSearchOpen && (
                         <motion.div
                             ref={layoutRef}
                             initial={{ opacity: 0, y: -40 }}
