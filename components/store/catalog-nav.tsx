@@ -52,6 +52,7 @@ export function CatalogNav({
     }>({})
     const wasLockedRef = useRef(false)
     const manuallyOpenedRef = useRef(false)
+    const mobileBlurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     const clearAnimation = () => {
         if (animationRef.current.interval) clearInterval(animationRef.current.interval)
@@ -63,6 +64,12 @@ export function CatalogNav({
         checkDesktop()
         window.addEventListener('resize', checkDesktop)
         return () => window.removeEventListener('resize', checkDesktop)
+    }, [])
+
+    useEffect(() => {
+        return () => {
+            if (mobileBlurTimeoutRef.current) clearTimeout(mobileBlurTimeoutRef.current)
+        }
     }, [])
 
     // Detect when sticky element is actually stuck (desktop only)
@@ -97,6 +104,13 @@ export function CatalogNav({
         const handleScroll = () => {
             const currentScrollY = window.scrollY
             const isScrollingUp = currentScrollY < lastScrollY
+
+            // Keep search input state stable while user is actively typing.
+            if (isSearchOpen) {
+                setShowLayout(false)
+                setLastScrollY(currentScrollY)
+                return
+            }
 
             // Keep nav closed and stable while showing mobile search results.
             if (isMobileSearchLocked) {
@@ -133,7 +147,7 @@ export function CatalogNav({
 
         window.addEventListener('scroll', handleScroll, { passive: true })
         return () => window.removeEventListener('scroll', handleScroll)
-    }, [lastScrollY, isDesktop, isLocked, isMobileSearchLocked])
+    }, [lastScrollY, isDesktop, isLocked, isMobileSearchLocked, isSearchOpen])
 
     // Layout fade-out at bottom
     useEffect(() => {
@@ -248,18 +262,34 @@ export function CatalogNav({
     const handleSearchChange = (v: string) => {
         setSearchQuery(v)
         onSearchChange?.(v)
-        if (!isDesktop && v.trim()) setIsMobileSearchLocked(true)
+        if (!v.trim()) setIsMobileSearchLocked(false)
+    }
+
+    const isIOSMobile = () => {
+        if (typeof navigator === 'undefined') return false
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
     }
     const handleSearchBlur = () => {
         if (isDesktop) {
             setIsSearchOpen(false)
             return
         }
-        if (searchQuery.trim()) {
+        if (mobileBlurTimeoutRef.current) clearTimeout(mobileBlurTimeoutRef.current)
+        mobileBlurTimeoutRef.current = setTimeout(() => {
+            if (searchQuery.trim()) {
+                setIsSearchOpen(false)
+                setIsExpanded(false)
+                setShowLayout(false)
+                setIsMobileSearchLocked(true)
+                return
+            }
+
             setIsSearchOpen(false)
             setIsExpanded(false)
-            setIsMobileSearchLocked(true)
-        }
+            setShowLayout(false)
+            setIsMobileSearchLocked(false)
+        }, 80)
     }
     const editSearch = () => {
         if (!isDesktop && isMobileSearchLocked) {
@@ -274,9 +304,23 @@ export function CatalogNav({
     }
     const scrollToCatalogTop = () => {
         document.getElementById('catalog')?.scrollIntoView({
-            behavior: 'smooth',
+            behavior: !isDesktop && isIOSMobile() ? 'auto' : 'smooth',
             block: 'start',
         })
+    }
+    const submitSearch = () => {
+        scrollToCatalogTop()
+
+        if (isDesktop) {
+            setIsSearchOpen(false)
+            return
+        }
+
+        const hasQuery = !!searchQuery.trim()
+        setIsSearchOpen(false)
+        setIsExpanded(false)
+        setShowLayout(false)
+        setIsMobileSearchLocked(hasQuery)
     }
     const showingBreadcrumb = !isSearchOpen && searchQuery
     const isDesktopSearchMode = isDesktop && !!searchQuery.trim() && !isSearchOpen
@@ -316,7 +360,13 @@ export function CatalogNav({
                 {isDesktop && isDesktopSearchMode && (
                     <div className="-mx-[calc(5vw+16px)] -mr-[2vw] bg-[#FCFDF0] px-[calc(5vw+16px)] pr-[2vw] py-4 text-[9pt] z-10">
                         {isSearchOpen ? (
-                            <div className="flex items-center gap-2">
+                            <form
+                                className="flex items-center gap-2"
+                                onSubmit={(e) => {
+                                    e.preventDefault()
+                                    submitSearch()
+                                }}
+                            >
                                 <span aria-hidden className="font-bold">▸</span>
                                 <input
                                     autoFocus
@@ -324,19 +374,13 @@ export function CatalogNav({
                                     value={searchQuery}
                                     onChange={(e) => handleSearchChange(e.target.value)}
                                     onBlur={handleSearchBlur}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            scrollToCatalogTop()
-                                            if (isDesktop) {
-                                                setIsSearchOpen(false)
-                                            } else {
-                                                ;(e.currentTarget as HTMLInputElement).blur()
-                                            }
-                                        }
-                                    }}
+                                    enterKeyHint="search"
+                                    autoCapitalize="none"
+                                    autoCorrect="off"
+                                    spellCheck={false}
                                     placeholder=""
                                 />
-                            </div>
+                            </form>
                         ) : (
                             <button onClick={editSearch} className="hover:underline">▸ {searchQuery}</button>
                         )}
@@ -363,10 +407,14 @@ export function CatalogNav({
                             )}
 
                             {isSearchOpen && (
-                                <div
+                                <form
                                     className={`flex items-center gap-2 ${
                                         !isDesktop ? '-ml-4 -mr-10 pl-4 pr-10 py-2 bg-[#FCFDF0]' : ''
                                     }`}
+                                    onSubmit={(e) => {
+                                        e.preventDefault()
+                                        submitSearch()
+                                    }}
                                 >
                                     {isMobileSearchLocked && !isDesktop && (
                                         <span
@@ -383,19 +431,13 @@ export function CatalogNav({
                                         value={searchQuery}
                                         onChange={(e) => handleSearchChange(e.target.value)}
                                         onBlur={handleSearchBlur}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                scrollToCatalogTop()
-                                                if (isDesktop) {
-                                                    setIsSearchOpen(false)
-                                                } else {
-                                                    ;(e.currentTarget as HTMLInputElement).blur()
-                                                }
-                                            }
-                                        }}
+                                        enterKeyHint="search"
+                                        autoCapitalize="none"
+                                        autoCorrect="off"
+                                        spellCheck={false}
                                         placeholder=""
                                     />
-                                </div>
+                                </form>
                             )}
 
                             {!isDesktop && showingBreadcrumb && (
