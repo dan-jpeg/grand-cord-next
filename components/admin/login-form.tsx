@@ -6,79 +6,75 @@ import { useRouter } from 'next/navigation'
 
 export function LoginForm() {
     const router = useRouter()
-    const [email, setEmail] = useState('')
+    const [identifier, setIdentifier] = useState('')
     const [password, setPassword] = useState('')
-    const [error, setError] = useState('')
+    const [hasError, setHasError] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
+    const canSubmit = identifier.trim().length > 0 && password.length > 0
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
-        setError('')
+        if (!canSubmit || isLoading) return
+        setHasError(false)
         setIsLoading(true)
 
         try {
             const result = await signIn('credentials', {
-                email,
+                identifier,
                 password,
                 redirect: false,
             })
 
             if (result?.error) {
-                setError('Invalid email or password')
+                setHasError(true)
             } else {
                 router.push('/admin')
                 router.refresh()
             }
-        } catch (error) {
-            setError('Something went wrong')
+        } catch {
+            setHasError(true)
         } finally {
             setIsLoading(false)
         }
     }
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-6">
-            {error && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-sm">
-                    {error}
-                </div>
-            )}
-
-            <div>
-                <label htmlFor="email" className="block text-sm font-medium mb-2">
-                    Email
-                </label>
+        <form onSubmit={handleSubmit} className="w-full">
+            <div className="fixed top-0 left-0 right-0 z-20 px-4 pt-2 sm:px-8 sm:pt-4 space-y-1">
                 <input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 border border-neutral-300 focus:outline-none focus:border-black"
+                    id="identifier"
+                    type="text"
+                    aria-label="Login"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    className={`w-full h-10 px-3 bg-neutral-200 text-[11px] tracking-[0.18em] border-0 rounded-none outline-none ${
+                        hasError ? 'bg-neutral-300' : ''
+                    }`}
                     required
                 />
-            </div>
-
-            <div>
-                <label htmlFor="password" className="block text-sm font-medium mb-2">
-                    Password
-                </label>
                 <input
                     id="password"
                     type="password"
+                    aria-label="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 border border-neutral-300 focus:outline-none focus:border-black"
+                    className={`w-full h-10 px-3 bg-neutral-200 text-[11px] tracking-[0.18em] border-0 rounded-none outline-none ${
+                        hasError ? 'bg-neutral-300' : ''
+                    }`}
                     required
                 />
             </div>
 
-            <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-black text-white py-3 font-medium hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-                {isLoading ? 'Signing in...' : 'Sign In'}
-            </button>
+            {canSubmit && (
+                <button
+                    type="submit"
+                    aria-label="Submit login"
+                    disabled={isLoading}
+                    className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[90px] leading-none tracking-[0.24em] text-black/85 hover:text-black disabled:opacity-30"
+                >
+                    ▸
+                </button>
+            )}
         </form>
     )
 }

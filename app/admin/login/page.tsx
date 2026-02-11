@@ -12,8 +12,7 @@ export default async function LoginPage() {
     }
 
     return (
-        <div className="flex flex-col items-center justify-center h-full">
-            <div className="text-2xl font-bold mb-8">ADMIN LOGIN</div>
+        <div className="w-full min-h-screen bg-white">
             <LoginForm />
         </div>
     )

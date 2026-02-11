@@ -3,8 +3,8 @@ import { prisma } from './lib/prisma'
 import bcrypt from 'bcryptjs'
 
 async function createAdmin() {
-    const email = 'admin@example.com'
-    const password = 'admin123'
+    const email = 'benjamin'
+    const password = 'francis0'
 
     const hashedPassword = await bcrypt.hash(password, 10)
 

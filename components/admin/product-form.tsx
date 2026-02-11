@@ -11,6 +11,7 @@ type ProductWithSizes = Product & {
 }
 
 const AVAILABLE_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
+const MAX_DESIGNERS = 8
 
 export function ProductForm({ product }: { product?: ProductWithSizes }) {
     const router = useRouter()
@@ -20,7 +21,9 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
     const [name, setName] = useState(product?.name || '')
     const [slug, setSlug] = useState(product?.slug || '')
     const [description, setDescription] = useState(product?.description || '')
-    const [designerName, setDesignerName] = useState(product?.designerName || '')
+    const [designerNames, setDesignerNames] = useState<string[]>(
+        product?.designerNames?.length ? product.designerNames : ['']
+    )
     const [price, setPrice] = useState(product?.price || 0)
     const [published, setPublished] = useState(product?.published || false)
 
@@ -28,16 +31,25 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
     const [images, setImages] = useState<ImageData[]>(() => {
         if (!product?.images) return []
 
-        const rawImages = product.images as any
+        const rawImages = product.images as unknown
 
         // If it's already the new format
-        if (Array.isArray(rawImages) && rawImages[0]?.url) {
-            return rawImages.map((img: any, index: number) => ({
-                url: img.url,
-                isMobilePrimary: img.isMobilePrimary ?? (index === 0),
-                isDesktopPrimary: img.isDesktopPrimary ?? (index === 0),
-                isCartPrimary: img.isCartPrimary ?? (index === 0), // Add this
-            }))
+        if (Array.isArray(rawImages) && typeof rawImages[0] === 'object' && rawImages[0] !== null && 'url' in rawImages[0]) {
+            return rawImages.map((img, index: number) => {
+                const image = img as {
+                    url?: string
+                    isMobilePrimary?: boolean
+                    isDesktopPrimary?: boolean
+                    isCartPrimary?: boolean
+                }
+
+                return {
+                    url: image.url || '',
+                    isMobilePrimary: image.isMobilePrimary ?? (index === 0),
+                    isDesktopPrimary: image.isDesktopPrimary ?? (index === 0),
+                    isCartPrimary: image.isCartPrimary ?? (index === 0),
+                }
+            })
         }
 
         // If it's old format (string array), convert
@@ -92,6 +104,25 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
         setSizes(sizes.filter((_, i) => i !== index))
     }
 
+    function updateDesigner(index: number, value: string) {
+        const next = [...designerNames]
+        next[index] = value
+        setDesignerNames(next)
+    }
+
+    function addDesigner() {
+        if (designerNames.length >= MAX_DESIGNERS) return
+        setDesignerNames([...designerNames, ''])
+    }
+
+    function removeDesigner(index: number) {
+        if (designerNames.length === 1) {
+            setDesignerNames([''])
+            return
+        }
+        setDesignerNames(designerNames.filter((_, i) => i !== index))
+    }
+
 
 
     async function handleSubmit(e: React.FormEvent) {
@@ -102,7 +133,7 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
             name,
             slug: slug || undefined,
             description: description || undefined,
-            designerName: designerName || undefined,
+            designerNames: designerNames.map((name) => name.trim()).filter(Boolean).slice(0, MAX_DESIGNERS),
             material: material || undefined,
             color: color || undefined,
             colorHex: colorHex || undefined,
@@ -155,16 +186,40 @@ export function ProductForm({ product }: { product?: ProductWithSizes }) {
                 </div>
 
                 <div>
-                    <label htmlFor="designerName" className="block text-sm font-medium mb-2">
-                        Designer Name
-                    </label>
-                    <input
-                        id="designerName"
-                        type="text"
-                        value={designerName}
-                        onChange={(e) => setDesignerName(e.target.value)}
-                        className="w-full px-4 py-3 border border-neutral-300 focus:outline-none focus:border-black"
-                    />
+                    <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium">
+                            Designers
+                        </label>
+                        <button
+                            type="button"
+                            onClick={addDesigner}
+                            disabled={designerNames.length >= MAX_DESIGNERS}
+                            className="text-sm underline hover:no-underline disabled:opacity-50"
+                        >
+                            Add Designer
+                        </button>
+                    </div>
+                    <div className="space-y-2">
+                        {designerNames.map((designer, index) => (
+                            <div key={index} className="flex items-center gap-3">
+                                <input
+                                    type="text"
+                                    value={designer}
+                                    onChange={(e) => updateDesigner(index, e.target.value)}
+                                    className="w-full px-4 py-3 border border-neutral-300 focus:outline-none focus:border-black"
+                                    placeholder={`Designer ${index + 1}`}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => removeDesigner(index)}
+                                    disabled={designerNames.length === 1}
+                                    className="text-sm text-red-600 underline hover:no-underline disabled:opacity-50"
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                        ))}
+                    </div>
                 </div>
                 <div>
                     <label htmlFor="material" className="block text-sm font-medium mb-2">

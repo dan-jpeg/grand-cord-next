@@ -1,7 +1,7 @@
 'use client'
 
 import { useLayoutEffect, useRef, useState } from 'react'
-import { motion, useScroll, useTransform } from 'framer-motion'
+import { motion, useScroll, useTransform, useMotionValueEvent } from 'framer-motion'
 import { CatalogNav } from '@/components/store/catalog-nav'
 
 type CatalogNavWrapperProps = {
@@ -44,13 +44,11 @@ export function CatalogNavWrapper(props: CatalogNavWrapperProps) {
             : 0.5 + Math.pow((pLimit - 0.5) * 2, 1.2) / 2
     })
 
-    useLayoutEffect(() => {
-        return easedProgress.on('change', v => {
-            setIsGrowing(v < 0.5)
-            // Handshake: Tell child we are at the top
-            setIsLocked(v >= 0.1)
-        })
-    }, [easedProgress])
+    useMotionValueEvent(easedProgress, 'change', (v) => {
+        console.log('Progress:', v.toFixed(3), 'isLocked:', v >= 1)
+        setIsGrowing(v < 0.5)
+        setIsLocked(v >= 1) // Only when fully scrolled through
+    })
 
     const currentSheetHeight = useTransform(easedProgress, p => {
         if (p < 0.5) {

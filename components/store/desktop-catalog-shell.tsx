@@ -16,6 +16,7 @@ export function DesktopCatalogShell({ products }: { products: ProductWithSizes[]
         const q = searchQuery.toLowerCase()
         return products.filter(p =>
             p.name.toLowerCase().includes(q) ||
+            p.designerNames.some((designer) => designer.toLowerCase().includes(q)) ||
             p.color?.toLowerCase().includes(q) ||
             p.material?.toLowerCase().includes(q)
         )

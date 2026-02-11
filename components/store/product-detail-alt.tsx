@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useCart } from '@/contexts/cart-context'
 import { formatPrice } from '@/lib/utils'
+import { formatDesignerNames } from '@/lib/designers'
 import type { Product, ProductSize } from '@prisma/client'
 
 type ImageData = {
@@ -33,10 +34,10 @@ const getSizeNumber = (size: string): number => {
 export function ProductDetailAlt({ product }: { product: ProductWithSizes }) {
     const { addItem } = useCart()
     const [selectedSize, setSelectedSize] = useState<string>('')
-    const [justAdded, setJustAdded] = useState(false)
     const scrollContainerRef = useRef<HTMLDivElement>(null)
 
     const images = product.images as ImageData[]
+    const designerLabel = formatDesignerNames(product.designerNames)
     const displayImage =
         images.find(img => img.isDesktopPrimary)?.url || images[0]?.url
     const cartImage =
@@ -76,11 +77,7 @@ export function ProductDetailAlt({ product }: { product: ProductWithSizes }) {
             color: product.color || undefined,
         })
 
-        setJustAdded(true)
-        setTimeout(() => {
-            setJustAdded(false)
-            setSelectedSize('')
-        }, 1200)
+        setTimeout(() => setSelectedSize(''), 1200)
     }
 
     return (
@@ -136,8 +133,8 @@ export function ProductDetailAlt({ product }: { product: ProductWithSizes }) {
                                 {product.color && (
                                     <div className="lowercase font-bold mb-8">{product.color}</div>
                                 )}
-                                {product.designerName && (
-                                    <div>{product.designerName}</div>
+                                {designerLabel && (
+                                    <div>{designerLabel}</div>
                                 )}
                                 <div className="font-bold mt-8">{formatPrice(product.price)}</div>
                             </div>

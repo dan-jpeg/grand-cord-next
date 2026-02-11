@@ -35,14 +35,23 @@ export function CatalogNav({
     const [lastScrollY, setLastScrollY] = useState(0)
     const [isExpanded, setIsExpanded] = useState(false)
     const [isDesktop, setIsDesktop] = useState(false)
+    const [isStuck, setIsStuck] = useState(false)
+    const [isMobileSearchLocked, setIsMobileSearchLocked] = useState(false)
 
     const [displayNumber, setDisplayNumber] = useState('')
     const [showCursor, setShowCursor] = useState(false)
     const [cursorBlinkCount, setCursorBlinkCount] = useState(0)
+    const [showSearchArrow, setShowSearchArrow] = useState(true)
 
     const prevTotalItems = useRef(0)
     const layoutRef = useRef<HTMLDivElement>(null)
-    const animationRef = useRef<{ interval?: any; timeout?: any }>({})
+    const navRef = useRef<HTMLDivElement>(null)
+    const animationRef = useRef<{
+        interval?: ReturnType<typeof setInterval>
+        timeout?: ReturnType<typeof setTimeout>
+    }>({})
+    const wasLockedRef = useRef(false)
+    const manuallyOpenedRef = useRef(false)
 
     const clearAnimation = () => {
         if (animationRef.current.interval) clearInterval(animationRef.current.interval)
@@ -56,7 +65,32 @@ export function CatalogNav({
         return () => window.removeEventListener('resize', checkDesktop)
     }, [])
 
-    // THE SYNC LOGIC: Only show layout/expanded when locked at top + scrolling up
+    // Detect when sticky element is actually stuck (desktop only)
+    useEffect(() => {
+        if (!isDesktop || !navRef.current) return
+
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                setIsStuck(!entry.isIntersecting)
+            },
+            { threshold: [1], rootMargin: '-1px 0px 0px 0px' }
+        )
+
+        const sentinel = document.createElement('div')
+        sentinel.style.position = 'absolute'
+        sentinel.style.top = '-1px'
+        sentinel.style.height = '1px'
+        sentinel.style.width = '1px'
+
+        navRef.current.parentElement?.insertBefore(sentinel, navRef.current)
+        observer.observe(sentinel)
+
+        return () => {
+            observer.disconnect()
+            sentinel.remove()
+        }
+    }, [isDesktop])
+
     useEffect(() => {
         if (isDesktop) return
 
@@ -64,13 +98,27 @@ export function CatalogNav({
             const currentScrollY = window.scrollY
             const isScrollingUp = currentScrollY < lastScrollY
 
-            if (isLocked && isScrollingUp) {
+            // If manually opened while at top (isLocked), keep it open
+            if (manuallyOpenedRef.current && isLocked) {
+                setLastScrollY(currentScrollY)
+                return
+            }
+
+            // Reset manual flag if we scroll down past threshold
+            if (!isLocked) {
+                manuallyOpenedRef.current = false
+            }
+
+            // Only show if locked, scrolling up, AND was previously locked
+            if (isLocked && isScrollingUp && wasLockedRef.current) {
                 setShowLayout(true)
                 setIsExpanded(true)
             } else {
                 setShowLayout(false)
                 setIsExpanded(false)
             }
+
+            wasLockedRef.current = isLocked
             setLastScrollY(currentScrollY)
         }
 
@@ -133,6 +181,19 @@ export function CatalogNav({
         return clearAnimation
     }, [totalItems])
 
+    useEffect(() => {
+        if (isDesktop || !isMobileSearchLocked || !isSearchOpen) {
+            setShowSearchArrow(true)
+            return
+        }
+
+        const interval = setInterval(() => {
+            setShowSearchArrow(prev => !prev)
+        }, 900)
+
+        return () => clearInterval(interval)
+    }, [isDesktop, isMobileSearchLocked, isSearchOpen])
+
     const cursor = (
         <AnimatePresence>
             {showCursor && (
@@ -157,20 +218,63 @@ export function CatalogNav({
         </AnimatePresence>
     )
 
-    const handleSearchChange = (v: string) => { setSearchQuery(v); onSearchChange?.(v); }
-    const editSearch = () => { setIsSearchOpen(true); setIsExpanded(true); }
+    const handleToggleExpand = () => {
+        if (!isDesktop) {
+            // Re-open full catalog controls only when user explicitly taps Catalog.
+            if (isMobileSearchLocked) {
+                setIsMobileSearchLocked(false)
+            }
+            const newExpandedState = !isExpanded
+            setIsExpanded(newExpandedState)
+
+            // Track if user manually opened it while at top
+            if (newExpandedState && isLocked) {
+                manuallyOpenedRef.current = true
+            } else {
+                manuallyOpenedRef.current = false
+            }
+        }
+    }
+
+    const handleSearchChange = (v: string) => {
+        setSearchQuery(v)
+        onSearchChange?.(v)
+        if (!isDesktop && v.trim()) setIsMobileSearchLocked(true)
+    }
+    const handleSearchBlur = () => {
+        if (isDesktop) return
+        if (searchQuery.trim()) {
+            setIsSearchOpen(false)
+            setIsExpanded(false)
+            setIsMobileSearchLocked(true)
+        }
+    }
+    const editSearch = () => {
+        if (!isDesktop && isMobileSearchLocked) {
+            setSearchQuery('')
+            onSearchChange?.('')
+            setIsSearchOpen(true)
+            setIsExpanded(false)
+            return
+        }
+        setIsSearchOpen(true)
+        setIsExpanded(true)
+    }
     const showingBreadcrumb = !isSearchOpen && searchQuery
+    const showMainContent = isDesktop || isExpanded || (!isDesktop && isMobileSearchLocked && isSearchOpen)
 
     return (
-        <div className="bg-transparent lg:bg-white w-full min-h-[120px]" data-catalog-nav>
-            <div className="flex flex-col gap-3 px-4 md:px-8 lg:px-[9vw] pt-4 pb-4 relative">
+        <div ref={navRef} className="bg-transparent lg:bg-white w-full min-h-[120px]" data-catalog-nav>
+            <div className={`flex flex-col gap-3 pl-4  pr-10 lg:pr-[2vw] lg:pl-[calc(5vw+0px)] pt-6 pb-6 relative transition-all ${
+                isDesktop && isStuck ? 'lg:border-b-[0.5px]' : ''
+            }`}>
                 {/* Header Row */}
                 <div className="flex items-center justify-between relative z-10 w-full">
-                    <button onClick={() => !isDesktop && setIsExpanded(!isExpanded)}>
+                    <button onClick={handleToggleExpand}>
                         <h2 className="text-[9pt] font-bold">Catalog</h2>
                     </button>
-                    <Link href="/cart" className="relative px-2 flex items-center gap-2">
-                        <span className="inline-flex items-center min-w-[20px] text-[9pt] font-bold tabular-nums">
+                    <Link href="/cart" className="relative text-right flex items-end gap-2">
+                        <span className="inline-flex items-end text-right min-w-[20px] text-[9pt] font-bold tabular-nums">
                             {displayNumber}{cursor}
                         </span>
                     </Link>
@@ -178,31 +282,50 @@ export function CatalogNav({
 
                 {/* Mobile Search Breadcrumb */}
                 {!isDesktop && showingBreadcrumb && !isExpanded && (
-                    <button onClick={editSearch} className="text-[9pt] font-bold text-left z-10">{searchQuery}</button>
+                    <button onClick={editSearch} className="text-[9pt] font-bold text-left z-10">▸ {searchQuery}</button>
                 )}
 
                 {/* Main Content Area */}
                 <AnimatePresence>
-                    {(isExpanded || isDesktop) && (
+                    {showMainContent && (
                         <motion.div
                             initial={isDesktop ? false : { opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: 'auto' }}
                             exit={{ opacity: 0, height: 0 }}
                             className="flex flex-col gap-3 overflow-hidden"
                         >
-                            <div className="flex flex-col gap-3 text-[9pt] z-10">
-                                <Link href="/sample" className="hover:underline">Sample</Link>
-                                <button onClick={() => setIsSearchOpen(!isSearchOpen)} className="text-left hover:underline">Search</button>
-                            </div>
+                            {(!isMobileSearchLocked || isDesktop) && (
+                                <div className="flex flex-col gap-3 text-[9pt] z-10">
+                                    <Link href="/sample" className="hover:underline">Sample</Link>
+                                    <button onClick={() => setIsSearchOpen(!isSearchOpen)} className="text-left hover:underline">Search</button>
+                                </div>
+                            )}
 
                             {isSearchOpen && (
-                                <input
-                                    autoFocus
-                                    className="bg-transparent text-[9pt] outline-none z-10"
-                                    value={searchQuery}
-                                    onChange={(e) => handleSearchChange(e.target.value)}
-                                    placeholder=""
-                                />
+                                <div className="flex items-center gap-2">
+                                    {isMobileSearchLocked && !isDesktop && (
+                                        <span
+                                            aria-hidden
+                                            className="text-[9pt] font-bold"
+                                            style={{ visibility: showSearchArrow ? 'visible' : 'hidden' }}
+                                        >
+                                            ▸
+                                        </span>
+                                    )}
+                                    <input
+                                        autoFocus
+                                        className="bg-transparent text-[9pt] outline-none z-10"
+                                        value={searchQuery}
+                                        onChange={(e) => handleSearchChange(e.target.value)}
+                                        onBlur={handleSearchBlur}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                ;(e.currentTarget as HTMLInputElement).blur()
+                                            }
+                                        }}
+                                        placeholder=""
+                                    />
+                                </div>
                             )}
 
                             {showingBreadcrumb && (
@@ -216,14 +339,14 @@ export function CatalogNav({
 
                 {/* Layout Switcher */}
                 <AnimatePresence>
-                    {showLayout && !isDesktop && (
+                    {showLayout && !isDesktop && !isMobileSearchLocked && (
                         <motion.div
                             ref={layoutRef}
                             initial={{ opacity: 0, y: -40 }}
                             animate={{ opacity: layoutOpacity, y: 0 }}
                             exit={{ opacity: 0, y: -40 }}
                             transition={{ duration: 0.17 }}
-                            className="absolute left-0 right-0 top-full -mt-1 pt-4 pb-4 grid grid-cols-[auto_1fr_auto] bg-white items-center text-[9pt] px-4 md:px-8"
+                            className="absolute left-0 right-0 top-full -mt-2 pt-4 pb-4 grid grid-cols-[auto_1fr_auto] bg-white items-center text-[9pt] px-4 md:px-8"
                         >
                             <span>Layout</span>
                             <div className="flex gap-20 justify-center">

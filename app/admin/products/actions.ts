@@ -5,12 +5,13 @@ import { stripe } from '@/lib/stripe'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { slugify } from '@/lib/utils'
+import { normalizeDesignerNames } from '@/lib/designers'
 
 type ProductFormData = {
     name: string
     slug?: string
     description?: string
-    designerName?: string
+    designerNames?: string[]
     material?: string
     color?: string
     colorHex?: string
@@ -32,6 +33,7 @@ type ProductFormData = {
 
 export async function createProduct(data: ProductFormData) {
     const slug = data.slug || slugify(data.name)
+    const designerNames = normalizeDesignerNames(data.designerNames)
 
     // Check if slug exists
     const existing = await prisma.product.findUnique({
@@ -49,7 +51,8 @@ export async function createProduct(data: ProductFormData) {
         images: data.images.length > 0 ? [data.images[0].url] : undefined,
         metadata: {
             slug,
-            designerName: data.designerName || '',
+            designerName: designerNames[0] || '',
+            designerNames: designerNames.join(', '),
             material: data.material || '',
             color: data.color || '',
         },
@@ -63,12 +66,12 @@ export async function createProduct(data: ProductFormData) {
     })
 
     // Create product in database
-    const product = await prisma.product.create({
+    await prisma.product.create({
         data: {
             name: data.name,
             slug,
             description: data.description,
-            designerName: data.designerName,
+            designerNames,
             material: data.material,
             color: data.color,
             colorHex: data.colorHex,
@@ -91,6 +94,7 @@ export async function createProduct(data: ProductFormData) {
 }
 
 export async function updateProduct(id: string, data: ProductFormData) {
+    const designerNames = normalizeDesignerNames(data.designerNames)
     // Get existing product to check for Stripe product ID
     const existingProduct = await prisma.product.findUnique({
         where: { id },
@@ -105,7 +109,8 @@ export async function updateProduct(id: string, data: ProductFormData) {
                 images: data.images.length > 0 ? [data.images[0].url] : undefined,
                 metadata: {
                     slug: data.slug || slugify(data.name),
-                    designerName: data.designerName || '',
+                    designerName: designerNames[0] || '',
+                    designerNames: designerNames.join(', '),
                     material: data.material || '',
                     color: data.color || '',
                 },
@@ -141,7 +146,7 @@ export async function updateProduct(id: string, data: ProductFormData) {
                 name: data.name,
                 slug: data.slug || slugify(data.name),
                 description: data.description,
-                designerName: data.designerName,
+                designerNames,
                 material: data.material,
                 color: data.color,
                 colorHex: data.colorHex,

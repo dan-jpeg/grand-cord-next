@@ -12,7 +12,7 @@ model Product {
   name            String
   slug            String   @unique
   description     String?
-  designerName    String?
+  designerNames   String[] @default([])
   material        String?
   color           String?
   colorHex        String?

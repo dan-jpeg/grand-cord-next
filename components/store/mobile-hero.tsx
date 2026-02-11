@@ -27,7 +27,7 @@ export function MobileHero() {
     const contentOpacity = Math.max(0, 1 - scrollY / 400)
 
     // Title moves up as you scroll
-    const titleTransform = Math.min(scrollY / 1, 150)
+    const titleTransform = Math.min(scrollY / 1, 200)
 
     return (
         <div className="relative" style={{minHeight: '150vh'}}>

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useCart } from '@/contexts/cart-context'
 import { formatPrice } from '@/lib/utils'
 import { motion } from 'framer-motion'
+import { formatDesignerNames } from '@/lib/designers'
 import type { Product, ProductSize } from '@prisma/client'
 
 type ImageData = {
@@ -40,6 +41,7 @@ export function ProductDetail({ product }: { product: ProductWithSizes }) {
     const sizePickerRef = useRef<HTMLDivElement>(null)
 
     const images = product.images as ImageData[]
+    const designerLabel = formatDesignerNames(product.designerNames)
     const displayImage =
         images.find(img => img.isDesktopPrimary)?.url || images[0]?.url
     const mobileImage =
@@ -130,8 +132,8 @@ export function ProductDetail({ product }: { product: ProductWithSizes }) {
                             {product.color && (
                                 <div className="lowercase font-bold">{product.color}</div>
                             )}
-                            {product.designerName && (
-                                <div className="mt-4">{product.designerName}</div>
+                            {designerLabel && (
+                                <div className="mt-4">{designerLabel}</div>
                             )}
                             <div className="font-bold mt-4">
                                 {formatPrice(product.price)}
@@ -288,8 +290,8 @@ export function ProductDetail({ product }: { product: ProductWithSizes }) {
                                 {product.color && (
                                     <div className="lowercase font-bold whitespace-nowrap mb-20">{product.color}</div>
                                 )}
-                                {product.designerName && (
-                                    <div className="whitespace-nowrap mb-[100px]">{product.designerName}</div>
+                                {designerLabel && (
+                                    <div className="whitespace-nowrap mb-[100px]">{designerLabel}</div>
                                 )}
                                 <div className="font-bold whitespace-nowrap">
                                     {formatPrice(product.price)}

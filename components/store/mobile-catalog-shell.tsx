@@ -17,6 +17,7 @@ export function MobileCatalogShell({ products }: { products: ProductWithSizes[] 
         const q = searchQuery.toLowerCase()
         return products.filter(p =>
             p.name.toLowerCase().includes(q) ||
+            p.designerNames.some((designer) => designer.toLowerCase().includes(q)) ||
             p.color?.toLowerCase().includes(q) ||
             p.material?.toLowerCase().includes(q)
         )
@@ -25,14 +26,12 @@ export function MobileCatalogShell({ products }: { products: ProductWithSizes[] 
     return (
         <>
             <MobileHero />
-
             <CatalogNavWrapper
                 productCount={filteredProducts.length}
                 onSearchChange={setSearchQuery}
                 mobileLayout={mobileLayout}
                 onLayoutChange={setMobileLayout}
             />
-
             <CatalogSection
                 products={filteredProducts}
                 mobileLayout={mobileLayout}

@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { useCart } from '@/contexts/cart-context'
 import type { Product, ProductSize } from '@prisma/client'
 import { motion } from 'framer-motion'
+import { formatDesignerNames } from '@/lib/designers'
 
 type ImageData = {
     url: string
@@ -22,7 +23,8 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
     const [showSizing, setShowSizing] = useState(false)
     const [buttonState, setButtonState] = useState<'idle' | 'added'>('idle')
 
-    const images = (product.images as any) as ImageData[]
+    const images = product.images as unknown as ImageData[]
+    const designerLabel = formatDesignerNames(product.designerNames)
     const displayImage = images.find(img => img.isDesktopPrimary)?.url || images[0]?.url
 
     // Repeat the image 4 times for scrolling
@@ -78,9 +80,9 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                     {/* Header */}
                     <div className="flex items-start justify-between mb-12">
                         <h1 className="text-[10px]">{product.name}</h1>
-                        {product.designerName && (
+                        {designerLabel && (
                             <p className={`text-[11px] tracking-tight font-bold transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
-                                {product.designerName}
+                                {designerLabel}
                             </p>
                         )}
                     </div>
@@ -210,9 +212,9 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                             {product.name}
                         </h1>
                         <div className={`text-right  transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
-                            {product.designerName && (
+                            {designerLabel && (
                                 <>
-                                    <p className="text-[11px] font-semibold tracking-tight whitespace-nowrap font ">{product.designerName}</p>
+                                    <p className="text-[11px] font-semibold tracking-tight whitespace-nowrap font ">{designerLabel}</p>
                                 </>
                             )}
                         </div>
@@ -312,7 +314,7 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                 </div>
 
                 {/* Mobile Images */}
-                <div className=" -mx-12 scale-110 h-[60vh] snap-y snap-mandatory scroll-smooth">
+                <div className=" -mx-12  my-4 scale-110 h-[60vh] snap-y snap-mandatory scroll-smooth">
                     {imageArray.map((img, index) => (
                         <div key={index} className="w-full snap-start snap-always">
                             {img ? (

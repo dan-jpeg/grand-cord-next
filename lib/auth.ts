@@ -11,19 +11,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     providers: [
         Credentials({
             credentials: {
-                email: { label: 'Email', type: 'email' },
+                identifier: { label: 'Login', type: 'text' },
                 password: { label: 'Password', type: 'password' },
             },
             authorize: async (credentials) => {
-                const email = credentials?.email as string
+                const identifier = credentials?.identifier as string
                 const password = credentials?.password as string
 
-                if (!email || !password) {
+                if (!identifier || !password) {
                     throw new Error('Missing credentials')
                 }
 
                 const admin = await prisma.adminUser.findUnique({
-                    where: { email },
+                    where: { email: identifier },
                 })
 
                 if (!admin) {

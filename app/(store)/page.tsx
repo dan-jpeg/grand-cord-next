@@ -19,8 +19,8 @@ export default async function HomePage() {
                 <MobileCatalogShell products={products} />
             </div>
             {/* Desktop View */}
-            <div className="hidden lg:block min-h-screen font-inter bg-white">
-                <div className="px-[9vw] lg:grid grid-cols-12 pt-[calc(100vh-200px)] gap-y-[260px] w-full">
+            <div className="hidden lg:block min-h-screen  font-inter bg-white">
+                <div className="pl-[5vw]  pr-[6vw] mb-32  px-2 lg:grid grid-cols-12 pt-[calc(100vh-200px)] gap-y-[200px] w-full">
                     <p className="col-span-9 text-left leading-3 pr-[5rem] font-inter text-[7pt] italic">
                         This catalog is the work of many people; founded as a shared framework for independent studios.
                         Grand-Cord is supported by those involved and takes no commission. All orders are shipped from
@@ -30,7 +30,7 @@ export default async function HomePage() {
                     <p className="text-[9.5pt] col-span-1 text-right font-semibold italic whitespace-nowrap">Grand-Cord</p>
                     <div className="col-span-1"></div>
 
-                    <div className="block md:col-span-2 lg:col-span-1">
+                    <div className="block md:col-span-2   lg:col-span-1">
                         <div className="whitespace-nowrap text-[8pt] font-semibold italic opacity-60 mb-2">
                             messenger @ grand-cord.com
                         </div>
