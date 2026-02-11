@@ -3,8 +3,8 @@ import './globals.css'
 import { CartProvider } from '@/contexts/cart-context'
 
 export const metadata: Metadata = {
-    title: 'Grand Cord',
-    description: 'Custom e-commerce store',
+    title: 'grand-cord',
+    description: 'grand-cord studio ',
 }
 
 export default function RootLayout({
