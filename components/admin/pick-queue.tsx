@@ -13,9 +13,7 @@ function urgencyColor(createdAt: Date): string {
 }
 
 function orderLabel(orderNumber: string): string {
-    const digits = orderNumber.replace(/\D/g, '')
-    const stripped = digits.replace(/^0+/, '') || digits
-    return stripped.slice(0, 3)
+    return orderNumber.slice(0, 3)
 }
 
 type Mode = 'batch' | 'sequential'
