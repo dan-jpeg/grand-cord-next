@@ -2,7 +2,6 @@
 
 import { prisma } from '@/lib/prisma'
 import { stripe } from '@/lib/stripe'
-import { generateOrderNumber } from '@/lib/utils'
 import { revalidatePath } from 'next/cache'
 
 type OrderData = {
@@ -48,10 +47,14 @@ type OrderData = {
             }
         }
 
+        // Generate sequential order number
+        const orderCount = await prisma.order.count()
+        const orderNumber = String(orderCount + 1).padStart(4, '0')
+
         // Create order
         const order = await prisma.order.create({
             data: {
-                orderNumber: generateOrderNumber(),
+                orderNumber,
                 email: data.email,
                 status: 'PENDING',
                 total: data.total,

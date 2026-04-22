@@ -10,12 +10,6 @@ export function formatPrice(price: number): string {
   return `${rounded} `
 }
 
-export function generateOrderNumber(): string {
-  const timestamp = Date.now().toString(36).toUpperCase()
-  const random = Math.random().toString(36).substring(2, 6).toUpperCase()
-  return `ORD-${timestamp}${random}`
-}
-
 export function formatDate(date: Date): string {
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',

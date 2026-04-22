@@ -20,7 +20,7 @@ export default async function AdminOrdersPage() {
 
     return (
         <div className="absolute inset-0 bg-white overflow-auto">
-            <AdminNav active="orders" />
+            <AdminNav active="orders" variant="centered" />
             <div className="w-full px-16 py-12">
                 <OrdersTable orders={orders} />
             </div>

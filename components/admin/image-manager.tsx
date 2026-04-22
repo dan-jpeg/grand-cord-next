@@ -11,213 +11,159 @@ export type ImageData = {
     isCartPrimary: boolean
 }
 
+type RoleKey = 'isMobilePrimary' | 'isDesktopPrimary' | 'isCartPrimary'
+
+const ROLES: { key: RoleKey; label: string }[] = [
+    { key: 'isMobilePrimary', label: 'Mobile' },
+    { key: 'isDesktopPrimary', label: 'Desktop' },
+    { key: 'isCartPrimary', label: 'Cart' },
+]
+
 export function ImageManager({
-                                 images,
-                                 onChange,
-                             }: {
+    images,
+    onChange,
+}: {
     images: ImageData[]
     onChange: (images: ImageData[]) => void
 }) {
-    const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
     const [isUploading, setIsUploading] = useState(false)
     const { startUpload } = useUploadThing('productImage')
 
     async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
         const files = e.target.files
         if (!files || files.length === 0) return
-
         setIsUploading(true)
         try {
             const res = await startUpload(Array.from(files))
             if (res) {
                 const newImages = res.map((file, index) => ({
                     url: file.url,
-                    // First image uploaded (and first overall) is mobile, desktop, and cart primary
                     isMobilePrimary: images.length === 0 && index === 0,
                     isDesktopPrimary: images.length === 0 && index === 0,
                     isCartPrimary: images.length === 0 && index === 0,
                 }))
                 onChange([...images, ...newImages])
             }
-        } catch (error) {
+        } catch {
             alert('Upload failed')
         } finally {
             setIsUploading(false)
+            // reset input so the same file can be re-uploaded
+            e.target.value = ''
         }
     }
 
-    function toggleMobilePrimary() {
-        if (selectedIndex === null) return
-        const updated = [...images]
-        updated.forEach(img => img.isMobilePrimary = false)
-        updated[selectedIndex].isMobilePrimary = true
+    function setRole(index: number, role: RoleKey) {
+        const updated = images.map((img, i) => ({
+            ...img,
+            [role]: i === index,
+        }))
         onChange(updated)
     }
 
-    function toggleDesktopPrimary() {
-        if (selectedIndex === null) return
-        const updated = [...images]
-        updated.forEach(img => img.isDesktopPrimary = false)
-        updated[selectedIndex].isDesktopPrimary = true
-        onChange(updated)
-    }
-
-    function toggleCartPrimary() {
-        if (selectedIndex === null) return
-        const updated = [...images]
-        updated.forEach(img => img.isCartPrimary = false)
-        updated[selectedIndex].isCartPrimary = true
-        onChange(updated)
-    }
-
-    function removeImage() {
-        if (selectedIndex === null) return
-        const updated = images.filter((_, i) => i !== selectedIndex)
-
+    function remove(index: number) {
+        const updated = images.filter((_, i) => i !== index)
         if (updated.length > 0) {
-            const hasMobilePrimary = updated.some(img => img.isMobilePrimary)
-            const hasDesktopPrimary = updated.some(img => img.isDesktopPrimary)
-            const hasCartPrimary = updated.some(img => img.isCartPrimary)
-
-            if (!hasMobilePrimary) updated[0].isMobilePrimary = true
-            if (!hasDesktopPrimary) updated[0].isDesktopPrimary = true
-            if (!hasCartPrimary) updated[0].isCartPrimary = true
+            if (!updated.some((img) => img.isMobilePrimary)) updated[0].isMobilePrimary = true
+            if (!updated.some((img) => img.isDesktopPrimary)) updated[0].isDesktopPrimary = true
+            if (!updated.some((img) => img.isCartPrimary)) updated[0].isCartPrimary = true
         }
-
         onChange(updated)
-        setSelectedIndex(null)
+    }
+
+    function move(index: number, direction: -1 | 1) {
+        const next = index + direction
+        if (next < 0 || next >= images.length) return
+        const updated = [...images]
+        ;[updated[index], updated[next]] = [updated[next], updated[index]]
+        onChange(updated)
     }
 
     return (
-        <div className="space-y-4">
-            {/* Upload Area */}
-            <div className="border-2 border-black p-8 text-center">
-                <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    disabled={isUploading}
-                    className="hidden"
-                    id="image-upload"
-                />
-                <label
-                    htmlFor="image-upload"
-                    className={`cursor-pointer text-sm font-bold uppercase ${
-                        isUploading ? 'opacity-50' : 'hover:underline'
-                    }`}
-                >
-                    {isUploading ? 'Uploading...' : 'Upload Images'}
-                </label>
-            </div>
+        <div>
+            <div className="grid grid-cols-4 gap-4">
+                {images.map((image, index) => (
+                    <div key={image.url + index}>
+                        {/* Image */}
+                        <div className="relative aspect-[4/5] bg-neutral-100 overflow-hidden">
+                            <Image
+                                src={image.url}
+                                alt={`Product image ${index + 1}`}
+                                fill
+                                className="object-cover"
+                            />
+                        </div>
 
-            {images.length > 0 && (
-                <div className="flex gap-6">
-                    {/* Image Grid */}
-                    <div className="flex-1">
-                        <div className="grid grid-cols-4 gap-3">
-                            {images.map((image, index) => (
+                        {/* Roles */}
+                        <div className="mt-2 space-y-0.5">
+                            {ROLES.map(({ key, label }) => (
                                 <button
+                                    key={key}
                                     type="button"
-                                    key={index}
-                                    onClick={() => setSelectedIndex(index)}
-                                    className={`relative aspect-square border-2 transition-all ${
-                                        selectedIndex === index
-                                            ? 'border-black shadow-lg scale-105'
-                                            : 'border-neutral-300 hover:border-neutral-500'
+                                    onClick={() => setRole(index, key)}
+                                    className={`block text-left w-full text-[7pt] font-bold uppercase transition-colors ${
+                                        image[key]
+                                            ? 'text-black underline underline-offset-2'
+                                            : 'text-neutral-300 hover:text-neutral-600'
                                     }`}
                                 >
-                                    <Image
-                                        src={image.url}
-                                        alt={`Product ${index + 1}`}
-                                        fill
-                                        className="object-cover"
-                                    />
-
-                                    {/* Indicators */}
-                                    <div className="absolute top-1 right-1 flex gap-1">
-                                        {image.isMobilePrimary && (
-                                            <div className="bg-black text-white px-1 text-[8px] font-bold">
-                                                M
-                                            </div>
-                                        )}
-                                        {image.isDesktopPrimary && (
-                                            <div className="bg-black text-white px-1 text-[8px] font-bold">
-                                                D
-                                            </div>
-                                        )}
-                                        {image.isCartPrimary && (
-                                            <div className="bg-black text-white px-1 text-[8px] font-bold">
-                                                C
-                                            </div>
-                                        )}
-                                    </div>
+                                    {label}
                                 </button>
                             ))}
                         </div>
-                    </div>
 
-                    {/* Controls */}
-                    {selectedIndex !== null && (
-                        <div className="w-48 border border-black p-4 space-y-3">
-                            <div className="text-sm font-bold mb-4">
-                                Image {selectedIndex + 1}
-                            </div>
-
+                        {/* Actions */}
+                        <div className="mt-1.5 flex items-center gap-2">
                             <button
                                 type="button"
-                                onClick={toggleMobilePrimary}
-                                className={`w-full flex items-center gap-3 p-3 border transition-colors ${
-                                    images[selectedIndex].isMobilePrimary
-                                        ? 'border-black bg-black text-white'
-                                        : 'border-neutral-300 hover:bg-neutral-100'
-                                }`}
+                                onClick={() => move(index, -1)}
+                                disabled={index === 0}
+                                className="text-[7pt] text-neutral-300 hover:text-black disabled:opacity-20"
                             >
-                                <div className="w-2 h-8 bg-current" />
-                                <span className="text-xs font-bold uppercase">Mobile Primary</span>
+                                ←
                             </button>
-
                             <button
                                 type="button"
-                                onClick={toggleDesktopPrimary}
-                                className={`w-full flex items-center gap-3 p-3 border transition-colors ${
-                                    images[selectedIndex].isDesktopPrimary
-                                        ? 'border-black bg-black text-white'
-                                        : 'border-neutral-300 hover:bg-neutral-100'
-                                }`}
+                                onClick={() => move(index, 1)}
+                                disabled={index === images.length - 1}
+                                className="text-[7pt] text-neutral-300 hover:text-black disabled:opacity-20"
                             >
-                                <div className="flex gap-1">
-                                    <div className="w-2 h-8 bg-current" />
-                                    <div className="w-2 h-8 bg-current" />
-                                    <div className="w-2 h-8 bg-current" />
-                                </div>
-                                <span className="text-xs font-bold uppercase">Desktop Primary</span>
+                                →
                             </button>
-
                             <button
                                 type="button"
-                                onClick={toggleCartPrimary}
-                                className={`w-full flex items-center gap-3 p-3 border transition-colors ${
-                                    images[selectedIndex].isCartPrimary
-                                        ? 'border-black bg-black text-white'
-                                        : 'border-neutral-300 hover:bg-neutral-100'
-                                }`}
-                            >
-                                <div className="w-6 h-6 border-2 border-current" />
-                                <span className="text-xs font-bold uppercase">Cart Primary</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={removeImage}
-                                className="w-full p-3 border border-red-600 text-red-600 text-xs font-bold uppercase hover:bg-red-50 transition-colors"
+                                onClick={() => remove(index)}
+                                className="ml-auto text-[7pt] font-bold uppercase text-neutral-300 hover:text-red-500 transition-colors"
                             >
                                 Remove
                             </button>
                         </div>
-                    )}
+                    </div>
+                ))}
+
+                {/* Upload slot */}
+                <div>
+                    <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        disabled={isUploading}
+                        className="hidden"
+                        id="image-upload"
+                    />
+                    <label
+                        htmlFor="image-upload"
+                        className={`flex aspect-[4/5] items-center justify-center bg-neutral-100 text-[7pt] font-bold uppercase transition-colors ${
+                            isUploading
+                                ? 'text-neutral-400 cursor-wait'
+                                : 'text-neutral-400 hover:bg-neutral-200 hover:text-black cursor-pointer'
+                        }`}
+                    >
+                        {isUploading ? 'Uploading...' : '+ Add'}
+                    </label>
                 </div>
-            )}
+            </div>
         </div>
     )
 }

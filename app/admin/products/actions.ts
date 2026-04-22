@@ -23,6 +23,7 @@ type ProductFormData = {
         url: string
         isMobilePrimary: boolean
         isDesktopPrimary: boolean
+        isCartPrimary: boolean
     }[]
     sizes: {
         size: string
@@ -187,6 +188,20 @@ export async function updateProduct(id: string, data: ProductFormData) {
     revalidatePath('/admin/products')
     revalidatePath(`/admin/products/${id}/edit`)
     redirect('/admin/products')
+}
+
+export async function updateSizeStock(sizeId: string, delta: number) {
+    const size = await prisma.productSize.findUnique({ where: { id: sizeId } })
+    if (!size) return
+    const newAvailable = Math.max(0, size.available + delta)
+    await prisma.productSize.update({
+        where: { id: sizeId },
+        data: {
+            available: newAvailable,
+            total: newAvailable + size.committed,
+        },
+    })
+    revalidatePath('/admin/products')
 }
 
 export async function deleteProduct(id: string) {

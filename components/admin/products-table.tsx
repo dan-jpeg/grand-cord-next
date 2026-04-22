@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { StockKey } from './stock-key'
 import { ProductStockCard } from './product-stock-card'
@@ -35,11 +36,24 @@ export function ProductsTable({ products }: { products: ProductWithSizes[] }) {
     const [isMobile, setIsMobile] = useState(false)
 
     useEffect(() => {
-        const checkMobile = () => setIsMobile(window.innerWidth < 768)
+        const checkMobile = () => {
+            const mobile = window.innerWidth < 768
+            setIsMobile(mobile)
+            if (mobile) setViewMode((prev) => prev === 'stock' ? 'photo' : prev)
+        }
         checkMobile()
         window.addEventListener('resize', checkMobile)
         return () => window.removeEventListener('resize', checkMobile)
     }, [])
+
+    const alertCounts = useMemo(() => {
+        const noStock = products.filter((p) => p.published && p.sizes.reduce((s, sz) => s + sz.available, 0) === 0).length
+        const lowStock = products.filter((p) => {
+            const avail = p.sizes.reduce((s, sz) => s + sz.available, 0)
+            return p.published && avail > 0 && avail <= STOCK_THRESHOLDS.LOW_STOCK
+        }).length
+        return { noStock, lowStock }
+    }, [products])
 
     // ... rest of logic ...
 
@@ -63,6 +77,31 @@ export function ProductsTable({ products }: { products: ProductWithSizes[] }) {
 
     return (
         <div className="w-full flex justify-center pt-42 pb-8">
+
+            {/* Alert Bar */}
+            {(alertCounts.noStock > 0 || alertCounts.lowStock > 0) && (
+                <div className="fixed top-8 md:top-8 left-0 right-0 flex justify-center z-40 pointer-events-none">
+                    <div className="flex gap-3 pointer-events-auto">
+                        {alertCounts.noStock > 0 && (
+                            <button
+                                onClick={() => { setStockFilter('NO_STOCK'); setCurrentPage(1) }}
+                                className="text-[7pt] font-bold uppercase px-2 py-0.5 bg-white border border-black hover:bg-black hover:text-white transition-colors"
+                            >
+                                {alertCounts.noStock} OUT OF STOCK
+                            </button>
+                        )}
+                        {alertCounts.lowStock > 0 && (
+                            <button
+                                onClick={() => { setStockFilter('LOW_STOCK'); setCurrentPage(1) }}
+                                className="text-[7pt] font-bold uppercase px-2 py-0.5 bg-white border border-black hover:bg-black hover:text-white transition-colors"
+                            >
+                                {alertCounts.lowStock} LOW STOCK
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Fixed Top Bar - View Mode Toggle */}
             <div className="fixed top-32 md:top-3 left-0 right-0 flex justify-center z-50">
                 <div className="flex gap-4 text-[8pt]">
@@ -136,10 +175,41 @@ export function ProductsTable({ products }: { products: ProductWithSizes[] }) {
                 )}
 
 
-                {/* Photo View - TODO */}
+                {/* Photo View */}
                 {viewMode === 'photo' && (
-                    <div className="text-center py-12 text-neutral-400">
-                        Photo view coming soon...
+                    <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
+                        {paginatedProducts.map((product) => {
+                            const raw = product.images as unknown
+                            const imgs = Array.isArray(raw) ? raw : []
+                            const cartImg = imgs.find(
+                                (img): img is { url: string } =>
+                                    typeof img === 'object' && img !== null && 'isCartPrimary' in img && (img as { isCartPrimary: boolean }).isCartPrimary
+                            ) ?? (imgs[0] as { url?: string } | undefined)
+                            const src = typeof cartImg === 'object' && cartImg !== null ? (cartImg as { url?: string }).url : undefined
+
+                            return (
+                                <Link
+                                    key={product.id}
+                                    href={`/admin/products/${product.id}/edit`}
+                                    className="group"
+                                >
+                                    {src ? (
+                                        <Image
+                                            src={src}
+                                            alt={product.name}
+                                            width={80}
+                                            height={100}
+                                            className="w-full h-auto"
+                                        />
+                                    ) : (
+                                        <div className="w-full aspect-[4/5] bg-neutral-100 flex items-center justify-center text-neutral-300 text-[6pt]">
+                                            —
+                                        </div>
+                                    )}
+                                    <p className="mt-1 text-[6pt] font-bold uppercase leading-tight group-hover:underline">{product.name}</p>
+                                </Link>
+                            )
+                        })}
                     </div>
                 )}
 
