@@ -7,9 +7,10 @@ import { useState, useRef, useCallback } from 'react'
 type AdminNavProps = {
     active: 'orders' | 'inventory' | 'catalog' | 'more' | 'pick'
     variant?: 'centered' | 'top-left'
+    pickUrgency?: string | null
 }
 
-const NAV_ITEMS = [
+const   NAV_ITEMS = [
     { key: 'orders' as const, label: 'Orders', href: '/admin/orders' },
     { key: 'pick' as const, label: 'Pick', href: '/admin/pick' },
     { key: 'inventory' as const, label: 'Inventory', href: '/admin/products' },
@@ -25,7 +26,7 @@ type AnimState = {
     activeKey: string
 }
 
-function MobileHubNav({ active }: { active: AdminNavProps['active'] }) {
+function MobileHubNav({ active, pickUrgency }: { active: AdminNavProps['active']; pickUrgency?: string | null }) {
     const router = useRouter()
     const [anim, setAnim] = useState<AnimState | null>(null)
     const labelRefs = useRef<(HTMLSpanElement | null)[]>([])
@@ -92,13 +93,16 @@ function MobileHubNav({ active }: { active: AdminNavProps['active'] }) {
                     >
                         <span
                             ref={el => { labelRefs.current[i] = el }}
-                            className={`text-[8pt] font-bold ${
+                            className={`text-[8pt] font-bold inline-flex items-center gap-[5px] ${
                                 active === item.key || anim?.activeKey === item.key
                                     ? 'underline decoration-2 underline-offset-3'
                                     : ''
                             }`}
                         >
                             {item.label}
+                            {item.key === 'pick' && pickUrgency && (
+                                <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: pickUrgency, flexShrink: 0 }} />
+                            )}
                         </span>
                     </div>
                 ))}
@@ -107,7 +111,7 @@ function MobileHubNav({ active }: { active: AdminNavProps['active'] }) {
     )
 }
 
-function MobileTopNav({ active }: { active: AdminNavProps['active'] }) {
+function MobileTopNav({ active, pickUrgency }: { active: AdminNavProps['active']; pickUrgency?: string | null }) {
     const router = useRouter()
     const [anim, setAnim] = useState<AnimState | null>(null)
     const labelRefs = useRef<(HTMLSpanElement | null)[]>([])
@@ -163,13 +167,16 @@ function MobileTopNav({ active }: { active: AdminNavProps['active'] }) {
                 >
                     <span
                         ref={el => { labelRefs.current[i] = el }}
-                        className={`text-[8pt] font-bold ${
+                        className={`text-[8pt] font-bold inline-flex items-center gap-[5px] ${
                             active === item.key || anim?.activeKey === item.key
                                 ? 'underline decoration-2 underline-offset-3'
                                 : ''
                         }`}
                     >
                         {item.label}
+                        {item.key === 'pick' && pickUrgency && (
+                            <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: pickUrgency, flexShrink: 0 }} />
+                        )}
                     </span>
                 </div>
             ))}
@@ -177,21 +184,24 @@ function MobileTopNav({ active }: { active: AdminNavProps['active'] }) {
     )
 }
 
-export function AdminNav({ active, variant = 'top-left' }: AdminNavProps) {
+export function AdminNav({ active, variant = 'top-left', pickUrgency }: AdminNavProps) {
     if (variant === 'top-left') {
         return (
             <>
                 <div className="md:hidden">
-                    <MobileHubNav active={active} />
+                    <MobileHubNav active={active} pickUrgency={pickUrgency} />
                 </div>
                 <div className="hidden md:flex absolute top-3 left-3 z-[300] items-start text-[8pt] font-bold gap-4">
                     {NAV_ITEMS.map(item => (
                         <Link
                             key={item.key}
                             href={item.href}
-                            className={active === item.key ? 'underline decoration-2 underline-offset-3' : 'hover:underline hover:decoration-2 hover:underline-offset-3'}
+                            className={`inline-flex items-center gap-[5px] ${active === item.key ? 'underline decoration-2 underline-offset-3' : 'hover:underline hover:decoration-2 hover:underline-offset-3'}`}
                         >
                             {item.label}
+                            {item.key === 'pick' && pickUrgency && (
+                                <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: pickUrgency, flexShrink: 0 }} />
+                            )}
                         </Link>
                     ))}
                 </div>
@@ -202,16 +212,19 @@ export function AdminNav({ active, variant = 'top-left' }: AdminNavProps) {
     return (
         <>
             <div className="md:hidden">
-                <MobileTopNav active={active} />
+                <MobileTopNav active={active} pickUrgency={pickUrgency} />
             </div>
             <div className="hidden md:flex items-start text-[8pt] font-bold justify-center gap-8 py-6">
                 {NAV_ITEMS.map(item => (
                     <Link
                         key={item.key}
                         href={item.href}
-                        className={active === item.key ? 'underline decoration-2 underline-offset-3' : 'hover:underline hover:decoration-2 hover:underline-offset-3'}
+                        className={`inline-flex items-center gap-[5px] ${active === item.key ? 'underline decoration-2 underline-offset-3' : 'hover:underline hover:decoration-2 hover:underline-offset-3'}`}
                     >
                         {item.label}
+                        {item.key === 'pick' && pickUrgency && (
+                            <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: pickUrgency, flexShrink: 0 }} />
+                        )}
                     </Link>
                 ))}
             </div>

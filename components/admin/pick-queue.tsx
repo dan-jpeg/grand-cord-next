@@ -12,6 +12,13 @@ function urgencyColor(createdAt: Date): string {
     return '#3b82f6'
 }
 
+function mostUrgentColor(orders: PickOrder[]): string {
+    const colors = orders.map(o => urgencyColor(o.createdAt))
+    if (colors.includes('#ef4444')) return '#ef4444'
+    if (colors.includes('#eab308')) return '#eab308'
+    return '#3b82f6'
+}
+
 function orderLabel(orderNumber: string): string {
     return orderNumber.slice(0, 3)
 }
@@ -42,114 +49,131 @@ export function PickQueue({ orders }: { orders: PickOrder[] }) {
         router.push(`/admin/pick/run?orders=${ids}&mode=${mode}`)
     }
 
+    const batchDotColor = mostUrgentColor(orders)
+
     return (
-        <div className="min-h-screen bg-[#e8e8e8] flex items-center justify-center">
-            {/* Phone frame */}
-            <div
-                className="relative flex flex-col bg-[#e8e8e8] rounded-[44px] overflow-hidden"
-                style={{ width: 320, height: 660 }}
-            >
-                {/* Title */}
-                <div className="flex items-start justify-center pt-12 pb-8 gap-1">
-                    <span className="text-[26px] font-semibold tracking-tight leading-none">Pick Queue</span>
-                    <span className="text-[11px] text-neutral-400 mt-0.5 leading-none select-none">ⓘ</span>
-                </div>
-
-                {/* Orders to ship count */}
-                <div className="flex items-center gap-2 px-8 pb-5">
-                    <span className="w-[7px] h-[7px] rounded-full bg-red-500 flex-shrink-0" />
-                    <span className="text-[11px] font-medium">
-                        {orders.length} Order{orders.length !== 1 ? 's' : ''} to Ship
-                    </span>
-                </div>
-
-                {/* Order rows */}
-                <div className="flex flex-col gap-[14px] px-7 flex-1">
-                    {orders.map(order => {
-                        const isSelected = selected.has(order.id)
-                        return (
-                            <button
-                                key={order.id}
-                                onClick={() => toggleOrder(order.id)}
-                                className="flex items-center w-full text-left transition-opacity duration-150"
-                                style={{ opacity: isSelected ? 1 : 0.28 }}
-                            >
-                                {/* Dot + order number */}
-                                <div className="flex items-center gap-[5px] w-[52px] flex-shrink-0">
-                                    <span
-                                        className="w-[7px] h-[7px] rounded-full flex-shrink-0"
-                                        style={{ backgroundColor: urgencyColor(order.createdAt) }}
-                                    />
-                                    <span className="text-[10px] font-medium tabular-nums text-neutral-700">
-                                        {orderLabel(order.orderNumber)}
-                                    </span>
-                                </div>
-
-                                {/* Cart photos */}
-                                <div className="flex gap-[3px] flex-1 justify-center">
-                                    {order.cartPhotos.length === 0
-                                        ? <div className="w-[18px] h-[26px] rounded-[3px] bg-neutral-300" />
-                                        : order.cartPhotos.slice(0, 4).map((url, i) => (
-                                            <div
-                                                key={i}
-                                                className="relative flex-shrink-0 rounded-[3px] overflow-hidden bg-neutral-200"
-                                                style={{ width: 18, height: 26 }}
-                                            >
-                                                <Image
-                                                    src={url}
-                                                    alt=""
-                                                    fill
-                                                    className="object-cover"
-                                                    sizes="18px"
-                                                />
-                                            </div>
-                                        ))
-                                    }
-                                </div>
-
-                                {/* Item count */}
-                                <span className="text-[9px] font-semibold tracking-wide text-neutral-500 w-[46px] text-right flex-shrink-0">
-                                    {order.itemCount} ITEM{order.itemCount !== 1 ? 'S' : ''}
-                                </span>
-                            </button>
-                        )
-                    })}
-                </div>
-
-                {/* Counter + controls */}
-                <div className="px-7 pb-5">
-                    <div className="flex justify-end mb-3">
-                        <span className="text-[10px] text-neutral-500 tabular-nums">
-                            {selected.size} / {orders.length} selected
-                        </span>
-                    </div>
-                    <div className="flex flex-col gap-[6px]">
-                        <button
-                            onClick={() => setSelected(new Set())}
-                            disabled={noneSelected}
-                            className="text-left text-[9px] font-semibold tracking-[0.12em] disabled:text-neutral-300 text-neutral-600 transition-colors w-fit"
-                        >
-                            UNSELECT ALL
-                        </button>
-                        <button
-                            onClick={() => setSelected(new Set(orders.map(o => o.id)))}
-                            disabled={allSelected}
-                            className="text-left text-[9px] font-semibold tracking-[0.12em] disabled:text-neutral-300 text-neutral-600 transition-colors w-fit"
-                        >
-                            SELECT ALL
-                        </button>
-                    </div>
-                </div>
-
-                {/* Begin */}
-                <button
-                    onClick={() => !noneSelected && setShowModeModal(true)}
-                    disabled={noneSelected}
-                    className="w-full text-center text-[26px] font-semibold tracking-tight pb-10 pt-4 transition-colors"
-                    style={{ color: noneSelected ? '#c8c8c8' : '#1a1a1a' }}
+        <>
+            {/* Full-screen layout on mobile, centered phone frame on desktop */}
+            <div className="fixed inset-0 flex flex-col bg-[#e8e8e8] md:items-center md:justify-center">
+                <div
+                    className="flex flex-col bg-[#e8e8e8] w-full h-full md:w-[320px] md:h-[660px] md:rounded-[44px] md:overflow-hidden md:border md:border-neutral-200"
                 >
-                    Begin
-                </button>
+                    {/* Scrollable content */}
+                    <div className="flex-1 overflow-y-auto">
+
+                        {/* Title */}
+                        <div className="flex items-start justify-center pt-12 pb-10 gap-[4px]">
+                            <span className="font-alte text-[36px] tracking-[-0.03em] leading-none">Pick Queue</span>
+                            <span
+                                className="flex-shrink-0 rounded-full bg-black flex items-center justify-center text-white font-bold leading-none select-none"
+                                style={{ width: 10, height: 10, fontSize: 7, marginTop: 3 }}
+                            >
+                                i
+                            </span>
+                        </div>
+
+                        {/* Orders to ship */}
+                        <div className="flex items-center justify-center gap-[7px] pb-8">
+                            <span
+                                className="rounded-full flex-shrink-0"
+                                style={{ display: 'inline-block', width: 8, height: 8, backgroundColor: batchDotColor }}
+                            />
+                            <span className="text-[11px] font-bold tracking-[0.09em] opacity-70">
+                                {orders.length} Orders to Ship
+                            </span>
+                        </div>
+
+                        {/* Order rows */}
+                        <div className="flex flex-col gap-[18px] px-5">
+                            {orders.map(order => {
+                                const isSelected = selected.has(order.id)
+                                return (
+                                    <button
+                                        key={order.id}
+                                        onClick={() => toggleOrder(order.id)}
+                                        className="flex items-center w-full text-left transition-opacity duration-150"
+                                        style={{ opacity: isSelected ? 1 : 0.28 }}
+                                    >
+                                        {/* Left: urgency dot + order number pill */}
+                                        <div className="flex items-center gap-[5px] bg-white rounded-[6px] px-[10px] py-[7px] flex-shrink-0">
+                                            <span
+                                                className="rounded-full flex-shrink-0"
+                                                style={{ display: 'inline-block', width: 8, height: 8, backgroundColor: urgencyColor(order.createdAt) }}
+                                            />
+                                            <span className="text-[8px] font-bold tracking-[0.09em] uppercase">
+                                                O-{orderLabel(order.orderNumber)}
+                                            </span>
+                                        </div>
+
+                                        {/* Spacer */}
+                                        <div className="flex-1" />
+
+                                        {/* Right: cart photos + item count */}
+                                        <div className="flex items-end gap-[10px] flex-shrink-0">
+                                            <div className="flex items-end gap-[3px]">
+                                                {order.cartPhotos.length === 0
+                                                    ? <div className="w-[20px] h-[30px]" />
+                                                    : order.cartPhotos.slice(0, 4).map((url, i) => (
+                                                        <div key={i} className="flex-shrink-0" style={{ height: 36 }}>
+                                                            <Image
+                                                                src={url}
+                                                                alt=""
+                                                                width={40}
+                                                                height={36}
+                                                                className="h-full w-auto object-contain"
+                                                                sizes="40px"
+                                                            />
+                                                        </div>
+                                                    ))
+                                                }
+                                            </div>
+                                            <span className="text-[8px] font-bold tracking-[0.09em] uppercase pb-[2px]">
+                                                {order.itemCount} ITEM{order.itemCount !== 1 ? 'S' : ''}
+                                            </span>
+                                        </div>
+                                    </button>
+                                )
+                            })}
+                        </div>
+
+                        {/* Counter */}
+                        <div className="flex justify-end px-5 pt-6">
+                            <span className="font-reformat text-[10px] tracking-[0.12em] bg-white rounded-[6px] px-[10px] py-[7px]">
+                                {selected.size} / {orders.length} selected
+                            </span>
+                        </div>
+
+                        {/* Select controls */}
+                        <div className="flex flex-col gap-[10px] px-5 pt-5">
+                            <button
+                                onClick={() => setSelected(new Set())}
+                                disabled={noneSelected}
+                                className="text-left font-reformat text-[10px] tracking-[0.12em] uppercase disabled:opacity-30 transition-opacity w-fit"
+                            >
+                                Unselect All
+                            </button>
+                            <button
+                                onClick={() => setSelected(new Set(orders.map(o => o.id)))}
+                                disabled={allSelected}
+                                className="text-left font-reformat text-[10px] tracking-[0.12em] uppercase disabled:opacity-30 transition-opacity w-fit"
+                            >
+                                Select All
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Begin CTA — flex-shrink-0 keeps it pinned at bottom of the flex column */}
+                    <div className="flex-shrink-0 bg-white md:rounded-b-[44px]">
+                        <button
+                            onClick={() => !noneSelected && setShowModeModal(true)}
+                            disabled={noneSelected}
+                            className="w-full text-center font-alte font-bold text-[36px] tracking-[-0.03em] py-7 transition-colors"
+                            style={{ color: noneSelected ? '#c0c0c0' : '#1a1a1a' }}
+                        >
+                            Begin
+                        </button>
+                    </div>
+                </div>
             </div>
 
             {/* Mode selection sheet */}
@@ -188,6 +212,6 @@ export function PickQueue({ orders }: { orders: PickOrder[] }) {
                     </div>
                 </div>
             )}
-        </div>
+        </>
     )
 }
