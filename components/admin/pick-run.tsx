@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { markOrderShipped, partialRefundItem, cancelOrder } from '@/app/admin/pick/actions'
@@ -48,9 +48,14 @@ export function PickRun({
     const router = useRouter()
     const [phase, setPhase] = useState<Phase>('picking')
     const [taskIndex, setTaskIndex] = useState(0)
+    const [taskStatuses, setTaskStatuses] = useState<Record<number, 'picked' | 'missing'>>({})
     const [shipOrders, setShipOrders] = useState(initialShipOrders)
     const [shipIndex, setShipIndex] = useState(0)
     const [shipping, setShipping] = useState(false)
+
+    function markTask(index: number, status: 'picked' | 'missing') {
+        setTaskStatuses(prev => ({ ...prev, [index]: status }))
+    }
 
     function advanceTask() {
         if (taskIndex < tasks.length - 1) {
@@ -71,20 +76,21 @@ export function PickRun({
     if (phase === 'picking') {
         return (
             <PickItemView
-                task={tasks[taskIndex]}
+                tasks={tasks}
                 taskIndex={taskIndex}
-                taskTotal={tasks.length}
+                taskStatuses={taskStatuses}
                 onBack={() =>
                     taskIndex > 0
                         ? setTaskIndex(i => i - 1)
                         : router.push('/admin/pick')
                 }
-                onConfirm={advanceTask}
+                onConfirm={() => { markTask(taskIndex, 'picked'); advanceTask() }}
                 onOrderCancelled={(orderId) => {
+                    markTask(taskIndex, 'missing')
                     removeOrderFromShip(orderId)
                     advanceTask()
                 }}
-                onItemRefunded={advanceTask}
+                onItemRefunded={() => { markTask(taskIndex, 'missing'); advanceTask() }}
             />
         )
     }
@@ -122,39 +128,108 @@ export function PickRun({
     )
 }
 
+// ── Progress Strip ──────────────────────────────────────────────────────────
+
+function ProgressStrip({
+    tasks,
+    taskIndex,
+    taskStatuses,
+}: {
+    tasks: PickTask[]
+    taskIndex: number
+    taskStatuses: Record<number, 'picked' | 'missing'>
+}) {
+    const currentRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        currentRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+    }, [taskIndex])
+
+    return (
+        <div className="flex gap-[5px] overflow-x-auto px-5 pb-3 flex-shrink-0 [&::-webkit-scrollbar]:hidden">
+            {tasks.map((t, i) => {
+                const status = taskStatuses[i]
+                const isCurrent = i === taskIndex
+                const isFuture = i > taskIndex && !status
+
+                return (
+                    <div
+                        key={i}
+                        ref={isCurrent ? currentRef : undefined}
+                        className="relative flex-shrink-0 rounded-[4px] overflow-hidden"
+                        style={{ width: 26, height: 34 }}
+                    >
+                        {/* Image */}
+                        {t.cartPhoto ? (
+                            <Image
+                                src={t.cartPhoto}
+                                alt=""
+                                fill
+                                className={`object-cover transition-all duration-200 ${isFuture ? 'grayscale opacity-35' : ''}`}
+                                sizes="26px"
+                            />
+                        ) : (
+                            <div className={`absolute inset-0 bg-neutral-300 ${isFuture ? 'opacity-35' : ''}`} />
+                        )}
+
+                        {/* Missing red tint */}
+                        {status === 'missing' && (
+                            <div className="absolute inset-0 bg-red-500/40" />
+                        )}
+
+                        {/* Status dot */}
+                        {(isCurrent || status === 'picked') && (
+                            <span
+                                className="absolute top-[2px] right-[2px] rounded-full"
+                                style={{
+                                    width: 5,
+                                    height: 5,
+                                    backgroundColor: isCurrent ? '#3b82f6' : '#22c55e',
+                                    boxShadow: '0 0 0 1px rgba(0,0,0,0.15)',
+                                }}
+                            />
+                        )}
+                    </div>
+                )
+            })}
+        </div>
+    )
+}
+
 // ── Pick Item View ──────────────────────────────────────────────────────────
 
 function PickItemView({
-    task,
+    tasks,
     taskIndex,
-    taskTotal,
+    taskStatuses,
     onBack,
     onConfirm,
     onOrderCancelled,
     onItemRefunded,
 }: {
-    task: PickTask
+    tasks: PickTask[]
     taskIndex: number
-    taskTotal: number
+    taskStatuses: Record<number, 'picked' | 'missing'>
     onBack: () => void
     onConfirm: () => void
     onOrderCancelled: (orderId: string) => void
     onItemRefunded: () => void
 }) {
-    const isLast = taskIndex === taskTotal - 1
+    const task = tasks[taskIndex]
+    const isLast = taskIndex === tasks.length - 1
     const [showUnavailable, setShowUnavailable] = useState(false)
 
     return (
         <div className="fixed inset-0 flex flex-col bg-[#e8e8e8]">
             {/* Top bar */}
-            <div className="flex items-center justify-between px-5 pt-10 pb-4 flex-shrink-0">
+            <div className="flex items-center justify-between px-5 pt-10 pb-3 flex-shrink-0">
                 <button onClick={onBack} className="text-[11px] font-medium text-neutral-500">
                     ← back
                 </button>
-                <span className="text-[11px] font-medium text-neutral-500 tabular-nums">
-                    {taskIndex + 1} / {taskTotal}
-                </span>
             </div>
+
+            {/* Progress strip */}
+            <ProgressStrip tasks={tasks} taskIndex={taskIndex} taskStatuses={taskStatuses} />
 
             {/* Cart photo */}
             <div className="flex-1 relative mx-5 rounded-2xl overflow-hidden">

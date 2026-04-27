@@ -2,15 +2,60 @@
 
 import { prisma } from '@/lib/prisma'
 import { stripe } from '@/lib/stripe'
+import { getCheapestQuote, buyLabel, type ShippoQuote } from '@/lib/shippo'
 import { revalidatePath } from 'next/cache'
 
-export async function markOrderShipped(orderId: string) {
+export async function markOrderShipped(orderId: string, trackingNumber?: string) {
     await prisma.order.update({
         where: { id: orderId },
-        data: { status: 'SHIPPED' },
+        data: {
+            status: 'SHIPPED',
+            ...(trackingNumber ? { trackingNumber } : {}),
+        },
     })
     revalidatePath('/admin/orders')
     revalidatePath('/admin/pick')
+}
+
+export async function quoteShippoLabel(orderId: string): Promise<ShippoQuote> {
+    const order = await prisma.order.findUnique({
+        where: { id: orderId },
+        select: { shippingAddress: true },
+    })
+    if (!order) throw new Error('Order not found')
+
+    const addr = (order.shippingAddress as Record<string, string>) ?? {}
+    return getCheapestQuote({
+        name: addr.name ?? '',
+        street1: addr.address ?? '',
+        city: addr.city ?? '',
+        state: addr.state ?? '',
+        zip: addr.zip ?? '',
+        country: addr.country || 'US',
+    })
+}
+
+export async function purchaseShippoLabel(orderId: string, rateId: string): Promise<{
+    labelUrl: string
+    trackingNumber: string
+}> {
+    const result = await buyLabel(rateId)
+
+    await prisma.order.update({
+        where: { id: orderId },
+        data: {
+            status: 'SHIPPED',
+            trackingNumber: result.trackingNumber,
+            trackingUrl: result.trackingUrl ?? undefined,
+        },
+    })
+    revalidatePath('/admin/orders')
+    revalidatePath('/admin/pick')
+
+    return {
+        labelUrl: result.labelUrl,
+        trackingNumber: result.trackingNumber,
+    }
 }
 
 export async function partialRefundItem(orderId: string, amountCents: number) {

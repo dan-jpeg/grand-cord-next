@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { PickQueue } from '@/components/admin/pick-queue'
+import { PickFlow, type FlowOrder } from '@/components/admin/pick-flow'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,14 +10,6 @@ type ImageData = {
     isCartPrimary?: boolean
     isMobilePrimary?: boolean
     isDesktopPrimary?: boolean
-}
-
-export type PickOrder = {
-    id: string
-    orderNumber: string
-    createdAt: Date
-    itemCount: number
-    cartPhotos: string[]
 }
 
 export default async function AdminPickPage() {
@@ -33,34 +25,40 @@ export default async function AdminPickPage() {
     const productIds = [...new Set(orders.flatMap(o => o.items.map(i => i.productId)))]
     const products = await prisma.product.findMany({
         where: { id: { in: productIds } },
-        select: { id: true, images: true },
+        select: { id: true, images: true, color: true, colorHex: true },
     })
 
-    const cartPhotoMap = new Map(
+    const productInfoMap = new Map(
         products.map(p => {
             const images = (p.images as ImageData[] | null) ?? []
             const url = images.find(img => img.isCartPrimary)?.url
                 ?? images.find(img => img.isMobilePrimary)?.url
                 ?? images[0]?.url
                 ?? null
-            return [p.id, url]
+            return [p.id, { cartPhoto: url, color: p.color, colorHex: p.colorHex }]
         })
     )
 
-    const pickOrders: PickOrder[] = orders.map(order => {
-        const uniqueProductIds = [...new Set(order.items.map(i => i.productId))]
-        const photos = uniqueProductIds
-            .map(id => cartPhotoMap.get(id))
-            .filter((url): url is string => !!url)
+    const flowOrders: FlowOrder[] = orders.map(order => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        createdAt: order.createdAt,
+        email: order.email,
+        shippingAddress: (order.shippingAddress as Record<string, string>) ?? {},
+        items: order.items.map(item => {
+            const info = productInfoMap.get(item.productId)
+            return {
+                productId: item.productId,
+                productName: item.productName,
+                size: item.size,
+                quantity: item.quantity,
+                price: item.price,
+                cartPhoto: info?.cartPhoto ?? null,
+                color: info?.color ?? null,
+                colorHex: info?.colorHex ?? null,
+            }
+        }),
+    }))
 
-        return {
-            id: order.id,
-            orderNumber: order.orderNumber,
-            createdAt: order.createdAt,
-            itemCount: order.items.reduce((sum, item) => sum + (item.quantity ?? 1), 0),
-            cartPhotos: photos,
-        }
-    })
-
-    return <PickQueue orders={pickOrders} />
+    return <PickFlow orders={flowOrders} />
 }
