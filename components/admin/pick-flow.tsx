@@ -4,8 +4,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { motion, AnimatePresence, LayoutGroup, useMotionValue, useTransform, animate } from 'framer-motion'
-import { markOrderShipped, partialRefundItem, cancelOrder, quoteShippoLabel, purchaseShippoLabel } from '@/app/admin/pick/actions'
-import type { ShippoQuote } from '@/lib/shippo'
+import { markOrderShipped, partialRefundItem, cancelOrder } from '@/app/admin/pick/actions'
+import { RoomOverviewSheet } from './room-overview-sheet'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -45,6 +45,7 @@ export type FlowOrderItem = {
     cartPhoto: string | null
     color: string | null
     colorHex: string | null
+    warehouseLocation: string | null
 }
 
 export type FlowOrder = {
@@ -56,7 +57,7 @@ export type FlowOrder = {
     items: FlowOrderItem[]
 }
 
-type PickTask = {
+export type PickTask = {
     productId: string
     cartPhoto: string | null
     productName: string
@@ -70,6 +71,7 @@ type PickTask = {
         size: string
         quantity: number
         price: number
+        boxNumber: number
     }>
 }
 
@@ -89,12 +91,12 @@ type ShipOrder = {
         size: string
         quantity: number
         cartPhoto: string | null
+        color: string | null
     }>
 }
 
 type Phase = 'queue' | 'calculating' | 'picking' | 'shipping'
 
-type CalcSummary = { itemCount: number; taskCount: number; orderCount: number }
 type TaskStatus = 'picked' | 'missing'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -113,45 +115,15 @@ function mostUrgentColor(orders: FlowOrder[]): string {
     return '#3b82f6'
 }
 
-function buildTasks(orders: FlowOrder[], mode: 'batch' | 'sequential'): PickTask[] {
-    if (mode === 'batch') {
-        const grouped = new Map<string, PickTask>()
-        for (const order of orders) {
-            for (const item of order.items) {
-                const existing = grouped.get(item.productId)
-                const detail = {
-                    orderId: order.id,
-                    orderLabel: order.orderNumber.slice(-3),
-                    createdAt: order.createdAt,
-                    email: order.email,
-                    size: item.size,
-                    quantity: item.quantity,
-                    price: item.price,
-                }
-                if (existing) {
-                    existing.details.push(detail)
-                } else {
-                    grouped.set(item.productId, {
-                        productId: item.productId,
-                        cartPhoto: item.cartPhoto,
-                        productName: item.productName,
-                        color: item.color,
-                        colorHex: item.colorHex,
-                        details: [detail],
-                    })
-                }
-            }
-        }
-        return [...grouped.values()]
-    }
-    return orders.flatMap(order =>
-        order.items.map(item => ({
-            productId: item.productId,
-            cartPhoto: item.cartPhoto,
-            productName: item.productName,
-            color: item.color,
-            colorHex: item.colorHex,
-            details: [{
+function buildTasks(orders: FlowOrder[]): PickTask[] {
+    const boxMap = new Map<string, number>()
+    orders.forEach((o, i) => boxMap.set(o.id, i + 1))
+
+    const grouped = new Map<string, PickTask>()
+    for (const order of orders) {
+        for (const item of order.items) {
+            const existing = grouped.get(item.productId)
+            const detail = {
                 orderId: order.id,
                 orderLabel: order.orderNumber.slice(-3),
                 createdAt: order.createdAt,
@@ -159,9 +131,23 @@ function buildTasks(orders: FlowOrder[], mode: 'batch' | 'sequential'): PickTask
                 size: item.size,
                 quantity: item.quantity,
                 price: item.price,
-            }],
-        }))
-    )
+                boxNumber: boxMap.get(order.id) ?? 1,
+            }
+            if (existing) {
+                existing.details.push(detail)
+            } else {
+                grouped.set(item.productId, {
+                    productId: item.productId,
+                    cartPhoto: item.cartPhoto,
+                    productName: item.productName,
+                    color: item.color,
+                    colorHex: item.colorHex,
+                    details: [detail],
+                })
+            }
+        }
+    }
+    return [...grouped.values()]
 }
 
 function buildShipOrders(orders: FlowOrder[]): ShipOrder[] {
@@ -183,6 +169,7 @@ function buildShipOrders(orders: FlowOrder[]): ShipOrder[] {
                 size: item.size,
                 quantity: item.quantity,
                 cartPhoto: item.cartPhoto,
+                color: item.color,
             })),
         }
     })
@@ -224,13 +211,18 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
     const router = useRouter()
     const [phase, setPhase] = useState<Phase>('queue')
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(orders.map(o => o.id)))
-    const [showModeModal, setShowModeModal] = useState(false)
     const [tasks, setTasks] = useState<PickTask[]>([])
     const [taskIndex, setTaskIndex] = useState(0)
     const [taskStatuses, setTaskStatuses] = useState<Record<number, TaskStatus>>({})
+    // Per-detail picked state: key = `${taskIndex}__${detailIndex}`. A task is
+    // considered "fully picked" only when every one of its details is picked.
+    // This lets the overview toggle individual SKUs independently even when
+    // they share a product card in the swipe flow.
+    const [pickedDetails, setPickedDetails] = useState<Set<string>>(new Set())
     const [shipOrders, setShipOrders] = useState<ShipOrder[]>([])
     const [shipIndex, setShipIndex] = useState(0)
-    const [calcSummary, setCalcSummary] = useState<CalcSummary | null>(null)
+    const [showOverview, setShowOverview] = useState(false)
+    const [runOrders, setRunOrders] = useState<FlowOrder[]>([])
 
     const dragX = useMotionValue(0)
     const dragRotate = useTransform(dragX, [-200, 200], [-3, 3])
@@ -251,23 +243,96 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
         })
     }
 
-    function beginRun(mode: 'batch' | 'sequential') {
+    function beginRun() {
         const selected = orders.filter(o => selectedIds.has(o.id))
-        const builtTasks = buildTasks(selected, mode)
+        const builtTasks = buildTasks(selected)
         const builtShip = buildShipOrders(selected)
-        const itemCount = selected.flatMap(o => o.items).reduce((s, i) => s + i.quantity, 0)
         setTasks(builtTasks)
         setShipOrders(builtShip)
+        setRunOrders(selected)
         setTaskIndex(0)
         setTaskStatuses({})
+        setPickedDetails(new Set())
         setShipIndex(0)
-        setShowModeModal(false)
-        setCalcSummary({ itemCount, taskCount: builtTasks.length, orderCount: selected.length })
         setPhase('calculating')
     }
 
-    function markTask(index: number, status: TaskStatus) {
-        setTaskStatuses(prev => ({ ...prev, [index]: status }))
+    const detailKey = (ti: number, di: number) => `${ti}__${di}`
+
+    // A task is fully picked when every detail row of that task has been
+    // checked off. Used everywhere we previously read taskStatuses[i] === 'picked'.
+    function isTaskFullyPicked(ti: number, taskList: PickTask[] = tasks, picked: Set<string> = pickedDetails): boolean {
+        const t = taskList[ti]
+        if (!t) return false
+        for (let di = 0; di < t.details.length; di++) {
+            if (!picked.has(detailKey(ti, di))) return false
+        }
+        return true
+    }
+
+    // A task is "resolved" (i.e. nothing more to do for it) when it's been
+    // marked missing OR every one of its details has been picked.
+    function isTaskResolved(ti: number, taskList: PickTask[] = tasks, picked: Set<string> = pickedDetails, statuses = taskStatuses): boolean {
+        if (statuses[ti] === 'missing') return true
+        return isTaskFullyPicked(ti, taskList, picked)
+    }
+
+    function markTaskMissing(index: number) {
+        setTaskStatuses(prev => ({ ...prev, [index]: 'missing' }))
+        // Clear any per-detail picks for the missing task so they don't
+        // count toward the overview's "X/Y items picked" tally.
+        setPickedDetails(prev => {
+            const next = new Set(prev)
+            const t = tasks[index]
+            if (t) {
+                for (let di = 0; di < t.details.length; di++) next.delete(detailKey(index, di))
+            }
+            return next
+        })
+    }
+
+    // Swipe-card "I picked this product" toggle: flips ALL details of the
+    // task between picked and unpicked together. Per-detail toggles still
+    // happen via the overview (togglePickedDetail).
+    function toggleAllPickedForTask(index: number) {
+        if (taskStatuses[index] === 'missing') return
+        setPickedDetails(prev => {
+            const next = new Set(prev)
+            const t = tasks[index]
+            if (!t) return prev
+            const currentlyAll = t.details.every((_, di) => next.has(detailKey(index, di)))
+            if (currentlyAll) {
+                for (let di = 0; di < t.details.length; di++) next.delete(detailKey(index, di))
+            } else {
+                for (let di = 0; di < t.details.length; di++) next.add(detailKey(index, di))
+            }
+            return next
+        })
+    }
+
+    // Missing-flow handlers triggered from the overview sheet. These mark
+    // the task missing without auto-advancing the swipe view (the user is
+    // looking at the overview, not a card). On cancel we also remove the
+    // affected order from the shipping queue.
+    function markMissingFromOverview(ti: number) {
+        markTaskMissing(ti)
+    }
+    function cancelOrderFromOverview(ti: number, orderId: string) {
+        markTaskMissing(ti)
+        setShipOrders(prev => prev.filter(o => o.id !== orderId))
+    }
+
+    function togglePickedDetail(taskIndex: number, detailIndex: number) {
+        // Don't allow per-detail toggling while a task is marked missing —
+        // the swipe-card flow owns that state.
+        if (taskStatuses[taskIndex] === 'missing') return
+        setPickedDetails(prev => {
+            const key = detailKey(taskIndex, detailIndex)
+            const next = new Set(prev)
+            if (next.has(key)) next.delete(key)
+            else next.add(key)
+            return next
+        })
     }
 
     function advanceTask(removedOrderId?: string, justMarkedStatus?: TaskStatus) {
@@ -275,7 +340,9 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
             setShipOrders(prev => prev.filter(o => o.id !== removedOrderId))
         }
         const resolvedIndices = new Set<number>()
-        for (const k of Object.keys(taskStatuses)) resolvedIndices.add(Number(k))
+        for (let i = 0; i < tasks.length; i++) {
+            if (isTaskResolved(i)) resolvedIndices.add(i)
+        }
         if (justMarkedStatus) resolvedIndices.add(taskIndex)
 
         const nextUnresolved = tasks.findIndex((_, i) => i !== taskIndex && !resolvedIndices.has(i))
@@ -316,6 +383,15 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                         transition={{ duration: 0.18 }}
                     >
                         <div className="flex flex-col bg-[#e8e8e8] w-full h-full md:max-w-screen-sm md:border md:border-black">
+                            {orders.length === 0 ? (
+                                <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
+                                    <span className="font-alte text-[36px] tracking-[-0.03em] leading-none opacity-20">Pick Queue</span>
+                                    <span className="text-[13px] font-medium text-neutral-400 text-center leading-relaxed">
+                                        No orders waiting to ship.
+                                    </span>
+                                </div>
+                            ) : (
+                            <>
                             <div className="flex-1 overflow-y-auto">
                                 <div className="flex items-start justify-center pt-12 pb-10 gap-[4px]">
                                     <span className="font-alte text-[36px] tracking-[-0.03em] leading-none">Pick Queue</span>
@@ -413,7 +489,7 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
 
                             <div className="flex-shrink-0 bg-white">
                                 <button
-                                    onClick={() => !noneSelected && setShowModeModal(true)}
+                                    onClick={() => !noneSelected && beginRun()}
                                     disabled={noneSelected}
                                     className="w-full text-center font-alte font-bold text-[36px] tracking-[-0.03em] py-7 transition-colors"
                                     style={{ color: noneSelected ? '#c0c0c0' : '#1a1a1a' }}
@@ -421,24 +497,23 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                                     Begin
                                 </button>
                             </div>
+                            </>
+                            )}
                         </div>
                     </motion.div>
                 )}
 
             {/* ── Calculating ── */}
-            {phase === 'calculating' && calcSummary && (
+            {phase === 'calculating' && (
                 <motion.div
                     key="calculating"
-                    className="fixed inset-0 flex flex-col bg-[#f2f2f2] items-center justify-center px-8"
+                    className="fixed inset-0 flex flex-col bg-[#f2f2f2] items-center justify-center"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.18 }}
                 >
-                    <CalculatingBody
-                        summary={calcSummary}
-                        onContinue={() => setPhase('picking')}
-                    />
+                    <CalculatingBody onContinue={() => setPhase('picking')} />
                 </motion.div>
             )}
 
@@ -446,12 +521,17 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
             {phase === 'picking' && tasks.length > 0 && (() => {
                 const current = tasks[taskIndex]
                 const totalQty = current.details.reduce((s, d) => s + d.quantity, 0)
-                const primaryDetail = current.details[0]
-                // An order is fully resolved only when every task containing it has a status.
+                // An order is fully resolved only when, for every task containing it,
+                // either the task is marked missing OR every detail of that order
+                // within the task has been picked.
                 const orderIsFullyResolved = (orderId: string): boolean => {
                     for (let i = 0; i < tasks.length; i++) {
-                        const containsOrder = tasks[i].details.some(d => d.orderId === orderId)
-                        if (containsOrder && !taskStatuses[i]) return false
+                        const t = tasks[i]
+                        if (taskStatuses[i] === 'missing') continue
+                        for (let di = 0; di < t.details.length; di++) {
+                            if (t.details[di].orderId !== orderId) continue
+                            if (!pickedDetails.has(detailKey(i, di))) return false
+                        }
                     }
                     return true
                 }
@@ -502,9 +582,18 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                             >
                                 ← back
                             </button>
-                            <p className="font-alte text-[53px] leading-none tracking-[-0.03em] text-black mb-4">
-                                Picking
-                            </p>
+                            <div className="flex items-baseline gap-[14px] mb-4">
+                                <span className="font-alte text-[53px] leading-none tracking-[-0.03em] text-black">
+                                    Queue
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowOverview(true)}
+                                    className="font-alte text-[53px] leading-none tracking-[-0.03em] text-black opacity-[0.18] active:opacity-40 transition-opacity"
+                                >
+                                    Overview
+                                </button>
+                            </div>
                             <div className="flex gap-[6px] overflow-x-auto [&::-webkit-scrollbar]:hidden">
                                 <AnimatePresence>
                                     {pastPills.map((p) => (
@@ -547,7 +636,14 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                         <ProgressStrip
                             tasks={tasks}
                             taskIndex={taskIndex}
-                            taskStatuses={taskStatuses}
+                            taskStatuses={(() => {
+                                const derived: Record<number, TaskStatus> = {}
+                                for (let i = 0; i < tasks.length; i++) {
+                                    if (taskStatuses[i] === 'missing') derived[i] = 'missing'
+                                    else if (isTaskFullyPicked(i)) derived[i] = 'picked'
+                                }
+                                return derived
+                            })()}
                             onJump={(i) => setTaskIndex(i)}
                         />
 
@@ -585,7 +681,7 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
 
                         {/* Swipe-to-navigate image area */}
                         <motion.div
-                            className="flex-1 mx-5 relative"
+                            className="flex-1 mx-auto relative w-full max-w-[240px]"
                             drag="x"
                             dragConstraints={{ left: -140, right: 140 }}
                             dragElastic={0.25}
@@ -599,7 +695,7 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                                     if (taskIndex < tasks.length - 1) {
                                         target = taskIndex + 1
                                     } else {
-                                        const firstUnresolved = tasks.findIndex((_, i) => !taskStatuses[i])
+                                        const firstUnresolved = tasks.findIndex((_, i) => !isTaskResolved(i))
                                         if (firstUnresolved !== -1 && firstUnresolved !== taskIndex) target = firstUnresolved
                                     }
                                     if (target !== null) {
@@ -668,8 +764,35 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                             </motion.div>
                         </motion.div>
 
+                        {/* Caret navigation */}
+                        <div className="flex items-center justify-between px-5 pt-3 pb-1 flex-shrink-0">
+                            <button
+                                onClick={() => taskIndex > 0 && setTaskIndex(i => i - 1)}
+                                disabled={taskIndex === 0}
+                                className="text-[32px] leading-none font-bold text-black/25 disabled:opacity-0 active:text-black/50 transition-opacity px-2 py-1"
+                                aria-label="Previous item"
+                            >
+                                ‹
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (taskIndex < tasks.length - 1) {
+                                        setTaskIndex(i => i + 1)
+                                    } else {
+                                        const firstUnresolved = tasks.findIndex((_, i) => !isTaskResolved(i))
+                                        if (firstUnresolved !== -1 && firstUnresolved !== taskIndex) setTaskIndex(firstUnresolved)
+                                    }
+                                }}
+                                disabled={taskIndex === tasks.length - 1}
+                                className="text-[32px] leading-none font-bold text-black/25 disabled:opacity-0 active:text-black/50 transition-opacity px-2 py-1"
+                                aria-label="Next item"
+                            >
+                                ›
+                            </button>
+                        </div>
+
                         {/* Color swatch + size */}
-                        <div className="flex items-center justify-between px-5 pt-6 pb-4 flex-shrink-0">
+                        <div className="flex items-center justify-between px-5 pt-3 pb-4 flex-shrink-0">
                             <div className="overflow-hidden">
                                 <AnimatePresence mode="wait">
                                     <motion.div
@@ -690,51 +813,56 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                                     </motion.div>
                                 </AnimatePresence>
                             </div>
-                            <div className="overflow-hidden">
-                                <AnimatePresence mode="wait">
-                                    <motion.span
-                                        key={primaryDetail.size}
-                                        className="font-reformat text-[20px] tracking-[-0.01em] leading-none block"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        transition={{ duration: 0.2 }}
-                                    >
-                                        SIZE: {primaryDetail.size}
-                                    </motion.span>
-                                </AnimatePresence>
+                            <div className="flex flex-col items-end gap-[5px]">
+                                {current.details.map((d, di) => (
+                                    <div key={`${d.orderId}-${d.size}-${di}`} className="flex items-center gap-[6px]">
+                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                                            <path d="M2 5L8 2L14 5L8 8L2 5Z" stroke="#1a1a1a" strokeWidth="1.2" strokeLinejoin="round" />
+                                            <path d="M2 5V11L8 14V8" stroke="#1a1a1a" strokeWidth="1.2" strokeLinejoin="round" />
+                                            <path d="M14 5V11L8 14" stroke="#1a1a1a" strokeWidth="1.2" strokeLinejoin="round" />
+                                        </svg>
+                                        <span className="font-alte font-bold text-[15px] leading-none text-black">
+                                            {d.boxNumber}
+                                        </span>
+                                        <span className="font-reformat text-[11px] tracking-[0.06em] text-neutral-500 leading-none">
+                                            S:{d.size} ×{d.quantity}
+                                        </span>
+                                    </div>
+                                ))}
                             </div>
                         </div>
 
                         <div className="px-5 pb-3 flex-shrink-0">
                             <ItemUnavailableButton
                                 task={current}
-                                onItemRefunded={() => { markTask(taskIndex, 'missing'); advanceTask(undefined, 'missing') }}
-                                onOrderCancelled={(orderId) => { markTask(taskIndex, 'missing'); advanceTask(orderId, 'missing') }}
+                                onItemRefunded={() => { markTaskMissing(taskIndex); advanceTask(undefined, 'missing') }}
+                                onOrderCancelled={(orderId) => { markTaskMissing(taskIndex); advanceTask(orderId, 'missing') }}
                             />
                         </div>
 
-                        <PickToggleBar
-                            status={taskStatuses[taskIndex]}
-                            allResolved={tasks.every((_, i) => taskStatuses[i])}
-                            accent={pickColor(current.colorHex, current.color)}
-                            onToggle={() => {
-                                const cur = taskStatuses[taskIndex]
-                                if (cur === 'picked') {
-                                    setTaskStatuses(prev => {
-                                        const next = { ...prev }
-                                        delete next[taskIndex]
-                                        return next
-                                    })
-                                } else {
-                                    markTask(taskIndex, 'picked')
-                                }
-                            }}
-                            onDone={() => {
-                                if (shipOrders.length === 0) router.push('/admin/orders')
-                                else setPhase('shipping')
-                            }}
-                        />
+                        {(() => {
+                            const totalQty = tasks.reduce((sum, t, i) =>
+                                taskStatuses[i] === 'missing' ? sum : sum + t.details.reduce((s, d) => s + d.quantity, 0), 0)
+                            const pickedQty = tasks.reduce((sum, t, i) => {
+                                if (taskStatuses[i] === 'missing') return sum
+                                if (!isTaskFullyPicked(i)) return sum
+                                return sum + t.details.reduce((s, d) => s + d.quantity, 0)
+                            }, 0)
+                            return (
+                                <PickToggleBar
+                                    status={taskStatuses[taskIndex] === 'missing' ? 'missing' : (isTaskFullyPicked(taskIndex) ? 'picked' : undefined)}
+                                    allResolved={tasks.every((_, i) => isTaskResolved(i))}
+                                    accent={pickColor(current.colorHex, current.color)}
+                                    onToggle={() => toggleAllPickedForTask(taskIndex)}
+                                    onDone={() => {
+                                        if (shipOrders.length === 0) router.push('/admin/orders')
+                                        else setPhase('shipping')
+                                    }}
+                                    pickedQty={pickedQty}
+                                    totalQty={totalQty}
+                                />
+                            )
+                        })()}
                     </motion.div>
                 )
             })()}
@@ -818,48 +946,60 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto px-5 pt-5 flex flex-col gap-4">
+                        <div className="flex-1 overflow-y-auto">
+                            {/* ── Items list — overview-style flat rows ── */}
                             {currentShip.items.length > 0 && (
-                                <div className="flex gap-2 flex-wrap">
+                                <div className="bg-white divide-y divide-[#f8f8f8]">
                                     {currentShip.items.map((item, j) => (
-                                        <div key={j} className="flex flex-col items-center gap-1">
-                                            <motion.div
-                                                layoutId={`photo-${currentShip.id}-${item.productId}`}
-                                                transition={spring}
-                                                className="relative rounded-[6px] overflow-hidden flex-shrink-0"
-                                                style={{ width: 44, height: 64 }}
-                                            >
+                                        <div key={j} className="flex items-center px-5 py-[10px] gap-[12px]">
+                                            <div className="relative flex-shrink-0" style={{ width: 36, height: 40 }}>
                                                 {item.cartPhoto ? (
                                                     <Image
                                                         src={item.cartPhoto}
-                                                        alt={item.productName}
+                                                        alt=""
                                                         fill
-                                                        className="object-cover"
-                                                        sizes="44px"
+                                                        className="object-contain"
+                                                        sizes="36px"
                                                     />
                                                 ) : (
-                                                    <div className="absolute inset-0 bg-neutral-200" />
+                                                    <div className="w-full h-full bg-neutral-100" />
                                                 )}
-                                            </motion.div>
-                                            <span className="text-[8px] text-neutral-400 font-medium">
-                                                {item.size}
+                                            </div>
+                                            <span className="font-alte text-[12px] leading-none truncate flex-1 min-w-0">
+                                                {item.productName}
                                             </span>
+                                            {item.color && (
+                                                <span className="font-reformat text-[9px] text-neutral-500 tracking-[0.1em] uppercase flex-shrink-0">
+                                                    {item.color}
+                                                </span>
+                                            )}
+                                            <span className="font-reformat text-[9px] text-neutral-500 tracking-[0.1em] uppercase flex-shrink-0">
+                                                S:{item.size}
+                                            </span>
+                                            {item.quantity > 1 && (
+                                                <span className="font-reformat text-[10px] font-bold tracking-[-0.01em] tabular-nums flex-shrink-0">
+                                                    ×{item.quantity}
+                                                </span>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
                             )}
 
-                            <div className="bg-white rounded-[10px] px-4 py-4">
-                                <p className="text-[9px] font-semibold tracking-[0.12em] text-neutral-400 mb-3">
-                                    SHIP TO
-                                </p>
-                                <p className="text-[14px] font-semibold text-neutral-800 leading-snug">
-                                    {currentShip.recipientName}
-                                </p>
-                                <p className="text-[12px] text-neutral-500 mt-1 leading-relaxed whitespace-pre-line">
-                                    {currentShip.address}{'\n'}{currentShip.city}, {currentShip.state} {currentShip.zip}{'\n'}{currentShip.country}
-                                </p>
-                                <p className="text-[11px] text-neutral-400 mt-3">{currentShip.email}</p>
+                            {/* ── Ship-to address ── */}
+                            <div className="px-5 pt-4 pb-5">
+                                <div className="bg-white px-4 py-4">
+                                    <p className="text-[9px] font-semibold tracking-[0.12em] text-neutral-400 mb-3">
+                                        SHIP TO
+                                    </p>
+                                    <p className="text-[14px] font-semibold text-neutral-800 leading-snug">
+                                        {currentShip.recipientName}
+                                    </p>
+                                    <p className="text-[12px] text-neutral-500 mt-1 leading-relaxed whitespace-pre-line">
+                                        {currentShip.address}{'\n'}{currentShip.city}, {currentShip.state} {currentShip.zip}{'\n'}{currentShip.country}
+                                    </p>
+                                    <p className="text-[11px] text-neutral-400 mt-3">{currentShip.email}</p>
+                                </div>
                             </div>
                         </div>
 
@@ -879,42 +1019,50 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
 
             </AnimatePresence>
 
-            {/* ── Mode modal ── */}
-            {showModeModal && (
-                <div
-                    className="fixed inset-0 z-50 flex items-end bg-black/20"
-                    onClick={() => setShowModeModal(false)}
+            {/* ── Room Overview trigger (visible on queue + shipping; picking screen has tab in header) ── */}
+            {phase !== 'calculating' && phase !== 'picking' && (
+                <motion.button
+                    key="overview-trigger"
+                    onClick={() => setShowOverview(true)}
+                    className="fixed z-[65] flex items-center gap-[5px] bg-white px-[10px] py-[7px] shadow-sm"
+                    style={{ top: 32, left: 20 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                    aria-label="Open room overview"
                 >
-                    <div
-                        className="w-full bg-white rounded-t-[2rem] px-6 pt-6 pb-12"
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <p className="text-[11px] text-neutral-400 mb-5 text-center tracking-wide">
-                            {selectedIds.size} ORDER{selectedIds.size !== 1 ? 'S' : ''} SELECTED
-                        </p>
-                        <div className="flex flex-col gap-3">
-                            <button
-                                onClick={() => beginRun('sequential')}
-                                className="w-full py-5 rounded-2xl bg-neutral-900 text-white text-[15px] font-semibold"
-                            >
-                                Sequential
-                                <span className="block text-[11px] font-normal text-neutral-400 mt-0.5">
-                                    One order at a time
-                                </span>
-                            </button>
-                            <button
-                                onClick={() => beginRun('batch')}
-                                className="w-full py-5 rounded-2xl bg-neutral-100 text-neutral-900 text-[15px] font-semibold"
-                            >
-                                Batch
-                                <span className="block text-[11px] font-normal text-neutral-500 mt-0.5">
-                                    All items grouped by product
-                                </span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                        <line x1="1" y1="3" x2="12" y2="3" stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round" />
+                        <line x1="1" y1="6.5" x2="12" y2="6.5" stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round" />
+                        <line x1="1" y1="10" x2="8" y2="10" stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round" />
+                    </svg>
+                    <span className="font-reformat text-[9px] tracking-[0.1em] font-bold uppercase text-black">
+                        Overview
+                    </span>
+                </motion.button>
             )}
+
+            {/* ── Room Overview Sheet ── */}
+            <RoomOverviewSheet
+                open={showOverview}
+                orders={phase === 'queue' ? orders : runOrders}
+                selectedIds={phase === 'queue' ? selectedIds : undefined}
+                onToggleOrder={phase === 'queue' ? toggleOrder : undefined}
+                tasks={phase !== 'queue' ? tasks : undefined}
+                taskStatuses={phase !== 'queue' ? taskStatuses : undefined}
+                pickedDetails={phase !== 'queue' ? pickedDetails : undefined}
+                onTogglePickedDetail={phase !== 'queue' ? togglePickedDetail : undefined}
+                onMarkMissingFromOverview={phase !== 'queue' ? markMissingFromOverview : undefined}
+                onCancelOrderFromOverview={phase !== 'queue' ? cancelOrderFromOverview : undefined}
+                onClose={() => setShowOverview(false)}
+                onDone={phase !== 'queue' ? () => {
+                    setShowOverview(false)
+                    if (shipOrders.length === 0) router.push('/admin/orders')
+                    else setPhase('shipping')
+                } : undefined}
+            />
+
         </LayoutGroup>
     )
 }
@@ -1016,70 +1164,93 @@ function PickToggleBar({
     accent,
     onToggle,
     onDone,
+    pickedQty,
+    totalQty,
 }: {
     status: TaskStatus | undefined
     allResolved: boolean
     accent: string
     onToggle: () => void
     onDone: () => void
+    pickedQty: number
+    totalQty: number
 }) {
     const isPicked = status === 'picked'
     const isMissing = status === 'missing'
 
     return (
         <div className="flex-shrink-0 bg-white px-5 pt-5 pb-8 flex items-center justify-between gap-4">
-            <button
-                onClick={onToggle}
-                disabled={isMissing}
-                className="flex items-center gap-3 disabled:opacity-50"
+            {/* Left slot: item counter — dims when all resolved */}
+            <motion.span
+                animate={{ opacity: allResolved ? 0.32 : 0.45 }}
+                transition={{ duration: 0.22 }}
+                className="text-[15px] font-semibold tracking-tight text-black"
             >
-                <motion.span
-                    whileTap={{ scale: 0.9 }}
-                    className="rounded-full border-2 flex items-center justify-center transition-colors"
-                    style={{
-                        width: 36,
-                        height: 36,
-                        borderColor: isPicked ? accent : isMissing ? '#f87171' : '#d4d4d4',
-                        backgroundColor: isPicked ? accent : isMissing ? '#fee2e2' : 'transparent',
-                    }}
-                >
-                    {isPicked && (
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                            <polyline
-                                points="2,7.5 5.5,11 12,3.5"
-                                stroke="white"
-                                strokeWidth="2.2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            />
-                        </svg>
-                    )}
-                    {isMissing && (
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                            <line x1="3" y1="3" x2="9" y2="9" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" />
-                            <line x1="9" y1="3" x2="3" y2="9" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" />
-                        </svg>
-                    )}
-                </motion.span>
-                <span className="text-[15px] font-semibold tracking-tight">
-                    {isPicked ? 'Picked' : isMissing ? 'Unavailable' : 'Mark as picked'}
-                </span>
-            </button>
+                {pickedQty}/{totalQty} items
+            </motion.span>
 
-            <AnimatePresence>
-                {allResolved && (
+            {/* Right slot: toggle button → Continue to shipping */}
+            <AnimatePresence mode="wait" initial={false}>
+                {allResolved ? (
                     <motion.button
-                        key="done"
+                        key="continue"
                         onClick={onDone}
                         initial={{ opacity: 0, x: 8 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: 8 }}
-                        className="text-[14px] font-semibold tracking-tight flex items-center gap-1"
+                        transition={{ duration: 0.22 }}
+                        className="text-[15px] font-semibold tracking-tight flex items-center gap-1"
                         style={{ color: accent }}
                     >
-                        Done picking
+                        Continue to shipping
                         <span className="text-[16px] leading-none">→</span>
                     </motion.button>
+                ) : (
+                    <motion.div
+                        key="toggle"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.18 }}
+                    >
+                        <button
+                            onClick={onToggle}
+                            disabled={isMissing}
+                            className="flex items-center gap-3 disabled:opacity-50"
+                        >
+                            <span className="text-[15px] font-semibold tracking-tight">
+                                {isPicked ? 'Picked' : isMissing ? 'Unavailable' : 'Mark as picked'}
+                            </span>
+                            <motion.span
+                                whileTap={{ scale: 0.9 }}
+                                className="rounded-full border-2 flex items-center justify-center transition-colors"
+                                style={{
+                                    width: 36,
+                                    height: 36,
+                                    borderColor: isPicked ? accent : isMissing ? '#f87171' : '#d4d4d4',
+                                    backgroundColor: isPicked ? accent : isMissing ? '#fee2e2' : 'transparent',
+                                }}
+                            >
+                                {isPicked && (
+                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                        <polyline
+                                            points="2,7.5 5.5,11 12,3.5"
+                                            stroke="white"
+                                            strokeWidth="2.2"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        />
+                                    </svg>
+                                )}
+                                {isMissing && (
+                                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                        <line x1="3" y1="3" x2="9" y2="9" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" />
+                                        <line x1="9" y1="3" x2="3" y2="9" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" />
+                                    </svg>
+                                )}
+                            </motion.span>
+                        </button>
+                    </motion.div>
                 )}
             </AnimatePresence>
         </div>
@@ -1088,94 +1259,24 @@ function PickToggleBar({
 
 // ── Calculating Screen ───────────────────────────────────────────────────────
 
-function CalculatingBody({
-    summary,
-    onContinue,
-}: {
-    summary: CalcSummary
-    onContinue: () => void
-}) {
-    const messages = [
-        'Determining pick order',
-        'Grouping items into parcels',
-        'Calculating optimal pick route',
-        'Verifying inventory',
-    ]
-    const [step, setStep] = useState(0)
-    const done = step >= messages.length
-
+function CalculatingBody({ onContinue }: { onContinue: () => void }) {
     useEffect(() => {
-        if (done) return
-        const t = setTimeout(() => setStep(s => s + 1), 1100)
+        const t = setTimeout(onContinue, 650)
         return () => clearTimeout(t)
-    }, [step, done])
+    }, [onContinue])
 
     return (
-        <>
-            {!done && <StaticBurst />}
-            <AnimatePresence mode="wait">
-                {!done ? (
-                    <motion.div
-                        key="loader"
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -8 }}
-                        transition={{ duration: 0.25 }}
-                        className="flex flex-col items-center gap-6"
-                    >
-                        <motion.div
-                            className="rounded-full"
-                            style={{
-                                width: 42,
-                                height: 42,
-                                border: '3px solid rgba(0,0,0,0.12)',
-                                borderTopColor: '#000',
-                            }}
-                            animate={{ rotate: [0, 360] }}
-                            transition={{ duration: 0.85, repeat: Infinity, ease: 'linear' }}
-                        />
-                        <div className="h-6 overflow-hidden text-center">
-                            <AnimatePresence mode="wait">
-                                <motion.p
-                                    key={step}
-                                    initial={{ opacity: 0, y: 12 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -12 }}
-                                    transition={{ duration: 0.3 }}
-                                    className="font-reformat text-[12px] tracking-[0.12em] uppercase text-neutral-600"
-                                >
-                                    {messages[step] ?? messages[messages.length - 1]}
-                                </motion.p>
-                            </AnimatePresence>
-                        </div>
-                    </motion.div>
-                ) : (
-                    <motion.div
-                        key="summary"
-                        initial={{ opacity: 0, scale: 0.96 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.3 }}
-                        className="flex flex-col items-center gap-8 max-w-sm w-full"
-                    >
-                        <div className="bg-white px-6 py-7 w-full text-center">
-                            <p className="font-alte text-[28px] tracking-[-0.02em] leading-tight text-black mb-3">
-                                Mapped {summary.itemCount} item{summary.itemCount === 1 ? '' : 's'}
-                                <br />
-                                into {summary.taskCount} parcel{summary.taskCount === 1 ? '' : 's'}
-                                <br />
-                                for {summary.orderCount} order{summary.orderCount === 1 ? '' : 's'}.
-                            </p>
-                        </div>
-                        <button
-                            onClick={onContinue}
-                            className="font-alte font-bold text-[28px] tracking-[-0.02em] text-black"
-                        >
-                            Begin picking first item →
-                        </button>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </>
+        <motion.div
+            className="rounded-full"
+            style={{
+                width: 28,
+                height: 28,
+                border: '2.5px solid rgba(0,0,0,0.1)',
+                borderTopColor: '#000',
+            }}
+            animate={{ rotate: [0, 360] }}
+            transition={{ duration: 0.7, repeat: Infinity, ease: 'linear' }}
+        />
     )
 }
 
@@ -1194,35 +1295,6 @@ function GrainOverlay() {
     )
 }
 
-function StaticBurst() {
-    return (
-        <motion.div
-            aria-hidden
-            className="pointer-events-none fixed inset-0 z-[55] mix-blend-multiply"
-            style={{
-                backgroundImage: NOISE_TILE,
-                backgroundSize: '200px 200px',
-            }}
-            initial={{ opacity: 0 }}
-            animate={{
-                opacity: [0.14, 0.2, 0.16, 0.22, 0.15],
-                backgroundPosition: [
-                    '0px 0px',
-                    '40px 20px',
-                    '-20px 35px',
-                    '25px -25px',
-                    '0px 0px',
-                ],
-            }}
-            exit={{ opacity: 0 }}
-            transition={{
-                opacity: { duration: 2.4, repeat: Infinity, ease: 'easeInOut' },
-                backgroundPosition: { duration: 2.4, repeat: Infinity, ease: 'easeInOut' },
-            }}
-        />
-    )
-}
-
 // ── Tracking Sheet ───────────────────────────────────────────────────────────
 
 function TrackingSheet({
@@ -1234,48 +1306,15 @@ function TrackingSheet({
 }) {
     const [open, setOpen] = useState(false)
     const [tracking, setTracking] = useState('')
-    const [loading, setLoading] = useState<'quote' | 'buy' | 'manual' | 'later' | null>(null)
-    const [error, setError] = useState<string | null>(null)
-    const [quote, setQuote] = useState<ShippoQuote | null>(null)
+    const [loading, setLoading] = useState<'save' | 'later' | null>(null)
 
     function reset() {
         setOpen(false)
         setTracking('')
-        setQuote(null)
-        setError(null)
     }
 
-    async function handleGetQuote() {
-        setLoading('quote')
-        setError(null)
-        try {
-            const q = await quoteShippoLabel(orderId)
-            setQuote(q)
-        } catch (e) {
-            setError(e instanceof Error ? e.message : 'Failed to fetch rate')
-        } finally {
-            setLoading(null)
-        }
-    }
-
-    async function handleConfirmPurchase() {
-        if (!quote) return
-        setLoading('buy')
-        setError(null)
-        try {
-            const result = await purchaseShippoLabel(orderId, quote.rateId)
-            window.open(result.labelUrl, '_blank', 'noopener,noreferrer')
-            reset()
-            onShipped()
-        } catch (e) {
-            setError(e instanceof Error ? e.message : 'Failed to buy label')
-        } finally {
-            setLoading(null)
-        }
-    }
-
-    async function handleManual(trackingNumber?: string) {
-        setLoading(trackingNumber ? 'manual' : 'later')
+    async function handleShip(trackingNumber?: string) {
+        setLoading(trackingNumber ? 'save' : 'later')
         try {
             await markOrderShipped(orderId, trackingNumber)
             reset()
@@ -1309,84 +1348,32 @@ function TrackingSheet({
                         onClick={e => e.stopPropagation()}
                     >
                         <p className="text-[11px] font-semibold tracking-[0.12em] text-neutral-400 mb-5 text-center">
-                            SHIP THIS ORDER
+                            MARK AS SHIPPED
                         </p>
 
-                        <div className="flex flex-col gap-2 mb-5">
-                            {quote ? (
-                                <div className="rounded-2xl border border-neutral-200 px-4 py-4">
-                                    <div className="flex items-baseline justify-between mb-2">
-                                        <span className="text-[12px] font-semibold text-neutral-700">
-                                            {quote.provider} {quote.serviceName}
-                                        </span>
-                                        <span className="text-[18px] font-semibold tabular-nums">
-                                            ${parseFloat(quote.amount).toFixed(2)}
-                                            <span className="text-[10px] text-neutral-400 ml-1">{quote.currency}</span>
-                                        </span>
-                                    </div>
-                                    {quote.estimatedDays !== null && (
-                                        <p className="text-[11px] text-neutral-500 mb-3">
-                                            Est. {quote.estimatedDays} day{quote.estimatedDays === 1 ? '' : 's'} in transit
-                                        </p>
-                                    )}
-                                    <div className="flex flex-col gap-2">
-                                        <button
-                                            onClick={handleConfirmPurchase}
-                                            disabled={busy}
-                                            className="w-full py-3 rounded-xl bg-neutral-900 text-white text-[13px] font-semibold disabled:opacity-40 transition-opacity"
-                                        >
-                                            {loading === 'buy' ? 'Buying label...' : `Confirm & Buy $${parseFloat(quote.amount).toFixed(2)}`}
-                                        </button>
-                                        <button
-                                            onClick={() => setQuote(null)}
-                                            disabled={busy}
-                                            className="w-full py-2 text-[11px] text-neutral-500 disabled:opacity-40"
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <button
-                                    onClick={handleGetQuote}
-                                    disabled={busy}
-                                    className="w-full py-4 rounded-2xl bg-neutral-900 text-white text-[14px] font-semibold disabled:opacity-40 transition-opacity"
-                                >
-                                    {loading === 'quote' ? 'Fetching rate...' : 'Get Shippo Rate'}
-                                    <span className="block text-[11px] font-normal text-neutral-400 mt-0.5">
-                                        Preview cheapest USPS price before buying
-                                    </span>
-                                </button>
-                            )}
-                        </div>
-
-                        {error && (
-                            <p className="text-[11px] text-red-500 mb-4 text-center break-words">{error}</p>
-                        )}
-
-                        <p className="text-[10px] text-neutral-400 mb-2 text-center tracking-wide">
-                            OR ENTER TRACKING MANUALLY
+                        <p className="text-[10px] text-neutral-400 mb-2 tracking-wide">
+                            TRACKING NUMBER (optional)
                         </p>
                         <input
                             type="text"
                             value={tracking}
                             onChange={e => setTracking(e.target.value)}
-                            placeholder="Tracking number"
+                            placeholder="e.g. 9400111899223450440756"
                             disabled={busy}
-                            className="w-full border border-neutral-200 rounded-xl px-4 py-3 text-[14px] mb-3 outline-none focus:border-neutral-400 transition-colors disabled:opacity-50"
+                            className="w-full border border-neutral-200 rounded-xl px-4 py-3 text-[14px] mb-4 outline-none focus:border-neutral-400 transition-colors disabled:opacity-50"
                         />
                         <div className="flex flex-col gap-2">
                             <button
-                                onClick={() => handleManual(tracking)}
-                                disabled={busy || !tracking.trim()}
-                                className="w-full py-4 rounded-2xl bg-neutral-100 text-neutral-900 text-[14px] font-semibold disabled:opacity-40 transition-opacity"
+                                onClick={() => handleShip(tracking.trim() || undefined)}
+                                disabled={busy}
+                                className="w-full py-4 rounded-2xl bg-neutral-900 text-white text-[14px] font-semibold disabled:opacity-40 transition-opacity"
                             >
-                                {loading === 'manual' ? '...' : 'Save Tracking & Ship'}
+                                {loading === 'save' ? '...' : tracking.trim() ? 'Save Tracking & Ship' : 'Mark Shipped'}
                             </button>
                             <button
-                                onClick={() => handleManual()}
+                                onClick={() => handleShip()}
                                 disabled={busy}
-                                className="w-full py-4 rounded-2xl bg-neutral-100 text-neutral-500 text-[14px] font-semibold disabled:opacity-40 transition-opacity"
+                                className="w-full py-3 rounded-2xl bg-neutral-100 text-neutral-500 text-[13px] font-semibold disabled:opacity-40 transition-opacity"
                             >
                                 {loading === 'later' ? '...' : 'Add Tracking Later'}
                             </button>
@@ -1432,7 +1419,7 @@ function ItemUnavailableButton({
     )
 }
 
-function ItemUnavailableSheet({
+export function ItemUnavailableSheet({
     task,
     onClose,
     onItemRefunded,
@@ -1444,6 +1431,7 @@ function ItemUnavailableSheet({
     onOrderCancelled: (orderId: string) => void
 }) {
     const [loading, setLoading] = useState<string | null>(null)
+    const [refundStep, setRefundStep] = useState<string>('Partial Refund')
     const primary = task.details[0]
 
     const emailBody = encodeURIComponent(
@@ -1456,7 +1444,12 @@ function ItemUnavailableSheet({
     async function handlePartialRefund() {
         setLoading('refund')
         try {
+            setRefundStep('Contacting Stripe...')
             await Promise.all(task.details.map(d => partialRefundItem(d.orderId, Math.round(d.price * d.quantity * 100))))
+            setRefundStep('Verifying refund...')
+            await new Promise(resolve => setTimeout(resolve, 500))
+            setRefundStep('Refund complete')
+            await new Promise(resolve => setTimeout(resolve, 400))
             onItemRefunded()
         } finally { setLoading(null) }
     }
@@ -1480,7 +1473,7 @@ function ItemUnavailableSheet({
                         <span className="block text-[11px] font-normal text-neutral-500 mt-0.5">{primary.email}</span>
                     </a>
                     <button onClick={handlePartialRefund} disabled={!!loading} className="w-full py-4 rounded-2xl bg-neutral-100 text-neutral-900 text-[14px] font-semibold disabled:opacity-50 transition-opacity">
-                        {loading === 'refund' ? 'Refunding...' : 'Partial Refund'}
+                        {loading === 'refund' ? refundStep : 'Partial Refund'}
                         <span className="block text-[11px] font-normal text-neutral-500 mt-0.5">Refund this item, continue with order</span>
                     </button>
                     <button onClick={handleCancelOrder} disabled={!!loading} className="w-full py-4 rounded-2xl bg-red-50 text-red-600 text-[14px] font-semibold disabled:opacity-50 transition-opacity">

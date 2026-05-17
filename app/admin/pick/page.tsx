@@ -56,6 +56,7 @@ export default async function AdminPickPage() {
                 cartPhoto: info?.cartPhoto ?? null,
                 color: info?.color ?? null,
                 colorHex: info?.colorHex ?? null,
+                warehouseLocation: null,
             }
         }),
     }))
