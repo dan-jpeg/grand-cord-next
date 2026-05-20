@@ -141,5 +141,29 @@ model AdminUser {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  inventoryChanges InventoryChangeLog[]
+
   @@index([email])
+}
+
+model InventoryChangeLog {
+  id            String   @id @default(cuid())
+  productId     String?
+  productSizeId String?
+  productName   String
+  sizeLabel     String
+  delta         Int
+  before        Int
+  after         Int
+  adminUserId   String?
+  adminEmail    String
+  adminName     String?
+  createdAt     DateTime @default(now())
+
+  adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  @@index([productId])
+  @@index([productSizeId])
+  @@index([adminUserId])
+  @@index([createdAt])
 }

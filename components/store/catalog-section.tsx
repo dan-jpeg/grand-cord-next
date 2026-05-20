@@ -66,6 +66,7 @@ export function CatalogSection({
                                 product={product}
                                 index={index}
                                 compact={mobileLayout === '2x2' || mobileLayout === '3x3'}
+                                cols={mobileLayout === '3x3' ? 3 : mobileLayout === '2x2' ? 2 : 1}
                             />
                         ))}
                     </div>
@@ -76,6 +77,7 @@ export function CatalogSection({
                                 product={product}
                                 index={index}
                                 compact={mobileLayout === '2x2' || mobileLayout === '3x3'}
+                                cols={mobileLayout === '3x3' ? 3 : mobileLayout === '2x2' ? 2 : 1}
                             />
                         ))}
                     </div>
@@ -86,6 +88,7 @@ export function CatalogSection({
                                 product={product}
                                 index={index}
                                 compact={mobileLayout === '2x2' || mobileLayout === '3x3'}
+                                cols={mobileLayout === '3x3' ? 3 : mobileLayout === '2x2' ? 2 : 1}
                             />
                         ))}
                     </div>
@@ -96,6 +99,7 @@ export function CatalogSection({
                                 product={product}
                                 index={index}
                                 compact={mobileLayout === '2x2' || mobileLayout === '3x3'}
+                                cols={mobileLayout === '3x3' ? 3 : mobileLayout === '2x2' ? 2 : 1}
                             />
                         ))}
                     </div>

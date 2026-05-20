@@ -1,14 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { createProduct, updateProduct } from '@/app/admin/products/actions'
+import { createProduct, updateProduct, commitInventoryChanges } from '@/app/admin/products/actions'
 import { ImageManager, type ImageData } from '@/components/admin/image-manager'
+import { InventoryConfirmModal, LockIcon, type InventoryChange } from './inventory-confirm-modal'
 import { formatDesignerNames } from '@/lib/designers'
 import { formatPrice } from '@/lib/utils'
-import type { Product, ProductSize, Order, OrderItem } from '@prisma/client'
+import type { Product, ProductSize, Order, OrderItem, InventoryChangeLog } from '@prisma/client'
 
 type ProductWithSizes = Product & {
     sizes: ProductSize[]
@@ -22,7 +23,7 @@ type OrderWithItems = Order & {
 const AVAILABLE_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
 const MAX_DESIGNERS = 8
 
-type Tab = 'identity' | 'look' | 'sizing' | 'listing' | 'sales'
+type Tab = 'identity' | 'look' | 'sizing' | 'listing' | 'sales' | 'history'
 
 const TABS_CREATE: { key: Tab; label: string }[] = [
     { key: 'identity', label: 'Identity' },
@@ -34,6 +35,7 @@ const TABS_CREATE: { key: Tab; label: string }[] = [
 const TABS_EDIT: { key: Tab; label: string }[] = [
     ...TABS_CREATE,
     { key: 'sales', label: 'Sales' },
+    { key: 'history', label: 'History' },
 ]
 
 const inputClass =
@@ -44,9 +46,11 @@ const labelClass = 'block text-sm font-bold mb-2'
 export function ProductForm({
     product,
     orders,
+    inventoryLogs,
 }: {
     product?: ProductWithSizes
     orders?: OrderWithItems[]
+    inventoryLogs?: InventoryChangeLog[]
 }) {
     const router = useRouter()
     const TABS = product ? TABS_EDIT : TABS_CREATE
@@ -93,11 +97,25 @@ export function ProductForm({
     const [color, setColor] = useState(product?.color || '')
     const [colorHex, setColorHex] = useState(product?.colorHex || '')
 
-    const [sizes, setSizes] = useState<{ size: string; available: number }[]>(
+    const [sizes, setSizes] = useState<{ id?: string; size: string; available: number }[]>(
         product?.sizes.length
-            ? product.sizes.map((s) => ({ size: s.size, available: s.available }))
+            ? product.sizes.map((s) => ({ id: s.id, size: s.size, available: s.available }))
             : [{ size: 'M', available: 0 }]
     )
+
+    // Server-side baseline of available counts for existing sizes; updated after
+    // a successful commitInventoryChanges so the confirm modal always shows the
+    // delta from the persisted value.
+    const [committedAvailable, setCommittedAvailable] = useState<Record<string, number>>(
+        () => Object.fromEntries((product?.sizes ?? []).map((s) => [s.id, s.available])),
+    )
+
+    const [inventoryUnlocked, setInventoryUnlocked] = useState(false)
+    const [inventoryConfirming, setInventoryConfirming] = useState(false)
+    const [inventorySaving, setInventorySaving] = useState(false)
+    // When set, the user attempted to navigate to another tab while inventory
+    // changes were pending. Gates navigation behind the confirm/discard modal.
+    const [pendingNavTo, setPendingNavTo] = useState<Tab | null>(null)
 
     function updateSize(index: number, field: 'size' | 'available', value: string | number) {
         const newSizes = [...sizes]
@@ -114,6 +132,104 @@ export function ProductForm({
     function removeSize(index: number) {
         setSizes(sizes.filter((_, i) => i !== index))
     }
+
+    function bumpExistingSize(sizeId: string, dir: 1 | -1) {
+        setSizes((prev) =>
+            prev.map((s) => {
+                if (s.id !== sizeId) return s
+                const next = Math.max(0, s.available + dir)
+                if (next === s.available && dir < 0) return s
+                return { ...s, available: next }
+            }),
+        )
+    }
+
+    const inventoryChanges: InventoryChange[] = sizes
+        .filter((s): s is { id: string; size: string; available: number } => !!s.id)
+        .map((s) => {
+            const before = committedAvailable[s.id] ?? 0
+            const after = s.available
+            return {
+                sizeId: s.id,
+                sizeLabel: s.size,
+                before,
+                after,
+                delta: after - before,
+            }
+        })
+        .filter((c) => c.delta !== 0)
+
+    const hasInventoryChanges = inventoryChanges.length > 0
+
+    function handleLockClick() {
+        if (!inventoryUnlocked) {
+            setInventoryUnlocked(true)
+            return
+        }
+        if (!hasInventoryChanges) {
+            setInventoryUnlocked(false)
+            return
+        }
+        setInventoryConfirming(true)
+    }
+
+    async function handleInventoryConfirm() {
+        if (!product) return
+        setInventorySaving(true)
+        try {
+            await commitInventoryChanges(
+                product.id,
+                inventoryChanges.map((c) => ({ sizeId: c.sizeId, delta: c.delta })),
+            )
+            setCommittedAvailable((prev) => {
+                const next = { ...prev }
+                for (const c of inventoryChanges) next[c.sizeId] = c.after
+                return next
+            })
+            setInventoryConfirming(false)
+            setInventoryUnlocked(false)
+            if (pendingNavTo) {
+                setActiveTab(pendingNavTo)
+                setPendingNavTo(null)
+            }
+        } finally {
+            setInventorySaving(false)
+        }
+    }
+
+    function handleInventoryDiscard() {
+        setSizes((prev) =>
+            prev.map((s) => {
+                if (!s.id) return s
+                const base = committedAvailable[s.id]
+                if (base === undefined) return s
+                return { ...s, available: base }
+            }),
+        )
+        setInventoryConfirming(false)
+        setInventoryUnlocked(false)
+        if (pendingNavTo) {
+            setActiveTab(pendingNavTo)
+            setPendingNavTo(null)
+        }
+    }
+
+    function handleInventoryCancel() {
+        setInventoryConfirming(false)
+        setPendingNavTo(null)
+    }
+
+    // Warn before leaving the page entirely (tab close, refresh, manual URL
+    // change, browser back) while inventory changes are pending.
+    useEffect(() => {
+        if (!hasInventoryChanges) return
+        function handler(e: BeforeUnloadEvent) {
+            e.preventDefault()
+            e.returnValue = ''
+        }
+        window.addEventListener('beforeunload', handler)
+        return () => window.removeEventListener('beforeunload', handler)
+    }, [hasInventoryChanges])
 
     function updateDesigner(index: number, value: string) {
         const next = [...designerNames]
@@ -184,6 +300,17 @@ export function ProductForm({
 
     const errors = warnings.filter((w) => w.severity === 'error')
 
+    // If the user has pending inventory deltas while on the Inventory tab and
+    // tries to leave, gate the navigation behind the confirm/discard modal.
+    function guardNav(target: Tab): boolean {
+        if (activeTab === 'sizing' && hasInventoryChanges) {
+            setPendingNavTo(target)
+            setInventoryConfirming(true)
+            return true
+        }
+        return false
+    }
+
     function jumpToTab(key: Tab) {
         const targetIndex = TABS.findIndex((t) => t.key === key)
         // Jumping forward via tab label must respect the same error gate as
@@ -201,14 +328,17 @@ export function ProductForm({
                 return
             }
         }
+        if (guardNav(key)) return
         setWarnings([])
         setActiveTab(key)
     }
 
     function goBack() {
-        setWarnings([])
         const prev = TABS[tabIndex - 1]
-        if (prev) setActiveTab(prev.key)
+        if (!prev) return
+        if (guardNav(prev.key)) return
+        setWarnings([])
+        setActiveTab(prev.key)
     }
 
     function goNext() {
@@ -224,9 +354,11 @@ export function ProductForm({
             setWarnings(found)
             return
         }
-        setWarnings([])
         const next = TABS[tabIndex + 1]
-        if (next) setActiveTab(next.key)
+        if (!next) return
+        if (guardNav(next.key)) return
+        setWarnings([])
+        setActiveTab(next.key)
     }
 
     async function handleSubmit(e: React.FormEvent) {
@@ -396,47 +528,125 @@ export function ProductForm({
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <p className="text-sm font-bold">Inventory by Size:</p>
-                        <button
-                            type="button"
-                            onClick={addSize}
-                            disabled={sizes.length >= AVAILABLE_SIZES.length}
-                            className="text-xs underline hover:no-underline disabled:opacity-40"
-                        >
-                            Add Size
-                        </button>
-                    </div>
-                    <div className="space-y-3">
-                        {sizes.map((sizeItem, index) => (
-                            <div key={index} className="flex items-center gap-3">
-                                <select
-                                    value={sizeItem.size}
-                                    onChange={(e) => updateSize(index, 'size', e.target.value)}
-                                    className="px-4 py-3 bg-neutral-100 rounded-lg text-sm focus:outline-none focus:bg-neutral-200 transition-colors"
-                                >
-                                    {AVAILABLE_SIZES.map((size) => (
-                                        <option key={size} value={size}>{size}</option>
-                                    ))}
-                                </select>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={sizeItem.available}
-                                    onChange={(e) => updateSize(index, 'available', Number(e.target.value))}
-                                    className={`${inputClass} flex-1`}
-                                    placeholder="Available"
-                                />
+                        <div className="flex items-center gap-4">
+                            <button
+                                type="button"
+                                onClick={addSize}
+                                disabled={sizes.length >= AVAILABLE_SIZES.length}
+                                className="text-xs underline hover:no-underline disabled:opacity-40"
+                            >
+                                Add Size
+                            </button>
+                            {product && (
                                 <button
                                     type="button"
-                                    onClick={() => removeSize(index)}
-                                    disabled={sizes.length === 1}
-                                    className="text-xs text-neutral-400 hover:text-red-500 underline hover:no-underline disabled:opacity-30 whitespace-nowrap"
+                                    onClick={handleLockClick}
+                                    className="p-[6px] text-neutral-400 hover:text-black"
+                                    aria-label={inventoryUnlocked ? 'Lock inventory controls' : 'Unlock inventory controls'}
+                                    aria-pressed={inventoryUnlocked}
                                 >
-                                    Remove
+                                    <LockIcon unlocked={inventoryUnlocked} />
                                 </button>
-                            </div>
-                        ))}
+                            )}
+                        </div>
                     </div>
+                    <div className="space-y-3">
+                        {sizes.map((sizeItem, index) => {
+                            const isExisting = !!sizeItem.id
+                            const base = isExisting ? committedAvailable[sizeItem.id!] ?? 0 : 0
+                            const delta = isExisting ? sizeItem.available - base : 0
+                            return (
+                                <div key={sizeItem.id ?? `new-${index}`} className="flex items-center gap-3">
+                                    <select
+                                        value={sizeItem.size}
+                                        onChange={(e) => updateSize(index, 'size', e.target.value)}
+                                        disabled={isExisting}
+                                        className="px-4 py-3 bg-neutral-100 rounded-lg text-sm focus:outline-none focus:bg-neutral-200 transition-colors disabled:opacity-60"
+                                    >
+                                        {AVAILABLE_SIZES.map((size) => (
+                                            <option key={size} value={size}>{size}</option>
+                                        ))}
+                                    </select>
+                                    {isExisting ? (
+                                        <div className="flex-1 flex items-center justify-between bg-neutral-100 rounded-lg px-4 py-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => bumpExistingSize(sizeItem.id!, -1)}
+                                                disabled={!inventoryUnlocked || sizeItem.available === 0}
+                                                className="text-neutral-500 hover:text-black disabled:opacity-20 px-2 text-base leading-none"
+                                                aria-label={`Decrease ${sizeItem.size}`}
+                                            >
+                                                −
+                                            </button>
+                                            <span
+                                                className={`font-alte tabular-nums text-base leading-none ${
+                                                    delta !== 0 ? 'font-bold text-black' : ''
+                                                }`}
+                                            >
+                                                {sizeItem.available}
+                                                {delta !== 0 && (
+                                                    <span
+                                                        className={`ml-2 text-[10px] font-reformat tracking-[0.05em] ${
+                                                            delta > 0 ? 'text-[#1a7a1a]' : 'text-[#a02020]'
+                                                        }`}
+                                                    >
+                                                        ({delta > 0 ? '+' : ''}
+                                                        {delta})
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => bumpExistingSize(sizeItem.id!, 1)}
+                                                disabled={!inventoryUnlocked}
+                                                className="text-neutral-500 hover:text-black disabled:opacity-20 px-2 text-base leading-none"
+                                                aria-label={`Increase ${sizeItem.size}`}
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={sizeItem.available}
+                                            onChange={(e) => updateSize(index, 'available', Number(e.target.value))}
+                                            className={`${inputClass} flex-1`}
+                                            placeholder="Available"
+                                        />
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => removeSize(index)}
+                                        disabled={sizes.length === 1}
+                                        className="text-xs text-neutral-400 hover:text-red-500 underline hover:no-underline disabled:opacity-30 whitespace-nowrap"
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+                            )
+                        })}
+                    </div>
+                    {product && (
+                        <p className="text-[10px] font-reformat tracking-[0.05em] text-neutral-400">
+                            {inventoryUnlocked
+                                ? 'Inventory unlocked — adjust with +/−, then lock to confirm and log.'
+                                : 'Inventory locked. Click the lock to make changes.'}
+                        </p>
+                    )}
                 </div>
+            )}
+
+            {/* Inventory confirmation modal */}
+            {inventoryConfirming && product && (
+                <InventoryConfirmModal
+                    productName={product.name}
+                    changes={inventoryChanges}
+                    saving={inventorySaving}
+                    onConfirm={handleInventoryConfirm}
+                    onCancel={handleInventoryCancel}
+                    onDiscard={handleInventoryDiscard}
+                />
             )}
 
             {/* ── Listing ── */}
@@ -511,6 +721,11 @@ export function ProductForm({
             {/* ── Sales (edit-only) ── */}
             {activeTab === 'sales' && product && (
                 <SalesPanel orders={orders ?? []} />
+            )}
+
+            {/* ── History (edit-only) ── */}
+            {activeTab === 'history' && product && (
+                <InventoryHistoryPanel logs={inventoryLogs ?? []} />
             )}
 
             {/* ── Issues panel ── */}
@@ -811,6 +1026,82 @@ function SalesPanel({ orders }: { orders: OrderWithItems[] }) {
                     })}
                 </div>
             )}
+        </div>
+    )
+}
+
+function InventoryHistoryPanel({ logs }: { logs: InventoryChangeLog[] }) {
+    if (logs.length === 0) {
+        return (
+            <div className="text-center py-8 text-[10px] tracking-[0.1em] uppercase text-neutral-400 font-reformat">
+                No inventory changes yet
+            </div>
+        )
+    }
+
+    const totalAdded = logs
+        .filter((l) => l.delta > 0)
+        .reduce((s, l) => s + l.delta, 0)
+    const totalRemoved = logs
+        .filter((l) => l.delta < 0)
+        .reduce((s, l) => s + Math.abs(l.delta), 0)
+
+    return (
+        <div className="space-y-4">
+            <div className="flex gap-[6px] flex-wrap">
+                <div className="flex items-center gap-[5px] bg-white px-[10px] py-[7px]">
+                    <span className="text-[8px] font-bold tracking-[0.09em] uppercase">
+                        +{totalAdded} Added
+                    </span>
+                </div>
+                <div className="flex items-center gap-[5px] bg-white px-[10px] py-[7px]">
+                    <span className="text-[8px] font-bold tracking-[0.09em] uppercase">
+                        −{totalRemoved} Removed
+                    </span>
+                </div>
+                <div className="flex items-center gap-[5px] bg-white px-[10px] py-[7px]">
+                    <span className="text-[8px] font-bold tracking-[0.09em] uppercase">
+                        {logs.length} {logs.length === 1 ? 'Entry' : 'Entries'}
+                    </span>
+                </div>
+            </div>
+
+            <div className="bg-white divide-y divide-[#f4f4f4]">
+                {logs.map((log) => (
+                    <div key={log.id} className="flex items-center gap-3 px-3 py-[10px]">
+                        <span className="font-reformat text-[9px] tracking-[0.1em] uppercase font-bold w-[36px] flex-shrink-0">
+                            {log.sizeLabel}
+                        </span>
+                        <span className="font-alte text-[12px] tabular-nums flex items-center gap-1 flex-shrink-0">
+                            <span className="text-neutral-400">{log.before}</span>
+                            <span className="text-neutral-400">→</span>
+                            <span>{log.after}</span>
+                        </span>
+                        <span
+                            className={`font-reformat text-[10px] tracking-[0.05em] font-bold flex-shrink-0 ${
+                                log.delta > 0 ? 'text-[#1a7a1a]' : 'text-[#a02020]'
+                            }`}
+                        >
+                            {log.delta > 0 ? '+' : ''}
+                            {log.delta}
+                        </span>
+                        <span className="flex-1 min-w-0 font-reformat text-[9px] tracking-[0.06em] text-neutral-500 truncate text-right">
+                            {log.adminName || log.adminEmail}
+                        </span>
+                        <span className="font-reformat text-[9px] tracking-[0.06em] uppercase text-neutral-400 tabular-nums flex-shrink-0 w-[72px] text-right">
+                            {new Date(log.createdAt).toLocaleDateString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                            })}
+                            {' · '}
+                            {new Date(log.createdAt).toLocaleTimeString(undefined, {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                            })}
+                        </span>
+                    </div>
+                ))}
+            </div>
         </div>
     )
 }

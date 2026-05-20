@@ -175,7 +175,7 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                 </div>
 
                 {/* Scrollable Images - 5 columns */}
-                <div className="col-span-5 overflow-y-scroll h-screen snap-y snap-mandatory scroll-smooth">
+                <div className="col-span-5 overflow-y-scroll h-screen snap-y snap-mandatory scroll-smooth scrollbar-hide">
                     {imageArray.map((img, index) => (
                         <div key={index} className="w-full snap-start snap-always">
                             {img ? (

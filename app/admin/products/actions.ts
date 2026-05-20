@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { slugify } from '@/lib/utils'
 import { normalizeDesignerNames } from '@/lib/designers'
+import { auth } from '@/lib/auth'
 import type { Prisma } from '@prisma/client'
 
 type ProductFormData = {
@@ -202,6 +203,70 @@ export async function updateSizeStock(sizeId: string, delta: number) {
         },
     })
     revalidatePath('/admin/products')
+}
+
+export async function commitInventoryChanges(
+    productId: string,
+    changes: { sizeId: string; delta: number }[],
+) {
+    if (!changes.length) return { ok: true as const }
+
+    const session = await auth()
+    if (!session?.user) {
+        throw new Error('Not authenticated')
+    }
+    const adminUserId = (session.user.id as string | undefined) ?? null
+    const adminEmail = (session.user.email as string | undefined) ?? 'unknown'
+    const adminName = (session.user.name as string | null | undefined) ?? null
+
+    const sizes = await prisma.productSize.findMany({
+        where: { id: { in: changes.map((c) => c.sizeId) } },
+        include: { product: { select: { id: true, name: true } } },
+    })
+    const sizeById = new Map(sizes.map((s) => [s.id, s]))
+
+    const ops: Prisma.PrismaPromise<unknown>[] = []
+    for (const { sizeId, delta } of changes) {
+        if (!delta) continue
+        const size = sizeById.get(sizeId)
+        if (!size) continue
+        const before = size.available
+        const after = Math.max(0, before + delta)
+        const effectiveDelta = after - before
+        if (effectiveDelta === 0) continue
+
+        ops.push(
+            prisma.productSize.update({
+                where: { id: sizeId },
+                data: { available: after, total: after + size.committed },
+            }),
+        )
+        ops.push(
+            prisma.inventoryChangeLog.create({
+                data: {
+                    productId: size.product.id,
+                    productSizeId: size.id,
+                    productName: size.product.name,
+                    sizeLabel: size.size,
+                    delta: effectiveDelta,
+                    before,
+                    after,
+                    adminUserId,
+                    adminEmail,
+                    adminName,
+                },
+            }),
+        )
+    }
+
+    if (ops.length) {
+        await prisma.$transaction(ops)
+    }
+
+    revalidatePath('/admin/products')
+    revalidatePath(`/admin/products/${productId}/edit`)
+    revalidatePath('/admin/logs')
+    return { ok: true as const }
 }
 
 export async function deleteProduct(id: string) {

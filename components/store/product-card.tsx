@@ -20,15 +20,16 @@ type ProductWithSizes = Product & {
 export function ProductCard({
                                 product,
                                 index,
-                                compact = false
+                                compact = false,
+                                cols = 1,
                             }: {
     product: ProductWithSizes
     index: number
     compact?: boolean
+    cols?: number
 }) {
     const [isHovered, setIsHovered] = useState(false)
     const [isMobile, setIsMobile] = useState(false)
-    void index
 
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth < 1024)
@@ -46,6 +47,10 @@ export function ProductCard({
 
     // Compact view for 2x2 and 3x3 mobile grids
     if (compact && isMobile) {
+        const colInRow = cols > 1 ? index % cols : 0
+        const isFirstCol = colInRow === 0
+        const isLastCol = colInRow === cols - 1
+        const namePadding = isFirstCol ? 'pl-2' : isLastCol ? 'pr-2 text-right' : ''
         return (
             <div className="group font-inter ">
                 <Link
@@ -69,7 +74,7 @@ export function ProductCard({
                         )}
                     </div>
                     <div className="pt-2">
-                        <p className="text-[7pt] font-semibold">{product.name}</p>
+                        <p className={`text-[7pt] font-semibold ${namePadding}`}>{product.name}</p>
                     </div>
                 </Link>
             </div>

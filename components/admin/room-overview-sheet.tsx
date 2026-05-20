@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import type { FlowOrder, PickTask } from './pick-flow'
-import { ItemUnavailableSheet } from './pick-flow'
+import { ItemUnavailableSheet, MultiOrderUnavailableSheet } from './pick-flow'
 
 type TaskStatus = 'picked' | 'missing'
 
@@ -416,9 +416,9 @@ export function RoomOverviewSheet({
     tasks,
     taskStatuses,
     pickedDetails,
+    missingDetails,
     onTogglePickedDetail,
-    onMarkMissingFromOverview,
-    onCancelOrderFromOverview,
+    onApplyUnavailable,
     onClose,
     onDone,
 }: {
@@ -429,9 +429,9 @@ export function RoomOverviewSheet({
     tasks?: PickTask[]
     taskStatuses?: Record<number, TaskStatus>
     pickedDetails?: Set<string>
+    missingDetails?: Set<string>
     onTogglePickedDetail?: (taskIndex: number, detailIndex: number) => void
-    onMarkMissingFromOverview?: (taskIndex: number) => void
-    onCancelOrderFromOverview?: (taskIndex: number, orderId: string) => void
+    onApplyUnavailable?: (taskIndex: number, missingDetailIndices: number[], cancelledOrderIds: string[]) => void
     onClose: () => void
     onDone?: () => void
 }) {
@@ -482,8 +482,8 @@ export function RoomOverviewSheet({
         let total = 0
         let picked = 0
         tasks!.forEach((task, taskIndex) => {
-            if (taskStatuses?.[taskIndex] === 'missing') return
             task.details.forEach((detail, detailIndex) => {
+                if (missingDetails?.has(detailKey(taskIndex, detailIndex))) return
                 total += detail.quantity
                 if (pickedDetails!.has(detailKey(taskIndex, detailIndex))) {
                     picked += detail.quantity
@@ -491,17 +491,17 @@ export function RoomOverviewSheet({
             })
         })
         return { picked, total }
-    }, [pickingMode, tasks, taskStatuses, pickedDetails])
+    }, [pickingMode, tasks, missingDetails, pickedDetails])
 
     const allResolved = useMemo(() => {
         if (!pickingMode || !tasks) return false
-        return tasks.every((task, taskIndex) => {
-            if (taskStatuses?.[taskIndex] === 'missing') return true
-            return task.details.every((_, detailIndex) =>
-                pickedDetails!.has(detailKey(taskIndex, detailIndex))
-            )
-        })
-    }, [pickingMode, tasks, taskStatuses, pickedDetails])
+        return tasks.every((task, taskIndex) =>
+            task.details.every((_, detailIndex) => {
+                const k = detailKey(taskIndex, detailIndex)
+                return missingDetails?.has(k) || pickedDetails!.has(k)
+            })
+        )
+    }, [pickingMode, tasks, missingDetails, pickedDetails])
 
     const isOrderSelected = (id: string) => !selectableSelection || selectedIds!.has(id)
 
@@ -634,7 +634,7 @@ export function RoomOverviewSheet({
                                                             <div className="flex flex-col divide-y divide-[#f8f8f8]">
                                                                 {box.rows.map((row, ri) => {
                                                                     const picked = pickedDetails!.has(detailKey(row.taskIndex, row.detailIndex))
-                                                                    const isMissing = taskStatuses?.[row.taskIndex] === 'missing'
+                                                                    const isMissing = !!missingDetails?.has(detailKey(row.taskIndex, row.detailIndex))
                                                                     return (
                                                                         <ItemRow
                                                                             key={`${row.taskIndex}-${row.detailIndex}-${ri}`}
@@ -642,7 +642,7 @@ export function RoomOverviewSheet({
                                                                             picked={picked}
                                                                             isMissing={isMissing}
                                                                             onToggle={onTogglePickedDetail && !isMissing ? () => onTogglePickedDetail(row.taskIndex, row.detailIndex) : undefined}
-                                                                            onMissing={onMarkMissingFromOverview && !isMissing ? () => setMissingTaskIndex(row.taskIndex) : undefined}
+                                                                            onMissing={onApplyUnavailable && !isMissing ? () => setMissingTaskIndex(row.taskIndex) : undefined}
                                                                         />
                                                                     )
                                                                 })}
@@ -698,7 +698,7 @@ export function RoomOverviewSheet({
                                                             <div className="flex flex-col divide-y divide-[#f8f8f8]">
                                                                 {r.rows.map((row, ri) => {
                                                                     const picked = pickedDetails!.has(detailKey(row.taskIndex, row.detailIndex))
-                                                                    const isMissing = taskStatuses?.[row.taskIndex] === 'missing'
+                                                                    const isMissing = !!missingDetails?.has(detailKey(row.taskIndex, row.detailIndex))
                                                                     return (
                                                                         <ItemRow
                                                                             key={`${row.taskIndex}-${row.detailIndex}-${ri}`}
@@ -706,7 +706,7 @@ export function RoomOverviewSheet({
                                                                             picked={picked}
                                                                             isMissing={isMissing}
                                                                             onToggle={onTogglePickedDetail && !isMissing ? () => onTogglePickedDetail(row.taskIndex, row.detailIndex) : undefined}
-                                                                            onMissing={onMarkMissingFromOverview && !isMissing ? () => setMissingTaskIndex(row.taskIndex) : undefined}
+                                                                            onMissing={onApplyUnavailable && !isMissing ? () => setMissingTaskIndex(row.taskIndex) : undefined}
                                                                         />
                                                                     )
                                                                 })}
@@ -921,20 +921,35 @@ export function RoomOverviewSheet({
                     </div>
 
                     {/* ── Missing-item modal triggered from item row ── */}
-                    {missingTaskIndex !== null && tasks?.[missingTaskIndex] && (
-                        <ItemUnavailableSheet
-                            task={tasks[missingTaskIndex]}
-                            onClose={() => setMissingTaskIndex(null)}
-                            onItemRefunded={() => {
-                                if (missingTaskIndex !== null) onMarkMissingFromOverview?.(missingTaskIndex)
-                                setMissingTaskIndex(null)
-                            }}
-                            onOrderCancelled={(orderId) => {
-                                if (missingTaskIndex !== null) onCancelOrderFromOverview?.(missingTaskIndex, orderId)
-                                setMissingTaskIndex(null)
-                            }}
-                        />
-                    )}
+                    {missingTaskIndex !== null && tasks?.[missingTaskIndex] && (() => {
+                        const t = tasks[missingTaskIndex]
+                        const ti = missingTaskIndex
+                        const alreadyMissing = new Set(
+                            t.details
+                                .map((_, di) => di)
+                                .filter(di => missingDetails?.has(detailKey(ti, di)))
+                        )
+                        const remaining = t.details.length - alreadyMissing.size
+                        const apply = (missing: number[], cancelled: string[]) => {
+                            onApplyUnavailable?.(ti, missing, cancelled)
+                            setMissingTaskIndex(null)
+                        }
+                        return remaining > 1 ? (
+                            <MultiOrderUnavailableSheet
+                                task={t}
+                                alreadyMissingIndices={alreadyMissing}
+                                onClose={() => setMissingTaskIndex(null)}
+                                onApplied={apply}
+                            />
+                        ) : (
+                            <ItemUnavailableSheet
+                                task={t}
+                                alreadyMissingIndices={alreadyMissing}
+                                onClose={() => setMissingTaskIndex(null)}
+                                onApplied={apply}
+                            />
+                        )
+                    })()}
                 </motion.div>
             )}
         </AnimatePresence>

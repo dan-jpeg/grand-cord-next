@@ -213,12 +213,11 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(orders.map(o => o.id)))
     const [tasks, setTasks] = useState<PickTask[]>([])
     const [taskIndex, setTaskIndex] = useState(0)
-    const [taskStatuses, setTaskStatuses] = useState<Record<number, TaskStatus>>({})
-    // Per-detail picked state: key = `${taskIndex}__${detailIndex}`. A task is
-    // considered "fully picked" only when every one of its details is picked.
-    // This lets the overview toggle individual SKUs independently even when
-    // they share a product card in the swipe flow.
+    // Per-detail state: key = `${taskIndex}__${detailIndex}`. Each task detail
+    // (one order's line in a shared SKU pull) tracks two flags independently
+    // so we can express "Order A got it, Order B didn't" within a single task.
     const [pickedDetails, setPickedDetails] = useState<Set<string>>(new Set())
+    const [missingDetails, setMissingDetails] = useState<Set<string>>(new Set())
     const [shipOrders, setShipOrders] = useState<ShipOrder[]>([])
     const [shipIndex, setShipIndex] = useState(0)
     const [showOverview, setShowOverview] = useState(false)
@@ -251,81 +250,134 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
         setShipOrders(builtShip)
         setRunOrders(selected)
         setTaskIndex(0)
-        setTaskStatuses({})
         setPickedDetails(new Set())
+        setMissingDetails(new Set())
         setShipIndex(0)
         setPhase('calculating')
     }
 
     const detailKey = (ti: number, di: number) => `${ti}__${di}`
 
-    // A task is fully picked when every detail row of that task has been
-    // checked off. Used everywhere we previously read taskStatuses[i] === 'picked'.
-    function isTaskFullyPicked(ti: number, taskList: PickTask[] = tasks, picked: Set<string> = pickedDetails): boolean {
+    // A task is fully picked when every detail that's NOT marked missing has
+    // been checked off. If every detail is missing, the task is "missing,"
+    // not "picked."
+    function isTaskFullyPicked(
+        ti: number,
+        taskList: PickTask[] = tasks,
+        picked: Set<string> = pickedDetails,
+        missing: Set<string> = missingDetails,
+    ): boolean {
+        const t = taskList[ti]
+        if (!t || t.details.length === 0) return false
+        let pickable = 0
+        let pickedCount = 0
+        for (let di = 0; di < t.details.length; di++) {
+            const k = detailKey(ti, di)
+            if (missing.has(k)) continue
+            pickable++
+            if (picked.has(k)) pickedCount++
+        }
+        if (pickable === 0) return false
+        return pickedCount === pickable
+    }
+
+    // A task is "resolved" (nothing more to do) when every detail has been
+    // either picked or marked missing.
+    function isTaskResolved(
+        ti: number,
+        taskList: PickTask[] = tasks,
+        picked: Set<string> = pickedDetails,
+        missing: Set<string> = missingDetails,
+    ): boolean {
         const t = taskList[ti]
         if (!t) return false
         for (let di = 0; di < t.details.length; di++) {
-            if (!picked.has(detailKey(ti, di))) return false
+            const k = detailKey(ti, di)
+            if (missing.has(k)) continue
+            if (!picked.has(k)) return false
         }
         return true
     }
 
-    // A task is "resolved" (i.e. nothing more to do for it) when it's been
-    // marked missing OR every one of its details has been picked.
-    function isTaskResolved(ti: number, taskList: PickTask[] = tasks, picked: Set<string> = pickedDetails, statuses = taskStatuses): boolean {
-        if (statuses[ti] === 'missing') return true
-        return isTaskFullyPicked(ti, taskList, picked)
+    function isTaskFullyMissing(
+        ti: number,
+        taskList: PickTask[] = tasks,
+        missing: Set<string> = missingDetails,
+    ): boolean {
+        const t = taskList[ti]
+        if (!t || t.details.length === 0) return false
+        return t.details.every((_, di) => missing.has(detailKey(ti, di)))
     }
 
+    // Bulk: mark every detail of a task missing. Used by the single-order
+    // unavailable sheet (where one detail == the whole task) and by callers
+    // that want the legacy "whole task missing" behavior.
     function markTaskMissing(index: number) {
-        setTaskStatuses(prev => ({ ...prev, [index]: 'missing' }))
-        // Clear any per-detail picks for the missing task so they don't
-        // count toward the overview's "X/Y items picked" tally.
+        const t = tasks[index]
+        if (!t) return
+        setMissingDetails(prev => {
+            const next = new Set(prev)
+            for (let di = 0; di < t.details.length; di++) next.add(detailKey(index, di))
+            return next
+        })
         setPickedDetails(prev => {
             const next = new Set(prev)
-            const t = tasks[index]
-            if (t) {
-                for (let di = 0; di < t.details.length; di++) next.delete(detailKey(index, di))
-            }
+            for (let di = 0; di < t.details.length; di++) next.delete(detailKey(index, di))
             return next
         })
     }
 
-    // Swipe-card "I picked this product" toggle: flips ALL details of the
-    // task between picked and unpicked together. Per-detail toggles still
-    // happen via the overview (togglePickedDetail).
+    // Per-row unavailable: mark a subset of details missing and (optionally)
+    // drop cancelled orders from the shipping queue. Picked state is cleared
+    // for any newly-missing detail.
+    function applyUnavailable(
+        taskIndex: number,
+        missingDetailIndices: number[],
+        cancelledOrderIds: string[],
+    ) {
+        if (missingDetailIndices.length > 0) {
+            setMissingDetails(prev => {
+                const next = new Set(prev)
+                for (const di of missingDetailIndices) next.add(detailKey(taskIndex, di))
+                return next
+            })
+            setPickedDetails(prev => {
+                const next = new Set(prev)
+                for (const di of missingDetailIndices) next.delete(detailKey(taskIndex, di))
+                return next
+            })
+        }
+        if (cancelledOrderIds.length > 0) {
+            setShipOrders(prev => prev.filter(o => !cancelledOrderIds.includes(o.id)))
+        }
+    }
+
+    // Swipe-card "I picked this product" toggle: flips ALL non-missing details
+    // of the task between picked and unpicked together. Per-detail toggles
+    // still happen via the overview (togglePickedDetail).
     function toggleAllPickedForTask(index: number) {
-        if (taskStatuses[index] === 'missing') return
+        const t = tasks[index]
+        if (!t) return
+        const pickableIndices = t.details
+            .map((_, di) => di)
+            .filter(di => !missingDetails.has(detailKey(index, di)))
+        if (pickableIndices.length === 0) return
         setPickedDetails(prev => {
             const next = new Set(prev)
-            const t = tasks[index]
-            if (!t) return prev
-            const currentlyAll = t.details.every((_, di) => next.has(detailKey(index, di)))
+            const currentlyAll = pickableIndices.every(di => next.has(detailKey(index, di)))
             if (currentlyAll) {
-                for (let di = 0; di < t.details.length; di++) next.delete(detailKey(index, di))
+                for (const di of pickableIndices) next.delete(detailKey(index, di))
             } else {
-                for (let di = 0; di < t.details.length; di++) next.add(detailKey(index, di))
+                for (const di of pickableIndices) next.add(detailKey(index, di))
             }
             return next
         })
-    }
-
-    // Missing-flow handlers triggered from the overview sheet. These mark
-    // the task missing without auto-advancing the swipe view (the user is
-    // looking at the overview, not a card). On cancel we also remove the
-    // affected order from the shipping queue.
-    function markMissingFromOverview(ti: number) {
-        markTaskMissing(ti)
-    }
-    function cancelOrderFromOverview(ti: number, orderId: string) {
-        markTaskMissing(ti)
-        setShipOrders(prev => prev.filter(o => o.id !== orderId))
     }
 
     function togglePickedDetail(taskIndex: number, detailIndex: number) {
-        // Don't allow per-detail toggling while a task is marked missing —
-        // the swipe-card flow owns that state.
-        if (taskStatuses[taskIndex] === 'missing') return
+        // Missing details can't be toggled to picked — they were resolved
+        // through the unavailable flow.
+        if (missingDetails.has(detailKey(taskIndex, detailIndex))) return
         setPickedDetails(prev => {
             const key = detailKey(taskIndex, detailIndex)
             const next = new Set(prev)
@@ -335,7 +387,19 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
         })
     }
 
-    function advanceTask(removedOrderId?: string, justMarkedStatus?: TaskStatus) {
+    // Derived view of task-level status, used by ProgressStrip + overview
+    // for the missing/picked decoration. 'missing' here means EVERY detail
+    // of the task was marked unavailable.
+    const taskStatusesDerived: Record<number, TaskStatus> = (() => {
+        const out: Record<number, TaskStatus> = {}
+        tasks.forEach((_, i) => {
+            if (isTaskFullyMissing(i)) out[i] = 'missing'
+            else if (isTaskFullyPicked(i)) out[i] = 'picked'
+        })
+        return out
+    })()
+
+    function advanceTask(removedOrderId?: string, autoResolveCurrent?: boolean) {
         if (removedOrderId) {
             setShipOrders(prev => prev.filter(o => o.id !== removedOrderId))
         }
@@ -343,17 +407,15 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
         for (let i = 0; i < tasks.length; i++) {
             if (isTaskResolved(i)) resolvedIndices.add(i)
         }
-        if (justMarkedStatus) resolvedIndices.add(taskIndex)
+        if (autoResolveCurrent) resolvedIndices.add(taskIndex)
 
         const nextUnresolved = tasks.findIndex((_, i) => i !== taskIndex && !resolvedIndices.has(i))
         if (nextUnresolved !== -1) {
-            // Prefer moving forward; otherwise jump back to the earliest unresolved
             const forward = tasks.findIndex((_, i) => i > taskIndex && !resolvedIndices.has(i))
             setTaskIndex(forward !== -1 ? forward : nextUnresolved)
             return
         }
 
-        // All tasks resolved → move to shipping (or finish if nothing left)
         const remaining = removedOrderId
             ? shipOrders.filter(o => o.id !== removedOrderId)
             : shipOrders
@@ -527,10 +589,11 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                 const orderIsFullyResolved = (orderId: string): boolean => {
                     for (let i = 0; i < tasks.length; i++) {
                         const t = tasks[i]
-                        if (taskStatuses[i] === 'missing') continue
                         for (let di = 0; di < t.details.length; di++) {
                             if (t.details[di].orderId !== orderId) continue
-                            if (!pickedDetails.has(detailKey(i, di))) return false
+                            const k = detailKey(i, di)
+                            if (missingDetails.has(k)) continue
+                            if (!pickedDetails.has(k)) return false
                         }
                     }
                     return true
@@ -636,14 +699,7 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                         <ProgressStrip
                             tasks={tasks}
                             taskIndex={taskIndex}
-                            taskStatuses={(() => {
-                                const derived: Record<number, TaskStatus> = {}
-                                for (let i = 0; i < tasks.length; i++) {
-                                    if (taskStatuses[i] === 'missing') derived[i] = 'missing'
-                                    else if (isTaskFullyPicked(i)) derived[i] = 'picked'
-                                }
-                                return derived
-                            })()}
+                            taskStatuses={taskStatusesDerived}
                             onJump={(i) => setTaskIndex(i)}
                         />
 
@@ -814,43 +870,66 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                                 </AnimatePresence>
                             </div>
                             <div className="flex flex-col items-end gap-[5px]">
-                                {current.details.map((d, di) => (
-                                    <div key={`${d.orderId}-${d.size}-${di}`} className="flex items-center gap-[6px]">
-                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
-                                            <path d="M2 5L8 2L14 5L8 8L2 5Z" stroke="#1a1a1a" strokeWidth="1.2" strokeLinejoin="round" />
-                                            <path d="M2 5V11L8 14V8" stroke="#1a1a1a" strokeWidth="1.2" strokeLinejoin="round" />
-                                            <path d="M14 5V11L8 14" stroke="#1a1a1a" strokeWidth="1.2" strokeLinejoin="round" />
-                                        </svg>
-                                        <span className="font-alte font-bold text-[15px] leading-none text-black">
-                                            {d.boxNumber}
-                                        </span>
-                                        <span className="font-reformat text-[11px] tracking-[0.06em] text-neutral-500 leading-none">
-                                            S:{d.size} ×{d.quantity}
-                                        </span>
-                                    </div>
-                                ))}
+                                {current.details.map((d, di) => {
+                                    const isMissing = missingDetails.has(detailKey(taskIndex, di))
+                                    return (
+                                        <div
+                                            key={`${d.orderId}-${d.size}-${di}`}
+                                            className="flex items-center gap-[6px]"
+                                            style={{ opacity: isMissing ? 0.45 : 1, textDecoration: isMissing ? 'line-through' : undefined }}
+                                        >
+                                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                                                <path d="M2 5L8 2L14 5L8 8L2 5Z" stroke="#1a1a1a" strokeWidth="1.2" strokeLinejoin="round" />
+                                                <path d="M2 5V11L8 14V8" stroke="#1a1a1a" strokeWidth="1.2" strokeLinejoin="round" />
+                                                <path d="M14 5V11L8 14" stroke="#1a1a1a" strokeWidth="1.2" strokeLinejoin="round" />
+                                            </svg>
+                                            <span className="font-alte font-bold text-[15px] leading-none text-black">
+                                                {d.boxNumber}
+                                            </span>
+                                            <span className="font-reformat text-[11px] tracking-[0.06em] text-neutral-500 leading-none">
+                                                S:{d.size} ×{d.quantity}
+                                            </span>
+                                        </div>
+                                    )
+                                })}
                             </div>
                         </div>
 
                         <div className="px-5 pb-3 flex-shrink-0">
                             <ItemUnavailableButton
                                 task={current}
-                                onItemRefunded={() => { markTaskMissing(taskIndex); advanceTask(undefined, 'missing') }}
-                                onOrderCancelled={(orderId) => { markTaskMissing(taskIndex); advanceTask(orderId, 'missing') }}
+                                alreadyMissingIndices={new Set(
+                                    current.details
+                                        .map((_, di) => di)
+                                        .filter(di => missingDetails.has(detailKey(taskIndex, di)))
+                                )}
+                                onApplied={(missingIndices, cancelledOrderIds) => {
+                                    applyUnavailable(taskIndex, missingIndices, cancelledOrderIds)
+                                    const projectedMissing = new Set(missingDetails)
+                                    for (const di of missingIndices) projectedMissing.add(detailKey(taskIndex, di))
+                                    const resolved = isTaskResolved(taskIndex, tasks, pickedDetails, projectedMissing)
+                                    if (resolved) {
+                                        advanceTask(cancelledOrderIds[0], true)
+                                    }
+                                }}
                             />
                         </div>
 
                         {(() => {
                             const totalQty = tasks.reduce((sum, t, i) =>
-                                taskStatuses[i] === 'missing' ? sum : sum + t.details.reduce((s, d) => s + d.quantity, 0), 0)
+                                isTaskFullyMissing(i) ? sum : sum + t.details.reduce((s, d, di) => missingDetails.has(detailKey(i, di)) ? s : s + d.quantity, 0), 0)
                             const pickedQty = tasks.reduce((sum, t, i) => {
-                                if (taskStatuses[i] === 'missing') return sum
-                                if (!isTaskFullyPicked(i)) return sum
-                                return sum + t.details.reduce((s, d) => s + d.quantity, 0)
+                                if (isTaskFullyMissing(i)) return sum
+                                return sum + t.details.reduce((s, d, di) => {
+                                    const k = detailKey(i, di)
+                                    if (missingDetails.has(k)) return s
+                                    if (!pickedDetails.has(k)) return s
+                                    return s + d.quantity
+                                }, 0)
                             }, 0)
                             return (
                                 <PickToggleBar
-                                    status={taskStatuses[taskIndex] === 'missing' ? 'missing' : (isTaskFullyPicked(taskIndex) ? 'picked' : undefined)}
+                                    status={isTaskFullyMissing(taskIndex) ? 'missing' : (isTaskFullyPicked(taskIndex) ? 'picked' : undefined)}
                                     allResolved={tasks.every((_, i) => isTaskResolved(i))}
                                     accent={pickColor(current.colorHex, current.color)}
                                     onToggle={() => toggleAllPickedForTask(taskIndex)}
@@ -1023,22 +1102,17 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
             {phase !== 'calculating' && phase !== 'picking' && (
                 <motion.button
                     key="overview-trigger"
-                    onClick={() => setShowOverview(true)}
-                    className="fixed z-[65] flex items-center gap-[5px] bg-white px-[10px] py-[7px] shadow-sm"
-                    style={{ top: 32, left: 20 }}
+                    onClick={() => setShowOverview(v => !v)}
+                    className={`fixed z-[65] flex items-center justify-center rounded-full border-2 transition-colors ${showOverview ? 'bg-black border-white text-white' : 'bg-white border-black text-black'}`}
+                    style={{ top: 32, left: 20, width: 44, height: 44 }}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.18 }}
                     aria-label="Open room overview"
                 >
-                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                        <line x1="1" y1="3" x2="12" y2="3" stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round" />
-                        <line x1="1" y1="6.5" x2="12" y2="6.5" stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round" />
-                        <line x1="1" y1="10" x2="8" y2="10" stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round" />
-                    </svg>
-                    <span className="font-reformat text-[9px] tracking-[0.1em] font-bold uppercase text-black">
-                        Overview
+                    <span className="font-reformat text-[12px] tracking-[0.05em] font-bold uppercase leading-none">
+                        OV
                     </span>
                 </motion.button>
             )}
@@ -1050,11 +1124,11 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                 selectedIds={phase === 'queue' ? selectedIds : undefined}
                 onToggleOrder={phase === 'queue' ? toggleOrder : undefined}
                 tasks={phase !== 'queue' ? tasks : undefined}
-                taskStatuses={phase !== 'queue' ? taskStatuses : undefined}
+                taskStatuses={phase !== 'queue' ? taskStatusesDerived : undefined}
                 pickedDetails={phase !== 'queue' ? pickedDetails : undefined}
+                missingDetails={phase !== 'queue' ? missingDetails : undefined}
                 onTogglePickedDetail={phase !== 'queue' ? togglePickedDetail : undefined}
-                onMarkMissingFromOverview={phase !== 'queue' ? markMissingFromOverview : undefined}
-                onCancelOrderFromOverview={phase !== 'queue' ? cancelOrderFromOverview : undefined}
+                onApplyUnavailable={phase !== 'queue' ? applyUnavailable : undefined}
                 onClose={() => setShowOverview(false)}
                 onDone={phase !== 'queue' ? () => {
                     setShowOverview(false)
@@ -1389,14 +1463,16 @@ function TrackingSheet({
 
 function ItemUnavailableButton({
     task,
-    onItemRefunded,
-    onOrderCancelled,
+    alreadyMissingIndices,
+    onApplied,
 }: {
     task: PickTask
-    onItemRefunded: () => void
-    onOrderCancelled: (orderId: string) => void
+    alreadyMissingIndices: Set<number>
+    onApplied: (missingDetailIndices: number[], cancelledOrderIds: string[]) => void
 }) {
     const [showSheet, setShowSheet] = useState(false)
+    const remainingDetails = task.details.length - alreadyMissingIndices.size
+    const isMulti = remainingDetails > 1
 
     return (
         <>
@@ -1408,12 +1484,21 @@ function ItemUnavailableButton({
             </button>
 
             {showSheet && (
-                <ItemUnavailableSheet
-                    task={task}
-                    onClose={() => setShowSheet(false)}
-                    onItemRefunded={() => { setShowSheet(false); onItemRefunded() }}
-                    onOrderCancelled={(orderId) => { setShowSheet(false); onOrderCancelled(orderId) }}
-                />
+                isMulti ? (
+                    <MultiOrderUnavailableSheet
+                        task={task}
+                        alreadyMissingIndices={alreadyMissingIndices}
+                        onClose={() => setShowSheet(false)}
+                        onApplied={(missing, cancelled) => { setShowSheet(false); onApplied(missing, cancelled) }}
+                    />
+                ) : (
+                    <ItemUnavailableSheet
+                        task={task}
+                        alreadyMissingIndices={alreadyMissingIndices}
+                        onClose={() => setShowSheet(false)}
+                        onApplied={(missing, cancelled) => { setShowSheet(false); onApplied(missing, cancelled) }}
+                    />
+                )
             )}
         </>
     )
@@ -1421,18 +1506,22 @@ function ItemUnavailableButton({
 
 export function ItemUnavailableSheet({
     task,
+    alreadyMissingIndices,
     onClose,
-    onItemRefunded,
-    onOrderCancelled,
+    onApplied,
 }: {
     task: PickTask
+    alreadyMissingIndices?: Set<number>
     onClose: () => void
-    onItemRefunded: () => void
-    onOrderCancelled: (orderId: string) => void
+    onApplied: (missingDetailIndices: number[], cancelledOrderIds: string[]) => void
 }) {
     const [loading, setLoading] = useState<string | null>(null)
     const [refundStep, setRefundStep] = useState<string>('Partial Refund')
-    const primary = task.details[0]
+    // Pick the first still-pickable detail as the "primary." For a single-
+    // order task this is just details[0]; for multi-order callers that
+    // routed here because only one row remains, we want that row.
+    const primaryIndex = task.details.findIndex((_, i) => !alreadyMissingIndices?.has(i))
+    const primary = task.details[primaryIndex >= 0 ? primaryIndex : 0]
 
     const emailBody = encodeURIComponent(
         `Hi,\n\nWe're sorry, but we were unable to fulfill the following item from your order:\n\n` +
@@ -1441,24 +1530,26 @@ export function ItemUnavailableSheet({
     )
     const mailtoHref = `mailto:${primary.email}?subject=${encodeURIComponent(`Update on your order #${primary.orderLabel}`)}&body=${emailBody}`
 
+    const primaryDi = primaryIndex >= 0 ? primaryIndex : 0
+
     async function handlePartialRefund() {
         setLoading('refund')
         try {
             setRefundStep('Contacting Stripe...')
-            await Promise.all(task.details.map(d => partialRefundItem(d.orderId, Math.round(d.price * d.quantity * 100))))
+            await partialRefundItem(primary.orderId, Math.round(primary.price * primary.quantity * 100))
             setRefundStep('Verifying refund...')
             await new Promise(resolve => setTimeout(resolve, 500))
             setRefundStep('Refund complete')
             await new Promise(resolve => setTimeout(resolve, 400))
-            onItemRefunded()
+            onApplied([primaryDi], [])
         } finally { setLoading(null) }
     }
 
     async function handleCancelOrder() {
         setLoading('cancel')
         try {
-            await Promise.all(task.details.map(d => cancelOrder(d.orderId)))
-            onOrderCancelled(primary.orderId)
+            await cancelOrder(primary.orderId)
+            onApplied([primaryDi], [primary.orderId])
         } finally { setLoading(null) }
     }
 
@@ -1483,5 +1574,189 @@ export function ItemUnavailableSheet({
                 </div>
             </div>
         </div>
+    )
+}
+
+// ── Multi-order unavailable sheet ────────────────────────────────────────────
+// When a single SKU pull serves multiple orders, the picker has to decide
+// per-order what to do (the floor reality: maybe we have 2 of 3, so 1 order
+// gets nothing). Each row has its own action; nothing fires until Confirm.
+
+type RowAction = 'pickable' | 'refund' | 'cancel' | 'email'
+
+export function MultiOrderUnavailableSheet({
+    task,
+    alreadyMissingIndices,
+    onClose,
+    onApplied,
+}: {
+    task: PickTask
+    alreadyMissingIndices?: Set<number>
+    onClose: () => void
+    onApplied: (missingDetailIndices: number[], cancelledOrderIds: string[]) => void
+}) {
+    // Only show rows that haven't already been resolved through this flow,
+    // so a re-open after a partial pass doesn't double-fire refunds.
+    const visibleIndices = task.details
+        .map((_, i) => i)
+        .filter(i => !alreadyMissingIndices?.has(i))
+
+    // Default every visible row to 'refund' — the most common path for
+    // "I don't have this." Picker flips rows to 'pickable' for boxes they
+    // can still fill, or 'cancel' for orders worth cancelling outright.
+    const [actions, setActions] = useState<Record<number, RowAction>>(() => {
+        const init: Record<number, RowAction> = {}
+        for (const i of visibleIndices) init[i] = 'refund'
+        return init
+    })
+    const [loading, setLoading] = useState(false)
+    const [progressText, setProgressText] = useState<string>('')
+
+    function setRow(i: number, a: RowAction) {
+        setActions(prev => ({ ...prev, [i]: a }))
+    }
+
+    async function handleConfirm() {
+        setLoading(true)
+        try {
+            const refundIndices: number[] = []
+            const cancelIndices: number[] = []
+            for (const i of visibleIndices) {
+                const a = actions[i]
+                if (a === 'refund') refundIndices.push(i)
+                else if (a === 'cancel') cancelIndices.push(i)
+            }
+
+            if (refundIndices.length > 0) {
+                setProgressText('Issuing refunds...')
+                await Promise.all(refundIndices.map(i => {
+                    const d = task.details[i]
+                    return partialRefundItem(d.orderId, Math.round(d.price * d.quantity * 100))
+                }))
+            }
+            if (cancelIndices.length > 0) {
+                setProgressText('Cancelling orders...')
+                await Promise.all(cancelIndices.map(i => cancelOrder(task.details[i].orderId)))
+            }
+
+            const missingIndices: number[] = [...refundIndices, ...cancelIndices]
+            const cancelledOrderIds = cancelIndices.map(i => task.details[i].orderId)
+
+            onApplied(missingIndices, cancelledOrderIds)
+        } finally {
+            setLoading(false)
+            setProgressText('')
+        }
+    }
+
+    const anyActionable = visibleIndices.some(i => actions[i] !== 'pickable')
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/20" onClick={onClose}>
+            <div className="w-full bg-white rounded-t-[2rem] px-6 pt-6 pb-8 max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                <p className="text-[11px] font-semibold tracking-[0.12em] text-neutral-400 mb-1 text-center">ITEM UNAVAILABLE</p>
+                <p className="text-[12px] text-neutral-500 text-center mb-1">{task.productName}</p>
+                <p className="text-[10px] text-neutral-400 text-center mb-4">
+                    {visibleIndices.length} order{visibleIndices.length !== 1 ? 's' : ''} need this — choose an action per order
+                </p>
+
+                <div className="flex-1 overflow-y-auto -mx-6 px-6 [&::-webkit-scrollbar]:hidden">
+                    <div className="flex flex-col gap-2">
+                        {visibleIndices.map(i => {
+                            const d = task.details[i]
+                            const action = actions[i]
+                            const emailBody = encodeURIComponent(
+                                `Hi,\n\nWe're sorry, but we were unable to fulfill the following item from your order:\n\n` +
+                                `${task.productName} — Size ${d.size} × ${d.quantity}\n\n` +
+                                `We'll be in touch shortly regarding your options.\n\nThank you for your patience.`
+                            )
+                            const mailtoHref = `mailto:${d.email}?subject=${encodeURIComponent(`Update on your order #${d.orderLabel}`)}&body=${emailBody}`
+                            return (
+                                <div key={`${d.orderId}-${i}`} className="rounded-2xl bg-neutral-50 px-4 py-3">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className="font-reformat text-[10px] font-bold tracking-[0.08em] uppercase">
+                                            O-{d.orderLabel}
+                                        </span>
+                                        <span className="font-reformat text-[9px] text-neutral-400 tracking-[0.06em] uppercase">
+                                            Box #{d.boxNumber} · S:{d.size} ×{d.quantity}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-[6px]">
+                                        <ActionPill
+                                            label="Refund line"
+                                            active={action === 'refund'}
+                                            onClick={() => setRow(i, 'refund')}
+                                        />
+                                        <ActionPill
+                                            label="Cancel order"
+                                            active={action === 'cancel'}
+                                            danger
+                                            onClick={() => setRow(i, 'cancel')}
+                                        />
+                                        <ActionPill
+                                            label="Have it"
+                                            active={action === 'pickable'}
+                                            onClick={() => setRow(i, 'pickable')}
+                                        />
+                                        <a
+                                            href={mailtoHref}
+                                            className="text-center px-[10px] py-[8px] rounded-full text-[10px] font-bold tracking-[0.08em] uppercase bg-white border border-neutral-200 text-neutral-600 active:opacity-70"
+                                        >
+                                            Email
+                                        </a>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                    <button
+                        onClick={onClose}
+                        disabled={loading}
+                        className="flex-1 py-4 rounded-2xl bg-neutral-100 text-neutral-700 text-[13px] font-semibold disabled:opacity-50"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={handleConfirm}
+                        disabled={loading || !anyActionable}
+                        className="flex-[2] py-4 rounded-2xl bg-neutral-900 text-white text-[13px] font-semibold disabled:opacity-40"
+                    >
+                        {loading ? (progressText || 'Working...') : 'Confirm'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function ActionPill({
+    label,
+    active,
+    danger = false,
+    onClick,
+}: {
+    label: string
+    active: boolean
+    danger?: boolean
+    onClick: () => void
+}) {
+    const activeBg = danger ? '#fee2e2' : '#1a1a1a'
+    const activeColor = danger ? '#b91c1c' : '#ffffff'
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="px-[10px] py-[8px] rounded-full text-[10px] font-bold tracking-[0.08em] uppercase transition-colors active:opacity-70"
+            style={{
+                backgroundColor: active ? activeBg : '#ffffff',
+                color: active ? activeColor : '#737373',
+                border: active ? 'none' : '1px solid #e5e5e5',
+            }}
+        >
+            {label}
+        </button>
     )
 }
