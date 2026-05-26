@@ -79,7 +79,7 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                 <div className="col-span-4 pt-4 pr-[8vw]">
                     {/* Header */}
                     <div className="flex items-start justify-between mb-12">
-                        <h1 className="text-[10px]">{product.name}</h1>
+                        <h1 className="text-[12px]">{product.name}</h1>
                         {designerLabel && (
                             <p className={`text-[11px] tracking-tight font-bold transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
                                 {designerLabel}
@@ -88,24 +88,24 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                     </div>
 
                     {/* Manufacturing Info */}
-                    <div className={`mb-8 transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
-                        <p className="text-[8pt] tracking-wider font-inter font-bold">Manufactured in the USA for Grand-Cord</p>
+                    <div className={`mb-8 pt-32 transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
+                        <p className="text-[7pt] tracking-wide font-inter font-bold">Manufactured in the USA for Grand-Cord</p>
                     </div>
 
                     {/* Materials */}
                     <div className={`mb-20 flex gap-8 font-inter transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
                         {product.material && (
-                            <p className="text-xs">Body {product.material}</p>
+                            <p className="text-[8pt]">Body {product.material}</p>
                         )}
                         {product.color && (
-                            <p className="text-xs">Lining {product.color}</p>
+                            <p className="text-[8pt]">Lining {product.color}</p>
                         )}
                     </div>
 
                     {/* Description */}
                     {product.description && (
                         <div className="mb-20 w-full font-inter min-h-[200px]">
-                            <p className="text-xs leading-[1.8] tracking-[1.3] text-justify">{product.description}</p>
+                            <p className="text-[7.5pt] leading-[1.8] tracking-[1.2] text-justify">{product.description}</p>
                         </div>
                     )}
 
@@ -113,12 +113,12 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                     <div className="mb-8 font-inter">
                         {/* Numbers and Price Row */}
                         <div className="flex items-center justify-between mb-6">
-                            <div className="flex gap-2">
+                            <div className="flex gap-3">
                                 {availableSizes.map((size, index) => (
                                     <button
                                         key={size.id}
                                         onClick={() => setSelectedSize(size.size)}
-                                        className={`text-sm transition-opacity ${
+                                        className={`text-[9pt] transition-opacity ${
                                             selectedSize === size.size
                                                 ? 'opacity-100 font-bold'
                                                 : 'opacity-50 hover:opacity-75'
@@ -137,9 +137,9 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                         <div className="flex items-start justify-between">
                             <button
                                 onClick={() => setShowSizing(!showSizing)}
-                                className="flex items-center gap-1 hover:opacity-70"
+                                className="flex items-center gap-4 hover:opacity-70"
                             >
-                                <span className="text-[8pt]">Sizing</span>
+                                <span className="text-[8.5pt]">Sizing</span>
                                 <span className="text-[5pt]">{showSizing ? '▲' : '▼'}</span>
                             </button>
                             <button

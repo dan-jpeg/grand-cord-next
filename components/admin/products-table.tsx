@@ -143,7 +143,7 @@ export function ProductsTable({ products }: { products: ProductWithSizes[] }) {
     }
 
     return (
-        <div className="w-full max-w-screen-md mx-auto pt-3">
+        <div className="w-full max-w-screen-md mx-auto pt-3 pb-16">
             {/* ── White slab header ── */}
             <div className="bg-white pt-8 pb-5 ">
                 <div className="flex items-baseline gap-[14px] mb-4 flex-wrap">
@@ -309,7 +309,7 @@ function PhotosView({
     onSwitchToStock: () => void
 }) {
     return (
-        <div className="min-h-[calc(100vh-80px)] flex flex-col justify-end px-3 pb-3">
+        <div className="min-h-[calc(100vh-60px)] flex flex-col justify-end px-3 pb-3">
             {/* Top-right Stock | Photos toggle */}
             <div className="fixed top-3 right-3 z-[310] flex items-center gap-5 text-[12px] font-bold font-alte">
                 <button

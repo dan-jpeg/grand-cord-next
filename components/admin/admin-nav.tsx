@@ -398,7 +398,7 @@ export function AdminNav({ active, variant = 'top-left', pickUrgency }: AdminNav
             <div className="md:hidden">
                 <MobileTopNav active={active} pickUrgency={pickUrgency} />
             </div>
-            <div className="hidden md:flex items-start text-[8pt] font-bold justify-center gap-8 py-6">
+            <div className="hidden md:flex absolute top-3 left-3 z-[300] items-start text-[8pt] font-bold gap-4">
                 {PRIMARY_NAV_ITEMS.map(item => (
                     <Link
                         key={item.key}
@@ -411,7 +411,7 @@ export function AdminNav({ active, variant = 'top-left', pickUrgency }: AdminNav
                         )}
                     </Link>
                 ))}
-                <DesktopMoreMenu active={active} align="center" />
+                <DesktopMoreMenu active={active} align="left" />
             </div>
         </>
     )

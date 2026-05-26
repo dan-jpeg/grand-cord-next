@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { motion, AnimatePresence, LayoutGroup, useMotionValue, useTransform, animate } from 'framer-motion'
 import { markOrderShipped, partialRefundItem, cancelOrder } from '@/app/admin/pick/actions'
 import { RoomOverviewSheet } from './room-overview-sheet'
+import { AdminNav } from './admin-nav'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -444,6 +445,9 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.18 }}
                     >
+                        <div className="hidden md:block">
+                            <AdminNav active="pick" variant="top-left" />
+                        </div>
                         <div className="flex flex-col bg-[#e8e8e8] w-full h-full md:max-w-screen-sm md:border md:border-black">
                             {orders.length === 0 ? (
                                 <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">

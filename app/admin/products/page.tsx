@@ -22,7 +22,7 @@ export default async function AdminProductsPage() {
     return (
         <div className="absolute inset-0 bg-[#d0d9d2]/10 overflow-auto">
             <AdminNav active="inventory" variant="centered" pickUrgency={pickUrgency} />
-            <div className="w-full px-4 md:px-6 pb-16">
+            <div className="w-full px-4 md:px-6 md:pt-10">
                 <ProductsTable products={products} />
             </div>
             <GrainOverlay />
