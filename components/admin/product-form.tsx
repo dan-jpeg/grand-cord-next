@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -47,15 +47,21 @@ export function ProductForm({
     product,
     orders,
     inventoryLogs,
+    hidePreview = false,
+    hideTabs = false,
+    initialTab,
 }: {
     product?: ProductWithSizes
     orders?: OrderWithItems[]
     inventoryLogs?: InventoryChangeLog[]
+    hidePreview?: boolean
+    hideTabs?: boolean
+    initialTab?: Tab
 }) {
     const router = useRouter()
     const TABS = product ? TABS_EDIT : TABS_CREATE
     const [isSubmitting, setIsSubmitting] = useState(false)
-    const [activeTab, setActiveTab] = useState<Tab>('identity')
+    const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? 'identity')
     const [warnings, setWarnings] = useState<Array<{ tab: Tab; severity: 'error' | 'warning'; message: string }>>([])
 
     const [name, setName] = useState(product?.name || '')
@@ -109,6 +115,61 @@ export function ProductForm({
     const [committedAvailable, setCommittedAvailable] = useState<Record<string, number>>(
         () => Object.fromEntries((product?.sizes ?? []).map((s) => [s.id, s.available])),
     )
+
+    // Snapshot of values at mount — diffed against current state to decide
+    // whether the wizard's primary action shows "Save Changes". Existing-size
+    // stock counts are excluded because those are persisted via the inventory
+    // lock/commit flow, not the form submit.
+    const initialSignatureRef = useRef<string>('')
+
+    const currentSignature = useMemo(() => {
+        return JSON.stringify({
+            name: name.trim(),
+            slug: slug.trim(),
+            description,
+            keywords: keywordsInput.split(/[,\n]/).map((k) => k.trim()).filter(Boolean),
+            designerNames: designerNames.map((n) => n.trim()).filter(Boolean),
+            price: price.trim(),
+            published,
+            material: material.trim(),
+            color: color.trim(),
+            colorHex: colorHex.trim(),
+            images: images.map((i) => ({
+                url: i.url,
+                isMobilePrimary: !!i.isMobilePrimary,
+                isDesktopPrimary: !!i.isDesktopPrimary,
+                isCartPrimary: !!i.isCartPrimary,
+            })),
+            // For existing sizes only track id+label; stock count edits are
+            // routed through the inventory lock/commit flow, not form submit.
+            // For new (unsaved) sizes the available count IS a real form change.
+            sizes: sizes.map((s) =>
+                s.id
+                    ? { id: s.id, size: s.size }
+                    : { id: null, size: s.size, available: s.available },
+            ),
+        })
+    }, [
+        name,
+        slug,
+        description,
+        keywordsInput,
+        designerNames,
+        price,
+        published,
+        material,
+        color,
+        colorHex,
+        images,
+        sizes,
+    ])
+
+    useEffect(() => {
+        // Capture initial signature once, after first render computes it.
+        if (!initialSignatureRef.current) initialSignatureRef.current = currentSignature
+    }, [currentSignature])
+
+    const isDirty = !!product && initialSignatureRef.current !== '' && currentSignature !== initialSignatureRef.current
 
     const [inventoryUnlocked, setInventoryUnlocked] = useState(false)
     const [inventoryConfirming, setInventoryConfirming] = useState(false)
@@ -296,7 +357,7 @@ export function ProductForm({
 
     const tabIndex = TABS.findIndex((t) => t.key === activeTab)
     const isLastTab = tabIndex === TABS.length - 1
-    const showPreview = tabIndex > 0
+    const showPreview = tabIndex > 0 && !hidePreview
 
     const errors = warnings.filter((w) => w.severity === 'error')
 
@@ -411,19 +472,21 @@ export function ProductForm({
             )}
 
             {/* ── Tab bar ── */}
-            <div className="flex items-baseline gap-4 flex-wrap border-b border-neutral-100 pb-3">
-                {TABS.map((t) => (
-                    <button
-                        key={t.key}
-                        type="button"
-                        onClick={() => jumpToTab(t.key)}
-                        className="font-alte text-[26px] leading-none tracking-[-0.02em] text-black transition-opacity active:opacity-60"
-                        style={{ opacity: activeTab === t.key ? 1 : 0.18 }}
-                    >
-                        {t.label}
-                    </button>
-                ))}
-            </div>
+            {!hideTabs && (
+                <div className="flex items-baseline gap-4 flex-wrap border-b border-neutral-100 pb-3">
+                    {TABS.map((t) => (
+                        <button
+                            key={t.key}
+                            type="button"
+                            onClick={() => jumpToTab(t.key)}
+                            className="font-alte text-[26px] leading-none tracking-[-0.02em] text-black transition-opacity active:opacity-60"
+                            style={{ opacity: activeTab === t.key ? 1 : 0.18 }}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {/* ── Identity ── */}
             {activeTab === 'identity' && (
@@ -651,7 +714,7 @@ export function ProductForm({
 
             {/* ── Listing ── */}
             {activeTab === 'listing' && (
-                <div className="space-y-5">
+                <div className="grid grid-cols-2 gap-x-5 gap-y-5">
                     <div>
                         <label htmlFor="slug" className={labelClass}>Slug:</label>
                         <input
@@ -663,17 +726,6 @@ export function ProductForm({
                             className={inputClass}
                         />
                         <p className="text-xs text-neutral-500 mt-1.5">Leave blank to auto-generate from item code</p>
-                    </div>
-
-                    <div>
-                        <label htmlFor="description" className={labelClass}>Description:</label>
-                        <textarea
-                            id="description"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            rows={4}
-                            className={`${inputClass} resize-none`}
-                        />
                     </div>
 
                     <div>
@@ -690,7 +742,18 @@ export function ProductForm({
                         />
                     </div>
 
-                    <div>
+                    <div className="col-span-2">
+                        <label htmlFor="description" className={labelClass}>Description:</label>
+                        <textarea
+                            id="description"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            rows={4}
+                            className={`${inputClass} resize-none`}
+                        />
+                    </div>
+
+                    <div className="col-span-2">
                         <label htmlFor="keywords" className={labelClass}>Keywords:</label>
                         <textarea
                             id="keywords"
@@ -703,7 +766,7 @@ export function ProductForm({
                         <p className="text-xs text-neutral-500 mt-1.5">Comma-separated — used in store and admin search</p>
                     </div>
 
-                    <div className="pt-3 border-t border-neutral-100">
+                    <div className="col-span-2 pt-3 border-t border-neutral-100">
                         <label className="flex items-center gap-2.5 cursor-pointer select-none">
                             <input
                                 type="checkbox"
@@ -784,7 +847,15 @@ export function ProductForm({
                             Back
                         </button>
                     )}
-                    {isLastTab ? (
+                    {product && isDirty ? (
+                        <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="text-sm font-bold underline hover:no-underline disabled:opacity-40"
+                        >
+                            {isSubmitting ? 'Saving...' : 'Save Changes'}
+                        </button>
+                    ) : isLastTab ? (
                         <button
                             type="submit"
                             disabled={isSubmitting}

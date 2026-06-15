@@ -13,6 +13,8 @@ type AdminNavProps = {
     active: 'orders' | 'inventory' | 'catalog' | 'more' | 'pick' | 'logs' | 'members'
     variant?: 'centered' | 'top-left'
     pickUrgency?: string | null
+    topClass?: string
+    leftClass?: string
 }
 
 const PRIMARY_NAV_ITEMS = [
@@ -367,14 +369,14 @@ function DesktopMoreMenu({
     )
 }
 
-export function AdminNav({ active, variant = 'top-left', pickUrgency }: AdminNavProps) {
+export function AdminNav({ active, variant = 'top-left', pickUrgency, topClass = 'top-3', leftClass = 'left-3' }: AdminNavProps) {
     if (variant === 'top-left') {
         return (
             <>
                 <div className="md:hidden">
                     <MobileHubNav active={active} pickUrgency={pickUrgency} />
                 </div>
-                <div className="hidden md:flex absolute top-3 left-3 z-[300] items-start text-[8pt] font-bold gap-4">
+                <div className={`hidden md:flex absolute ${topClass} ${leftClass} z-[300] items-start text-[8pt] font-bold gap-4`}>
                     {PRIMARY_NAV_ITEMS.map(item => (
                         <Link
                             key={item.key}

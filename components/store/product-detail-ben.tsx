@@ -22,6 +22,11 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
     const [selectedSize, setSelectedSize] = useState<string>('')
     const [showSizing, setShowSizing] = useState(false)
     const [buttonState, setButtonState] = useState<'idle' | 'added'>('idle')
+    const [unit, setUnit] = useState<'in' | 'cm'>('in')
+
+    const displayValue = (inches: string) =>
+        unit === 'in' ? inches : Math.round(parseFloat(inches) * 2.54).toString()
+    const toggleUnit = () => setUnit(u => (u === 'in' ? 'cm' : 'in'))
 
     const images = product.images as unknown as ImageData[]
     const designerLabel = formatDesignerNames(product.designerNames)
@@ -69,16 +74,13 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
     ]
 
     return (
-        <div className="min-h-screen bg-white">
+        <div className="min-h-screen bg-white lg:h-screen lg:overflow-hidden">
             {/* Desktop Layout */}
-            <div className="hidden lg:grid max-w-[1700px] mx-auto grid-cols-11 font-inter">
-                {/* Left Margin - 1 column */}
-                <div className="col-span-1"/>
-
-                {/* Product Info - 4 columns */}
-                <div className="col-span-4 pt-4 pr-[8vw]">
+            <div className="hidden lg:grid h-screen max-w-[1700px] mx-auto grid-cols-11 font-inter">
+                {/* Product Info - 5 columns. Padding is per-section so the sizing bg can fill full width. */}
+                <div className="col-span-5 pt-4">
                     {/* Header */}
-                    <div className="flex items-start justify-between mb-12">
+                    <div className="flex items-start justify-between mb-12 pl-[20%] pr-[8vw]">
                         <h1 className="text-[12px]">{product.name}</h1>
                         {designerLabel && (
                             <p className={`text-[11px] tracking-tight font-bold transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
@@ -88,12 +90,12 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                     </div>
 
                     {/* Manufacturing Info */}
-                    <div className={`mb-8 pt-32 transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
+                    <div className={`mb-8 pt-32 pl-[20%] pr-[8vw] transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
                         <p className="text-[7pt] tracking-wide font-inter font-bold">Manufactured in the USA for Grand-Cord</p>
                     </div>
 
                     {/* Materials */}
-                    <div className={`mb-20 flex gap-8 font-inter transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
+                    <div className={`mb-20 flex gap-8 pl-[20%] pr-[8vw] font-inter transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
                         {product.material && (
                             <p className="text-[8pt]">Body {product.material}</p>
                         )}
@@ -104,73 +106,80 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
 
                     {/* Description */}
                     {product.description && (
-                        <div className="mb-20 w-full font-inter min-h-[200px]">
+                        <div className={`mb-20 w-full pl-[20%] pr-[8vw] font-inter min-h-[200px] transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
                             <p className="text-[7.5pt] leading-[1.8] tracking-[1.2] text-justify">{product.description}</p>
                         </div>
                     )}
 
-                    {/* Size Selector */}
-                    <div className="mb-8 font-inter">
-                        {/* Numbers and Price Row */}
-                        <div className="flex items-center justify-between mb-6">
-                            <div className="flex gap-3">
-                                {availableSizes.map((size, index) => (
-                                    <button
-                                        key={size.id}
-                                        onClick={() => setSelectedSize(size.size)}
-                                        className={`text-[9pt] transition-opacity ${
-                                            selectedSize === size.size
-                                                ? 'opacity-100 font-bold'
-                                                : 'opacity-50 hover:opacity-75'
-                                        }`}
-                                    >
-                                        {index + 1}
-                                    </button>
-                                ))}
-                            </div>
-                            <p className="text-sm">
-                                $ {product.price.toFixed(2).replace('.', '. ')}
-                            </p>
-                        </div>
-
-                        {/* Sizing Dropdown and Add Row */}
-                        <div className="flex items-start justify-between">
-                            <button
-                                onClick={() => setShowSizing(!showSizing)}
-                                className="flex items-center gap-4 hover:opacity-70"
-                            >
-                                <span className="text-[8.5pt]">Sizing</span>
-                                <span className="text-[5pt]">{showSizing ? '▲' : '▼'}</span>
-                            </button>
-                            <button
-                                onClick={handleAdd}
-                                disabled={!selectedSize}
-                                className="text-xs hover:opacity-70 disabled:opacity-30 transition-opacity"
-                            >
-                                {buttonState === 'added' ? 'Added' : 'Add'}
-                            </button>
-                        </div>
-
-                        {/* Sizing Chart Dropdown */}
-                        {showSizing && (
-                            <motion.div
-                                initial={{opacity: 0, height: 0}}
-                                animate={{opacity: 1, height: 'auto'}}
-                                exit={{opacity: 0, height: 0}}
-                                className="mt-8 text-xs"
-                            >
-                                <div className="space-y-2">
-                                    {measurements.map((measurement, index) => (
-                                        <div key={index} className="grid grid-cols-[50px_60px_1fr_2fr] gap-x-4 items-baseline">
-                                            <span className="font-bold text-sm">{measurement.value}</span>
-                                            <span className="text-[8pt] text-neutral-500">in/cm</span>
-                                            <span className="font-bold">{measurement.label}</span>
-                                            <span className="text-neutral-600 text-right">{measurement.description}</span>
-                                        </div>
+                    {/* Size Selector — wrapper gets yellow bg when open. Negative margins extend the yellow up/left while matching padding keeps content in place. */}
+                    <div className={`font-inter ${showSizing ? '-mt-[160px] pt-[160px] -ml-[100vw] pl-[100vw] pb-40 bg-[#FCFDF0]' : 'mb-8'}`}>
+                        <div className="pl-[20%] pr-[8vw]">
+                            {/* Numbers and Price Row */}
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex gap-3">
+                                    {availableSizes.map((size, index) => (
+                                        <button
+                                            key={size.id}
+                                            onClick={() => setSelectedSize(size.size)}
+                                            className={`text-[9pt] transition-opacity ${
+                                                selectedSize === size.size
+                                                    ? 'opacity-100 font-bold'
+                                                    : 'opacity-50 hover:opacity-75'
+                                            }`}
+                                        >
+                                            {index + 1}
+                                        </button>
                                     ))}
                                 </div>
-                            </motion.div>
-                        )}
+                                <p className="text-sm">
+                                    $ {product.price.toFixed(2).replace('.', '. ')}
+                                </p>
+                            </div>
+
+                            {/* Sizing Dropdown and Add Row */}
+                            <div className="flex items-start justify-between -mr-[8vw]">
+                                <button
+                                    onClick={() => setShowSizing(!showSizing)}
+                                    className="flex items-center gap-4 hover:opacity-70"
+                                >
+                                    <span className="text-[8.5pt]">Sizing</span>
+                                    <span className="text-[5pt]">{showSizing ? '▲' : '▼'}</span>
+                                </button>
+                                <button
+                                    onClick={handleAdd}
+                                    disabled={!selectedSize}
+                                    className="text-xs w-1/2 py-2 -my-2 pr-[8vw] text-right disabled:opacity-30 transition-colors enabled:hover:bg-[#FCFDF0]"
+                                >
+                                    {buttonState === 'added' ? 'Added' : 'Add'}
+                                </button>
+                            </div>
+
+                            {/* Sizing Chart Dropdown */}
+                            {showSizing && (
+                                <motion.div
+                                    initial={{opacity: 0, height: 0}}
+                                    animate={{opacity: 1, height: 'auto'}}
+                                    exit={{opacity: 0, height: 0}}
+                                    className="mt-8 text-xs"
+                                >
+                                    <div className="space-y-2">
+                                        {measurements.map((measurement, index) => (
+                                            <div key={index} className="grid grid-cols-[40px_50px_80px_16px_1fr] gap-x-4 items-baseline">
+                                                <span className="font-bold text-sm">{displayValue(measurement.value)}</span>
+                                                <button onClick={toggleUnit} className="text-[8pt] text-neutral-500 text-left">
+                                                    <span className={unit === 'in' ? '' : 'opacity-30'}>in</span>
+                                                    <span className="opacity-30">/</span>
+                                                    <span className={unit === 'cm' ? '' : 'opacity-30'}>cm</span>
+                                                </button>
+                                                <span className="font-bold">{measurement.label}</span>
+                                                <span className="text-neutral-600">:</span>
+                                                <span className="text-neutral-600">{measurement.description}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -251,8 +260,12 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                                     {measurements.map((measurement, index) => (
                                         <div key={index}
                                              className="grid  grid-cols-[40px_50px_1fr_2fr] gap-x-2 items-baseline text-xs">
-                                            <span className="font-bold">{measurement.value}</span>
-                                            <span className="text-[8pt] text-neutral-500">in/cm</span>
+                                            <span className="font-bold">{displayValue(measurement.value)}</span>
+                                            <button onClick={toggleUnit} className="text-[8pt] text-neutral-500 text-left">
+                                                <span className={unit === 'in' ? '' : 'opacity-30'}>in</span>
+                                                <span className="opacity-30">/</span>
+                                                <span className={unit === 'cm' ? '' : 'opacity-30'}>cm</span>
+                                            </button>
                                             <span className="font-bold">{measurement.label}</span>
                                             <span className="text-neutral-600 text ">{measurement.description}</span>
                                         </div>

@@ -1,12 +1,18 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
-import Image from 'next/image'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { ProductStockCard } from './product-stock-card'
 import { STOCK_THRESHOLDS, STOCK_COLORS } from '@/lib/constants'
 import type { Product, ProductSize } from '@prisma/client'
 import { matchesProductSearch } from '@/lib/product-search'
+import { formatDesignerNames } from '@/lib/designers'
+
+const VIEW_COUNT = 5
+const ZOOM_STEP = 1.6
+const BASE_PHOTO_HEIGHT = 90
+const AMBIENT_PX_PER_FRAME = 0.35
+const USER_SCROLL_QUIET_MS = 280
 
 type ProductWithSizes = Product & {
     sizes: ProductSize[]
@@ -308,83 +314,228 @@ function PhotosView({
     onSelectFilter: (f: StockFilter) => void
     onSwitchToStock: () => void
 }) {
+    const [viewIndex, setViewIndex] = useState(0) // 0..VIEW_COUNT-1
+    const [hoveredProduct, setHoveredProduct] = useState<ProductWithSizes | null>(null)
+    const scrollRef = useRef<HTMLDivElement>(null)
+
+    // Z cycles through view sizes 1..5
+    useEffect(() => {
+        function onKey(e: KeyboardEvent) {
+            if (e.key !== 'z' && e.key !== 'Z') return
+            const t = e.target as HTMLElement | null
+            if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+            e.preventDefault()
+            setViewIndex((v) => (v + 1) % VIEW_COUNT)
+        }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [])
+
+    const scale = Math.pow(ZOOM_STEP, viewIndex)
+    const photoHeight = BASE_PHOTO_HEIGHT * scale
+    const isMaxView = viewIndex === VIEW_COUNT - 1
+
+    // Inertia-based ambient scroll at max view
+    const ambientActiveRef = useRef(false)
+    const lastUserScrollRef = useRef(0)
+    const lastScrollLeftRef = useRef(0)
+    const lastDirRef = useRef<1 | -1>(1)
+    const hoverPausedRef = useRef(false)
+
+    useEffect(() => {
+        if (!isMaxView) return
+        const el = scrollRef.current
+        if (!el) return
+
+        lastScrollLeftRef.current = el.scrollLeft
+        lastUserScrollRef.current = performance.now()
+        hoverPausedRef.current = false
+        let raf = 0
+
+        function onScroll() {
+            if (!el) return
+            const cur = el.scrollLeft
+            const delta = cur - lastScrollLeftRef.current
+            lastScrollLeftRef.current = cur
+            if (!ambientActiveRef.current && delta !== 0) {
+                lastDirRef.current = delta > 0 ? 1 : -1
+                lastUserScrollRef.current = performance.now()
+            }
+        }
+
+        function onUserInput() {
+            ambientActiveRef.current = false
+            lastUserScrollRef.current = performance.now()
+        }
+
+        function onPointerEnter() {
+            hoverPausedRef.current = true
+            ambientActiveRef.current = false
+        }
+
+        function onPointerLeave() {
+            hoverPausedRef.current = false
+            // Treat leaving like a fresh quiet period so ambient resumes smoothly
+            lastUserScrollRef.current = performance.now()
+        }
+
+        function step() {
+            if (!el) return
+            const quietFor = performance.now() - lastUserScrollRef.current
+            if (!hoverPausedRef.current && quietFor >= USER_SCROLL_QUIET_MS) {
+                const max = el.scrollWidth - el.clientWidth
+                if (max > 0) {
+                    let next = el.scrollLeft + lastDirRef.current * AMBIENT_PX_PER_FRAME
+                    if (next <= 0) {
+                        next = 0
+                        lastDirRef.current = 1
+                    } else if (next >= max) {
+                        next = max
+                        lastDirRef.current = -1
+                    }
+                    ambientActiveRef.current = true
+                    lastScrollLeftRef.current = next
+                    el.scrollLeft = next
+                }
+            } else {
+                ambientActiveRef.current = false
+            }
+            raf = requestAnimationFrame(step)
+        }
+
+        el.addEventListener('scroll', onScroll, { passive: true })
+        el.addEventListener('wheel', onUserInput, { passive: true })
+        el.addEventListener('touchstart', onUserInput, { passive: true })
+        el.addEventListener('pointerdown', onUserInput, { passive: true })
+        el.addEventListener('pointerenter', onPointerEnter)
+        el.addEventListener('pointerleave', onPointerLeave)
+        raf = requestAnimationFrame(step)
+
+        return () => {
+            cancelAnimationFrame(raf)
+            ambientActiveRef.current = false
+            hoverPausedRef.current = false
+            el.removeEventListener('scroll', onScroll)
+            el.removeEventListener('wheel', onUserInput)
+            el.removeEventListener('touchstart', onUserInput)
+            el.removeEventListener('pointerdown', onUserInput)
+            el.removeEventListener('pointerenter', onPointerEnter)
+            el.removeEventListener('pointerleave', onPointerLeave)
+        }
+    }, [isMaxView])
+
+    // Convert wheel deltaY into horizontal scroll so trackpads + mice can drive the strip
+    useEffect(() => {
+        const el = scrollRef.current
+        if (!el) return
+        function onWheel(e: WheelEvent) {
+            if (!el) return
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && el.scrollWidth > el.clientWidth) {
+                el.scrollLeft += e.deltaY
+                e.preventDefault()
+            }
+        }
+        el.addEventListener('wheel', onWheel, { passive: false })
+        return () => el.removeEventListener('wheel', onWheel)
+    }, [])
+
     return (
-        <div className="min-h-[calc(100vh-60px)] flex flex-col justify-end px-3 pb-3">
-            {/* Top-right Stock | Photos toggle */}
-            <div className="fixed top-3 right-3 z-[310] flex items-center gap-5 text-[12px] font-bold font-alte">
+        <div className="fixed inset-0 bg-white z-[200] overflow-hidden font-inter">
+            {/* Top-right view indicator */}
+            <p className="absolute right-4 top-[14px] text-[12px] z-[20] tabular-nums">
+                view: {viewIndex + 1}
+            </p>
+
+            {/* Center Stock / Photos toggle — sits behind the photo strip */}
+            <div className="absolute left-1/2 -translate-x-1/2 top-[36%] flex gap-[44px] text-[12px] font-bold z-[5]">
                 <button
                     type="button"
                     onClick={onSwitchToStock}
-                    className="hover:underline decoration-2 underline-offset-[3px]"
+                    className="hover:opacity-60"
                 >
                     Stock
                 </button>
                 <button
                     type="button"
-                    className="underline decoration-2 underline-offset-[3px]"
+                    className="underline underline-offset-[2px]"
                 >
                     Photos
                 </button>
             </div>
 
-            {/* Filter row: MATERIAL label left, status chips right */}
-            <div className="flex items-center justify-between mb-3 px-1">
-                <span className="font-reformat text-[12px] uppercase opacity-20 tracking-[0.05em]">
-                    Material
-                </span>
-                <div className="flex items-center gap-[18px] text-[12px] uppercase font-reformat tracking-[0.05em]">
-                    <PhotoFilter
-                        label={`${totalCount} All`}
-                        active={stockFilter === 'ALL'}
-                        onClick={() => onSelectFilter('ALL')}
-                    />
-                    <PhotoFilter
-                        label={`${counts.inStock} In Stock`}
-                        dot={STOCK_COLORS.IN_STOCK}
-                        active={stockFilter === 'IN_STOCK'}
-                        onClick={() =>
-                            onSelectFilter(stockFilter === 'IN_STOCK' ? 'ALL' : 'IN_STOCK')
-                        }
-                    />
-                    <PhotoFilter
-                        label={`${counts.lowStock} Low`}
-                        dot={STOCK_COLORS.LOW_STOCK}
-                        active={stockFilter === 'LOW_STOCK'}
-                        onClick={() =>
-                            onSelectFilter(stockFilter === 'LOW_STOCK' ? 'ALL' : 'LOW_STOCK')
-                        }
-                    />
-                    <PhotoFilter
-                        label={`${counts.noStock} Out`}
-                        dot={STOCK_COLORS.NO_STOCK}
-                        active={stockFilter === 'NO_STOCK'}
-                        onClick={() =>
-                            onSelectFilter(stockFilter === 'NO_STOCK' ? 'ALL' : 'NO_STOCK')
-                        }
-                    />
-                    <PhotoFilter
-                        label={`${counts.unpub} Unpublished`}
-                        dot="#ffffff"
-                        bordered
-                        active={stockFilter === 'UNPUBLISHED'}
-                        onClick={() =>
-                            onSelectFilter(stockFilter === 'UNPUBLISHED' ? 'ALL' : 'UNPUBLISHED')
-                        }
-                    />
+            {/* Horizontal photo strip — vertically centered, scrolls horizontally, layered above the toggle */}
+            <div
+                ref={scrollRef}
+                className="absolute inset-x-0 top-1/2 -translate-y-1/2 overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden z-[10]"
+                style={{ scrollbarWidth: 'none' }}
+            >
+                <div
+                    className="flex items-center justify-center min-w-full w-max"
+                    style={{
+                        height: Math.max(photoHeight + 40, 200),
+                        padding: `0 ${Math.max(48, photoHeight * 0.6)}px`,
+                        gap: Math.max(8, 6 * scale),
+                    }}
+                >
+                    {products.map((product) => (
+                        <PhotoStripItem
+                            key={product.id}
+                            product={product}
+                            height={photoHeight}
+                            onHoverChange={(hovered) =>
+                                setHoveredProduct(hovered ? product : (cur) => (cur?.id === product.id ? null : cur))
+                            }
+                        />
+                    ))}
                 </div>
             </div>
 
-            {/* Photo grid — fixed-width bordered cards */}
-            <div
-                className="grid gap-[6px]"
-                style={{
-                    gridTemplateColumns: 'repeat(auto-fill, 77px)',
-                    justifyContent: 'space-between',
-                }}
-            >
-                {products.map((product) => (
-                    <PhotoCard key={product.id} product={product} />
-                ))}
+            {/* Hover info — appears centered above the bottom legend */}
+            <HoverInfoOverlay product={hoveredProduct} />
+
+            {/* Bottom-left status filters */}
+            <div className="absolute left-9 bottom-6 flex items-center gap-[18px] text-[12px] uppercase font-reformat tracking-[0.04em] z-[20]">
+                <PhotoFilter
+                    label="All"
+                    active={stockFilter === 'ALL'}
+                    onClick={() => onSelectFilter('ALL')}
+                />
+                <PhotoFilter
+                    label={`${counts.inStock} In Stock`}
+                    dot={STOCK_COLORS.IN_STOCK}
+                    active={stockFilter === 'IN_STOCK'}
+                    onClick={() => onSelectFilter(stockFilter === 'IN_STOCK' ? 'ALL' : 'IN_STOCK')}
+                />
+                <PhotoFilter
+                    label={`${counts.lowStock} Low`}
+                    dot={STOCK_COLORS.LOW_STOCK}
+                    active={stockFilter === 'LOW_STOCK'}
+                    onClick={() => onSelectFilter(stockFilter === 'LOW_STOCK' ? 'ALL' : 'LOW_STOCK')}
+                />
+                <PhotoFilter
+                    label={`${counts.noStock} Out`}
+                    dot={STOCK_COLORS.NO_STOCK}
+                    active={stockFilter === 'NO_STOCK'}
+                    onClick={() => onSelectFilter(stockFilter === 'NO_STOCK' ? 'ALL' : 'NO_STOCK')}
+                />
+                <PhotoFilter
+                    label={`${counts.unpub} Unpublished`}
+                    dot="#ffffff"
+                    bordered
+                    active={stockFilter === 'UNPUBLISHED'}
+                    onClick={() => onSelectFilter(stockFilter === 'UNPUBLISHED' ? 'ALL' : 'UNPUBLISHED')}
+                />
+                <span className="ml-2 opacity-30 normal-case tracking-normal text-[10px]">
+                    {totalCount} total · Z to zoom
+                </span>
+            </div>
+
+            {/* Bottom-right material legend (placeholder until material filter is wired up) */}
+            <div className="absolute right-4 bottom-6 flex items-center gap-[18px] text-[12px] uppercase font-reformat tracking-[0.04em] z-[20]">
+                <span className="opacity-20">Material</span>
+                <button type="button" className="hover:opacity-60">Leather</button>
+                <button type="button" className="hover:opacity-60">Cotton</button>
+                <button type="button" className="hover:opacity-60">Wool</button>
             </div>
         </div>
     )
@@ -429,7 +580,15 @@ function PhotoFilter({
     )
 }
 
-function PhotoCard({ product }: { product: ProductWithSizes }) {
+function PhotoStripItem({
+    product,
+    height,
+    onHoverChange,
+}: {
+    product: ProductWithSizes
+    height: number
+    onHoverChange: (hovered: boolean) => void
+}) {
     const raw = product.images as unknown
     const imgs = Array.isArray(raw) ? raw : []
     const cartImg = imgs.find(
@@ -445,26 +604,78 @@ function PhotoCard({ product }: { product: ProductWithSizes }) {
             : undefined
     const src = cartImg?.url ?? fallback
 
+    const hoverHandlers = {
+        onPointerEnter: () => onHoverChange(true),
+        onPointerLeave: () => onHoverChange(false),
+    }
+
+    if (!src) {
+        return (
+            <Link
+                href={`/admin/products/${product.id}/edit`}
+                className="flex items-center justify-center text-neutral-300 text-[6pt] border border-dashed border-neutral-200 flex-none"
+                style={{ height, width: height * 0.6 }}
+                title={product.name}
+                {...hoverHandlers}
+            >
+                —
+            </Link>
+        )
+    }
+
     return (
         <Link
             href={`/admin/products/${product.id}/edit`}
-            className="block relative border border-[#181818] hover:border-black bg-white"
-            style={{ width: 77, height: 143 }}
+            className="block flex-none hover:opacity-80 transition-opacity"
             title={product.name}
+            style={{ height }}
+            {...hoverHandlers}
         >
-            {src ? (
-                <Image
-                    src={src}
-                    alt={product.name}
-                    fill
-                    sizes="77px"
-                    className="object-contain p-1"
-                />
-            ) : (
-                <div className="w-full h-full flex items-center justify-center text-neutral-300 text-[6pt]">
-                    —
-                </div>
-            )}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+                src={src}
+                alt={product.name}
+                draggable={false}
+                style={{ height: '100%', width: 'auto', objectFit: 'contain' }}
+            />
         </Link>
+    )
+}
+
+function HoverInfoOverlay({ product }: { product: ProductWithSizes | null }) {
+    if (!product) return null
+    const designerLabel = formatDesignerNames(product.designerNames)
+    const totalStock = product.sizes.reduce((sum, s) => sum + s.available, 0)
+    const status = statusOf(product)
+    const dotColor =
+        status === 'IN_STOCK'
+            ? STOCK_COLORS.IN_STOCK
+            : status === 'LOW_STOCK'
+              ? STOCK_COLORS.LOW_STOCK
+              : status === 'NO_STOCK'
+                ? STOCK_COLORS.NO_STOCK
+                : '#ffffff'
+    return (
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-[72px] z-[15] flex flex-col items-center gap-[6px] pointer-events-none text-center max-w-[80vw]">
+            <p className="text-[12px] font-bold tracking-tight text-black">{product.name}</p>
+            {designerLabel && (
+                <p className="text-[11px] font-bold tracking-tight text-black opacity-70">
+                    {designerLabel}
+                </p>
+            )}
+            <div className="flex items-center gap-[8px] font-reformat text-[10px] uppercase tracking-[0.05em]">
+                <span
+                    className="rounded-full"
+                    style={{
+                        display: 'inline-block',
+                        width: 7,
+                        height: 7,
+                        backgroundColor: dotColor,
+                        border: status === 'UNPUBLISHED' ? '1px solid #1a1a1a' : 'none',
+                    }}
+                />
+                <span>{product.published ? `${totalStock} I/S` : 'Unpublished'}</span>
+            </div>
+        </div>
     )
 }
