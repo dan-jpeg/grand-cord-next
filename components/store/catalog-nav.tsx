@@ -322,11 +322,14 @@ export function CatalogNav({
         setShowLayout(false)
         setIsMobileSearchLocked(hasQuery)
     }
+    const hasDesktopMenuOptions = (navConfig?.showSample ?? true) ||
+        (navConfig?.showSearch ?? true) ||
+        !!(navConfig?.groups && navConfig.groups.length > 0)
     const showingBreadcrumb = !isSearchOpen && searchQuery
     const isDesktopSearchMode = !!searchQuery.trim() && !isSearchOpen
     const showMainContentMobile = isExpanded || (isMobileSearchLocked && isSearchOpen)
-    const showMainContentDesktop = isExpanded && !isDesktopSearchMode
-    const isDesktopCollapsed = !isExpanded && !isDesktopSearchMode
+    const showMainContentDesktop = isExpanded && !isDesktopSearchMode && hasDesktopMenuOptions
+    const isDesktopCollapsed = (!isExpanded || !hasDesktopMenuOptions) && !isDesktopSearchMode
 
     /*
      * Two separate JSX trees — one for mobile, one for desktop. Both share
@@ -474,7 +477,7 @@ export function CatalogNav({
                     isDesktopSearchMode
                         ? 'min-h-0'
                         : isDesktopCollapsed
-                            ? 'min-h-[72px]'
+                            ? 'min-h-[60px]'
                             : 'min-h-[120px]'
                 }`}
                 data-catalog-nav
@@ -484,7 +487,7 @@ export function CatalogNav({
                     isDesktopSearchMode
                         ? 'gap-4 pt-6 pb-0'
                         : isDesktopCollapsed
-                            ? 'gap-3 pt-4 pb-4'
+                            ? 'gap-3 pt-4 pb-3 '
                             : 'gap-3 pt-6 pb-6'
                 }`}>
                     {/* Header Row */}

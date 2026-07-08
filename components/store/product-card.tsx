@@ -194,7 +194,7 @@ export function ProductCard({
                 </div>
             </Link>
 
-            <div className=" /20 pb-10 pt-24 relative z-20 opacity-90 pr-[1px]">
+            <div className=" /20 pb-6 pt-20 relative z-20 opacity-90 pr-[1px]">
                 <div className="grid grid-cols-2 text-[8pt]">
                     <div className="text-left pl-[5vw] mt-6">
                         {product.material && (
