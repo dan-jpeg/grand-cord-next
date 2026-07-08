@@ -4,11 +4,20 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { motion, useScroll, useTransform, useMotionValueEvent } from 'framer-motion'
 import { CatalogNav } from '@/components/store/catalog-nav'
 
+type NavConfig = {
+    showSearch: boolean
+    showSample: boolean
+    scrollToTopOnTapMobile: boolean
+    scrollToTopOnTapDesktop: boolean
+    groups: { id: string; name: string; slug: string }[]
+}
+
 type CatalogNavWrapperProps = {
     productCount: number
     onSearchChange?: (query: string) => void
     mobileLayout?: '1x1' | '2x2' | '3x3'
     onLayoutChange?: (layout: '1x1' | '2x2' | '3x3') => void
+    navConfig?: NavConfig
 }
 
 export function CatalogNavWrapper(props: CatalogNavWrapperProps) {

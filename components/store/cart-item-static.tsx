@@ -10,12 +10,12 @@ type CartItemTextStaticProps = {
 
 const getSizeNumber = (size: string): number => {
     const sizeMap: Record<string, number> = {
-        'XS': 0,
-        'S': 1,
-        'M': 2,
-        'L': 3,
-        'XL': 4,
-        'XXL': 5,
+        '1': 1,
+        '2': 2,
+        '3': 3,
+        '4': 4,
+        '5': 5,
+        'o/s': 0,
     }
     return sizeMap[size] ?? 0
 }

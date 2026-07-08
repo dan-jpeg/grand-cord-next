@@ -6,17 +6,43 @@ import { MobileHero } from '@/components/store/mobile-hero'
 export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
-    const products = await prisma.product.findMany({
-        where: { published: true },
-        include: { sizes: true },
-        orderBy: { createdAt: 'desc' },
-    })
+    const [products, settings, navGroups] = await Promise.all([
+        prisma.product.findMany({
+            where: { published: true },
+            include: { sizes: true },
+            orderBy: { createdAt: 'desc' },
+        }),
+        prisma.siteSettings.upsert({
+            where: { id: 'default' },
+            create: { id: 'default' },
+            update: {},
+            select: {
+                showSearchInNav: true,
+                showSampleInNav: true,
+                scrollToTopOnCatalogTapMobile: true,
+                scrollToTopOnCatalogTapDesktop: true,
+            },
+        }),
+        prisma.collection.findMany({
+            where: { showInCatalog: true },
+            orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+            select: { id: true, name: true, slug: true },
+        }),
+    ])
+
+    const navConfig = {
+        showSearch: settings.showSearchInNav,
+        showSample: settings.showSampleInNav,
+        scrollToTopOnTapMobile: settings.scrollToTopOnCatalogTapMobile,
+        scrollToTopOnTapDesktop: settings.scrollToTopOnCatalogTapDesktop,
+        groups: navGroups,
+    }
 
     return (
         <>
             {/* Mobile */}
             <div className="lg:hidden">
-                <MobileCatalogShell products={products} />
+                <MobileCatalogShell products={products} navConfig={navConfig} />
             </div>
             {/* Desktop View */}
             <div className="hidden lg:block min-h-screen  font-inter bg-white">
@@ -43,7 +69,7 @@ export default async function HomePage() {
                 </div>
 
                 <div className="pt-20">
-                    <CatalogSection products={products}/>
+                    <CatalogSection products={products} navConfig={navConfig} />
                 </div>
             </div>
         </>

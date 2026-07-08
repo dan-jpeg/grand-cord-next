@@ -9,33 +9,10 @@ import {CartCardBenDesktop} from "@/components/store/cart-card-ben-desktop";
 
 export function CartViewBen() {
     const { items, totalPrice } = useCart()
-
-    if (items.length === 0) {
-        return (
-            <div className="min-h-screen bg-white flex items-center justify-center p-8 font-inter">
-                <div className="text-center">
-                    <h1 className="text-sm mb-6">Your cart is empty.</h1>
-                    <div className="flex  flex-col gap-4 items-center">
-                        <Link
-                            href="/#catalog"
-                            className="inline-block px-4 py-2 text-sm border border-black hover:bg-black hover:text-white transition-colors"
-                        >
-                            Continue Shopping
-                        </Link>
-                        <Link
-                            href="/cart/order-status"
-                            className="text-sm underline hover:no-underline"
-                        >
-                            Check Order Status
-                        </Link>
-                    </div>
-                </div>
-            </div>
-        )
-    }
+    const isEmpty = items.length === 0
 
     return (
-        <div className="min-h-screen bg-white font-inter pb-16">
+        <div className="min-h-screen bg-white font-inter pb-16 overflow-x-hidden">
             <div className="max-w-6xl  px-8 md:max-w-7xl">
                 {/* Mobile Layout - Completely Original */}
                 <div className="lg:hidden flex flex-col gap-1.5">
@@ -47,6 +24,15 @@ export function CartViewBen() {
                             />
                         ))}
                     </AnimatePresence>
+                    {isEmpty && (
+                        <div className="flex flex-col items-center justify-center gap-2 mt-16 min-h-[calc(100vh-204px)] text-center text-[8.5pt] font-medium">
+                            <span>You have nothing in your cart.</span>
+                            <Link href="/" className="flex items-center gap-2">
+                                <span className="text-[6px]">▶</span>
+                                <span className="underline underline-offset-4 hover:no-underline">Return to catalog</span>
+                            </Link>
+                        </div>
+                    )}
                 </div>
 
                 {/* Desktop Layout - Two Columns */}
@@ -62,6 +48,21 @@ export function CartViewBen() {
                                     />
                                 ))}
                             </AnimatePresence>
+                            {isEmpty && (
+                                <div className="flex font-inter justify-center">
+                                    <div className="grid grid-cols-[180px_220px_440px] items-start">
+                                        <div />
+                                        <div />
+                                        <div className="py-4 mt-4 flex justify-end gap-8 pr-12 text-[8.5pt] font-medium">
+                                            <span>You have nothing in your cart.</span>
+                                            <Link href="/" className="flex items-center gap-2">
+                                                <span className="text-[6px]">▶</span>
+                                                <span className="underline underline-offset-4 hover:no-underline">Return to catalog</span>
+                                            </Link>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -70,7 +71,7 @@ export function CartViewBen() {
                         <div className="sticky top-16">
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 right-0 bg-[#FCFDF0]" style={{ right: '-100vw' }}></div>
-                                <div className="relative px-8 pb-2 pt-50    ">
+                                <div className={`relative px-8 pb-2 ${isEmpty ? 'pt-12' : 'pt-50'}`}>
                                     <div className="text-[8.5pt] font-medium">Order Subtotal</div>
                                 </div>
                             </div>
@@ -84,13 +85,23 @@ export function CartViewBen() {
                                     </div>
 
                                     <div className="flex items-center">
-                                        <Link
-                                            href="/checkout"
-                                            className="flex items-center gap-2 text-[8.5pt] font-bold hover:underline leading-none"
-                                        >
-                                            <span className="text-[6px]">▶</span>
-                                            <span>Continue</span>
-                                        </Link>
+                                        {isEmpty ? (
+                                            <span
+                                                aria-disabled
+                                                className="flex items-center gap-2 text-[8.5pt] font-bold leading-none opacity-30 cursor-default"
+                                            >
+                                                <span className="text-[6px]">▶</span>
+                                                <span>Continue</span>
+                                            </span>
+                                        ) : (
+                                            <Link
+                                                href="/checkout"
+                                                className="flex items-center gap-2 text-[8.5pt] font-bold hover:underline leading-none"
+                                            >
+                                                <span className="text-[6px]">▶</span>
+                                                <span>Continue</span>
+                                            </Link>
+                                        )}
                                     </div>
                                 </div>
 
@@ -120,13 +131,23 @@ export function CartViewBen() {
                             </span>
                         </div>
 
-                        <Link
-                            href="/checkout"
-                            className="flex items-center gap-2 mt-8 text-[10pt] font-bold hover:underline"
-                        >
-                            <span className="text-[7px]">▶</span>
-                            <span>Continue</span>
-                        </Link>
+                        {isEmpty ? (
+                            <span
+                                aria-disabled
+                                className="flex items-center gap-2 mt-8 text-[10pt] font-bold opacity-30 cursor-default"
+                            >
+                                <span className="text-[7px]">▶</span>
+                                <span>Continue</span>
+                            </span>
+                        ) : (
+                            <Link
+                                href="/checkout"
+                                className="flex items-center gap-2 mt-8 text-[10pt] font-bold hover:underline"
+                            >
+                                <span className="text-[7px]">▶</span>
+                                <span>Continue</span>
+                            </Link>
+                        )}
                     </div>
                 </div>
             </div>

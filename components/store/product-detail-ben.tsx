@@ -11,36 +11,63 @@ type ImageData = {
     url: string
     isMobilePrimary: boolean
     isDesktopPrimary: boolean
+    showOnPdp?: boolean
+}
+
+type SizeMeasurement = { sizingAttributeId: string; value: string }
+type SizeWithMeasurements = ProductSize & { measurements: SizeMeasurement[] }
+type ProductSizingAttr = {
+    sortOrder: number
+    sizingAttribute: { id: string; title: string; description: string | null }
 }
 
 type ProductWithSizes = Product & {
-    sizes: ProductSize[]
+    sizes: SizeWithMeasurements[]
+    sizingAttributes: ProductSizingAttr[]
 }
 
 export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
     const { addItem } = useCart()
-    const [selectedSize, setSelectedSize] = useState<string>('')
     const [showSizing, setShowSizing] = useState(false)
     const [buttonState, setButtonState] = useState<'idle' | 'added'>('idle')
     const [unit, setUnit] = useState<'in' | 'cm'>('in')
 
-    const displayValue = (inches: string) =>
-        unit === 'in' ? inches : Math.round(parseFloat(inches) * 2.54).toString()
+    const availableSizes = product.sizes
+        .filter(s => s.available > 0)
+        .sort((a, b) => {
+            const order = ['1', '2', '3', '4', '5', 'o/s']
+            return order.indexOf(a.size) - order.indexOf(b.size)
+        })
+
+    const [selectedSize, setSelectedSize] = useState<string>(
+        availableSizes.length === 1 ? availableSizes[0].size : ''
+    )
+
+    function openSizing() {
+        if (!selectedSize && availableSizes.length > 0) {
+            setSelectedSize(availableSizes[0].size)
+        }
+        setShowSizing(true)
+    }
+
+    const displayValue = (inches: string) => {
+        if (!inches) return '—'
+        if (unit === 'in') return inches
+        const n = parseFloat(inches)
+        return Number.isFinite(n) ? Math.round(n * 2.54).toString() : inches
+    }
     const toggleUnit = () => setUnit(u => (u === 'in' ? 'cm' : 'in'))
 
     const images = product.images as unknown as ImageData[]
     const designerLabel = formatDesignerNames(product.designerNames)
     const displayImage = images.find(img => img.isDesktopPrimary)?.url || images[0]?.url
 
-    // Repeat the image 4 times for scrolling
-    const imageArray = displayImage ? [displayImage, displayImage, displayImage, displayImage] : []
-
-    const availableSizes = product.sizes
-        .filter(s => s.available > 0)
-        .sort((a, b) => {
-            const order = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
-            return order.indexOf(a.size) - order.indexOf(b.size)
-        })
+    // Gallery images, hero image first, filtered to those marked visible on the PDP.
+    const galleryImages = images.filter(img => img.showOnPdp !== false)
+    const imageArray = [
+        ...galleryImages.filter(img => img.url === displayImage),
+        ...galleryImages.filter(img => img.url !== displayImage),
+    ].map(img => img.url)
 
     function handleAdd() {
         if (!selectedSize) {
@@ -62,16 +89,21 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
         setButtonState('added')
         setTimeout(() => setButtonState('idle'), 2000)
     }
-    // Placeholder measurements - would come from database in production
-    const measurements = [
-        { value: '30', label: 'length', description: 'back of collar to bottom hem' },
-        { value: '17', label: 'chest', description: 'underarm to underarm' },
-        { value: '37', label: 'waist', description: 'circumference closed' },
-        { value: '7', label: 'shoulder', description: 'collar to shoulder' },
-        { value: '20', label: 'sleeve', description: 'shoulder to cuff' },
-        { value: '12', label: 'bicep', description: 'circumference' },
-        { value: '11', label: 'cuff', description: 'circumference' },
-    ]
+    // Per-size measurements derived from the DB. Each row is one attribute
+    // configured for this product; value comes from the currently selected
+    // size's measurement for that attribute (or "—" when not yet entered).
+    const activeSize = product.sizes.find((s) => s.size === selectedSize)
+        ?? availableSizes[0]
+        ?? product.sizes[0]
+    const valueByAttr = new Map(
+        (activeSize?.measurements ?? []).map((m) => [m.sizingAttributeId, m.value]),
+    )
+    const measurements = product.sizingAttributes.map((pa) => ({
+        value: valueByAttr.get(pa.sizingAttribute.id) ?? '',
+        label: pa.sizingAttribute.title.toLowerCase(),
+        description: pa.sizingAttribute.description ?? '',
+    }))
+    const hasSizingChart = measurements.length > 0
 
     return (
         <div className="min-h-screen bg-white lg:h-screen lg:overflow-hidden">
@@ -96,11 +128,11 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
 
                     {/* Materials */}
                     <div className={`mb-20 flex gap-8 pl-[20%] pr-[8vw] font-inter transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
-                        {product.material && (
-                            <p className="text-[8pt]">Body {product.material}</p>
+                        {product.attribute1 && (
+                            <p className="text-[8pt]">{product.attribute1}</p>
                         )}
-                        {product.color && (
-                            <p className="text-[8pt]">Lining {product.color}</p>
+                        {product.attribute2 && (
+                            <p className="text-[8pt]">{product.attribute2}</p>
                         )}
                     </div>
 
@@ -138,13 +170,17 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
 
                             {/* Sizing Dropdown and Add Row */}
                             <div className="flex items-start justify-between -mr-[8vw]">
-                                <button
-                                    onClick={() => setShowSizing(!showSizing)}
-                                    className="flex items-center gap-4 hover:opacity-70"
-                                >
-                                    <span className="text-[8.5pt]">Sizing</span>
-                                    <span className="text-[5pt]">{showSizing ? '▲' : '▼'}</span>
-                                </button>
+                                {hasSizingChart ? (
+                                    <button
+                                        onClick={() => showSizing ? setShowSizing(false) : openSizing()}
+                                        className="flex items-center gap-4 hover:opacity-70"
+                                    >
+                                        <span className="text-[8.5pt]">Sizing</span>
+                                        <span className="text-[5pt]">{showSizing ? '▲' : '▼'}</span>
+                                    </button>
+                                ) : (
+                                    <span />
+                                )}
                                 <button
                                     onClick={handleAdd}
                                     disabled={!selectedSize}
@@ -214,33 +250,33 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
             {/* Mobile Layout */}
             <div className="lg:hidden scale-90 font-inter">
                 {/* Product Info */}
-                <div className="px-12 pt-20 ">
+                <div className="px-6 pt-12 ">
                     {/* Header */}
-                    <div className="flex items-start  justify-between mb-20">
+                    <div className="flex items-start justify-between mb-12">
                         <h1 className={`text-[10px] transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
                             {product.name}
                         </h1>
-                        <div className={`text-right  transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
-                            {designerLabel && (
-                                <>
-                                    <p className="text-[11px] font-semibold tracking-tight whitespace-nowrap font ">{designerLabel}</p>
-                                </>
-                            )}
-                        </div>
+                        {product.designerNames && product.designerNames.length > 0 && (
+                            <div className={`flex gap-4 text-right transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
+                                {product.designerNames.map((name) => (
+                                    <p key={name} className="text-[10px] tracking-tight">{name}</p>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div
                         className={`mb-2 flex gap-8  font-semibold text-[9pt] tracking-[1.1] transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
-                        {product.material && (
-                            <p className="">Body {product.material}</p>
+                        {product.attribute1 && (
+                            <p className="">{product.attribute1}</p>
                         )}
-                        {product.color && (
-                            <p className="">Lining {product.color}</p>
+                        {product.attribute2 && (
+                            <p className="">{product.attribute2}</p>
                         )}
                     </div>
 
                     {/* Content area with conditional background */}
-                    <div className={`transition-colors   ${showSizing ? 'bg-[#FCFDF0] -mx-12 px-12 py-4' : ''}`}>
+                    <div className={`transition-colors   ${showSizing ? 'bg-[#FCFDF0] -mx-[100vw] px-[100vw] pt-4 pb-24' : ''}`}>
 
 
                         {/* Manufacturing Info - only show when sizing is closed */}
@@ -256,12 +292,12 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
 
                                 className="mb-6"
                             >
-                                <div className="space-y-2 pt-30 pb-20  px-8">
+                                <div className="space-y-2 pt-30 pb-20  px-2">
                                     {measurements.map((measurement, index) => (
                                         <div key={index}
-                                             className="grid  grid-cols-[40px_50px_1fr_2fr] gap-x-2 items-baseline text-xs">
+                                             className="grid  grid-cols-[28px_40px_60px_1fr] gap-x-2 items-baseline text-[8pt] whitespace-nowrap">
                                             <span className="font-bold">{displayValue(measurement.value)}</span>
-                                            <button onClick={toggleUnit} className="text-[8pt] text-neutral-500 text-left">
+                                            <button onClick={toggleUnit} className="text-[7pt] text-neutral-500 text-left">
                                                 <span className={unit === 'in' ? '' : 'opacity-30'}>in</span>
                                                 <span className="opacity-30">/</span>
                                                 <span className={unit === 'cm' ? '' : 'opacity-30'}>cm</span>
@@ -276,7 +312,7 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                             /* Description - only show when sizing is closed */
                             product.description && (
                                 <div className="mb-32 font-light">
-                                    <p className="text-[10pt] tracking-[1.2] text-justify leading-[1.8]">{product.description}</p>
+                                    <p className="text-[10pt] tracking-[1.1] text-justify leading-[1.8]">{product.description}</p>
                                 </div>
                             )
                         )}
@@ -301,13 +337,17 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
 
                         {/* Sizing and Price Row */}
                         <div className="flex items-start justify-between mb-4">
-                            <button
-                                onClick={() => setShowSizing(!showSizing)}
-                                className="flex items-center gap-4 hover:opacity-70"
-                            >
-                                <span className="tracking-[1.1] text-[9pt]">Sizing</span>
-                                <span className="  text-[6pt]">{showSizing ? '▲' : '▼'}</span>
-                            </button>
+                            {hasSizingChart ? (
+                                <button
+                                    onClick={() => showSizing ? setShowSizing(false) : openSizing()}
+                                    className="flex items-center gap-4 hover:opacity-70"
+                                >
+                                    <span className="tracking-[1.1] text-[9pt]">Sizing</span>
+                                    <span className="  text-[6pt]">{showSizing ? '▲' : '▼'}</span>
+                                </button>
+                            ) : (
+                                <span />
+                            )}
                             <p className="text-sm">
                                 $ {product.price.toFixed(2).replace('.', '. ')}
                             </p>
@@ -327,7 +367,7 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                 </div>
 
                 {/* Mobile Images */}
-                <div className=" -mx-12  my-4 scale-105ç h-[59vh] snap-y snap-mandatory scroll-smooth">
+                <div className=" -mx-6  mb-4 scale-105ç h-[59vh] snap-y snap-mandatory scroll-smooth">
                     {imageArray.map((img, index) => (
                         <div key={index} className="w-full snap-start snap-always">
                             {img ? (

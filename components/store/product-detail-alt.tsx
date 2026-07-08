@@ -48,7 +48,7 @@ export function ProductDetailAlt({ product }: { product: ProductWithSizes }) {
         : []
 
     const allSizes = [...product.sizes].sort((a, b) => {
-        const order = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
+        const order = ['1', '2', '3', '4', '5', 'o/s']
         return order.indexOf(a.size) - order.indexOf(b.size)
     })
 

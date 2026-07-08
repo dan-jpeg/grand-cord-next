@@ -10,16 +10,20 @@ export function AddToCartNotification() {
     const { items } = useCart()
     const [lastItem, setLastItem] = useState<CartItem | null>(null)
     const [show, setShow] = useState(false)
-    const prevItemsLength = useRef(0)
+    const prevItemsLength = useRef<number | null>(null)
 
     useEffect(() => {
-        // Only trigger when items are ADDED (not removed or updated)
-        if (items.length > prevItemsLength.current && items.length > 0) {
+        // Skip the first run so the notification doesn't fire on hydration
+        if (prevItemsLength.current === null) {
+            prevItemsLength.current = items.length
+            return
+        }
+
+        if (items.length > prevItemsLength.current) {
             const newest = items[items.length - 1]
             setLastItem(newest)
             setShow(true)
 
-            // Auto-hide after 3 seconds
             const timer = setTimeout(() => {
                 setShow(false)
             }, 3000)

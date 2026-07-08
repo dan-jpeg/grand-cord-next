@@ -141,11 +141,7 @@ export function Navigation() {
     return (
         <nav className="fixed top-0 left-0 right-0 z-20">
             {/* Desktop */}
-            <div className="hidden lg:flex mx-auto px-8 py-12 md:py-4 items-center justify-between">
-                <Link href="/" className="z-50 text-[9pt] font-bold uppercase hover:underline">
-                    ⚉
-                </Link>
-
+            <div className="hidden lg:flex mx-auto px-8 py-12 md:py-4 items-center justify-end">
                 <Link
                     href="/cart"
                     className="relative px-2 rounded-full flex items-center gap-2"
@@ -163,11 +159,7 @@ export function Navigation() {
             </div>
 
             {/* Mobile */}
-            <div className="flex lg:hidden mx-auto px-10 py-4 h-[64px] bg-[#FCFDF0] items-center justify-between">
-                <Link href="/" className="text-[9pt] font-bold opacity-10 uppercase">
-                    ⚉
-                </Link>
-
+            <div className="flex lg:hidden mx-auto px-10 py-4 h-[64px] bg-[#FCFDF0] items-center justify-end">
                 <Link
                     href="/cart"
                     className="flex items-center gap-2"

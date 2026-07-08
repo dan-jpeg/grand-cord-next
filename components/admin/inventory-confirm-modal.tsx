@@ -6,6 +6,7 @@ export type InventoryChange = {
     before: number
     after: number
     delta: number
+    kind?: 'add' | 'remove'
 }
 
 export function InventoryConfirmModal({
@@ -49,11 +50,17 @@ export function InventoryConfirmModal({
                         >
                             <span className="font-reformat text-[10px] tracking-[0.1em] uppercase font-bold">
                                 {c.sizeLabel}
+                                {c.kind === 'add' && (
+                                    <span className="ml-2 font-normal normal-case text-[#1a7a1a]">(new)</span>
+                                )}
+                                {c.kind === 'remove' && (
+                                    <span className="ml-2 font-normal normal-case text-[#a02020]">(removed)</span>
+                                )}
                             </span>
                             <span className="font-alte text-[13px] tabular-nums flex items-center gap-2">
-                                <span className="text-neutral-400">{c.before}</span>
+                                <span className="text-neutral-400">{c.kind === 'add' ? '—' : c.before}</span>
                                 <span className="text-neutral-400">→</span>
-                                <span>{c.after}</span>
+                                <span>{c.kind === 'remove' ? '—' : c.after}</span>
                                 <span
                                     className={`font-reformat text-[10px] tracking-[0.05em] ${
                                         c.delta > 0 ? 'text-[#1a7a1a]' : 'text-[#a02020]'

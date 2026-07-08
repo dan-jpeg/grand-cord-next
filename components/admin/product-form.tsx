@@ -1,13 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createProduct, updateProduct, commitInventoryChanges } from '@/app/admin/products/actions'
 import { ImageManager, type ImageData } from '@/components/admin/image-manager'
 import { InventoryConfirmModal, LockIcon, type InventoryChange } from './inventory-confirm-modal'
-import { formatDesignerNames } from '@/lib/designers'
 import { formatPrice } from '@/lib/utils'
 import type { Product, ProductSize, Order, OrderItem, InventoryChangeLog } from '@prisma/client'
 
@@ -20,16 +19,35 @@ type OrderWithItems = Order & {
     items: OrderItem[]
 }
 
-const AVAILABLE_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
+const AVAILABLE_SIZES = ['1', '2', '3', '4', '5', 'o/s']
+const ONE_SIZE = 'o/s'
 const MAX_DESIGNERS = 8
 
 type Tab = 'identity' | 'look' | 'sizing' | 'listing' | 'sales' | 'history'
+type TabGroup = 'listing' | 'inventory'
+
+// Each tab belongs to one of two top-level groups. The wizard order goes
+// through every tab in the Listing group first, then everything in the
+// Inventory group.
+const TAB_GROUP: Record<Tab, TabGroup> = {
+    identity: 'listing',
+    look: 'listing',
+    listing: 'listing',
+    sizing: 'inventory',
+    sales: 'inventory',
+    history: 'inventory',
+}
+
+const GROUPS: { key: TabGroup; label: string }[] = [
+    { key: 'listing', label: 'Listing' },
+    { key: 'inventory', label: 'Inventory' },
+]
 
 const TABS_CREATE: { key: Tab; label: string }[] = [
     { key: 'identity', label: 'Identity' },
     { key: 'look', label: 'Look' },
+    { key: 'listing', label: 'Details' },
     { key: 'sizing', label: 'Inventory' },
-    { key: 'listing', label: 'Listing' },
 ]
 
 const TABS_EDIT: { key: Tab; label: string }[] = [
@@ -47,14 +65,12 @@ export function ProductForm({
     product,
     orders,
     inventoryLogs,
-    hidePreview = false,
     hideTabs = false,
     initialTab,
 }: {
     product?: ProductWithSizes
     orders?: OrderWithItems[]
     inventoryLogs?: InventoryChangeLog[]
-    hidePreview?: boolean
     hideTabs?: boolean
     initialTab?: Tab
 }) {
@@ -79,12 +95,25 @@ export function ProductForm({
         const rawImages = product.images as unknown
         if (Array.isArray(rawImages) && typeof rawImages[0] === 'object' && rawImages[0] !== null && 'url' in rawImages[0]) {
             return rawImages.map((img, index: number) => {
-                const image = img as { url?: string; isMobilePrimary?: boolean; isDesktopPrimary?: boolean; isCartPrimary?: boolean }
+                const image = img as {
+                    url?: string
+                    isMobilePrimary?: boolean
+                    isDesktopPrimary?: boolean
+                    isCartPrimary?: boolean
+                    isGrid1x1Primary?: boolean
+                    isGrid2x2Primary?: boolean
+                    isGrid3x3Primary?: boolean
+                    showOnPdp?: boolean
+                }
                 return {
                     url: image.url || '',
                     isMobilePrimary: image.isMobilePrimary ?? (index === 0),
                     isDesktopPrimary: image.isDesktopPrimary ?? (index === 0),
                     isCartPrimary: image.isCartPrimary ?? (index === 0),
+                    isGrid1x1Primary: image.isGrid1x1Primary ?? (index === 0),
+                    isGrid2x2Primary: image.isGrid2x2Primary ?? (index === 0),
+                    isGrid3x3Primary: image.isGrid3x3Primary ?? (index === 0),
+                    showOnPdp: image.showOnPdp ?? true,
                 }
             })
         }
@@ -94,6 +123,10 @@ export function ProductForm({
                 isMobilePrimary: index === 0,
                 isDesktopPrimary: index === 0,
                 isCartPrimary: index === 0,
+                isGrid1x1Primary: index === 0,
+                isGrid2x2Primary: index === 0,
+                isGrid3x3Primary: index === 0,
+                showOnPdp: true,
             }))
         }
         return []
@@ -102,11 +135,13 @@ export function ProductForm({
     const [material, setMaterial] = useState(product?.material || '')
     const [color, setColor] = useState(product?.color || '')
     const [colorHex, setColorHex] = useState(product?.colorHex || '')
+    const [attribute1, setAttribute1] = useState(product?.attribute1 || '')
+    const [attribute2, setAttribute2] = useState(product?.attribute2 || '')
 
     const [sizes, setSizes] = useState<{ id?: string; size: string; available: number }[]>(
         product?.sizes.length
             ? product.sizes.map((s) => ({ id: s.id, size: s.size, available: s.available }))
-            : [{ size: 'M', available: 0 }]
+            : [{ size: '1', available: 0 }]
     )
 
     // Server-side baseline of available counts for existing sizes; updated after
@@ -114,6 +149,13 @@ export function ProductForm({
     // delta from the persisted value.
     const [committedAvailable, setCommittedAvailable] = useState<Record<string, number>>(
         () => Object.fromEntries((product?.sizes ?? []).map((s) => [s.id, s.available])),
+    )
+
+    // Reserved units (open-order holds) per existing size. Read-only — these
+    // only move when an order is placed/cancelled, not from this form.
+    const reservedById = useMemo<Record<string, number>>(
+        () => Object.fromEntries((product?.sizes ?? []).map((s) => [s.id, s.committed])),
+        [product],
     )
 
     // Snapshot of values at mount — diffed against current state to decide
@@ -134,20 +176,21 @@ export function ProductForm({
             material: material.trim(),
             color: color.trim(),
             colorHex: colorHex.trim(),
+            attribute1: attribute1.trim(),
+            attribute2: attribute2.trim(),
             images: images.map((i) => ({
                 url: i.url,
                 isMobilePrimary: !!i.isMobilePrimary,
                 isDesktopPrimary: !!i.isDesktopPrimary,
                 isCartPrimary: !!i.isCartPrimary,
+                isGrid1x1Primary: !!i.isGrid1x1Primary,
+                isGrid2x2Primary: !!i.isGrid2x2Primary,
+                isGrid3x3Primary: !!i.isGrid3x3Primary,
+                showOnPdp: !!i.showOnPdp,
             })),
-            // For existing sizes only track id+label; stock count edits are
-            // routed through the inventory lock/commit flow, not form submit.
-            // For new (unsaved) sizes the available count IS a real form change.
-            sizes: sizes.map((s) =>
-                s.id
-                    ? { id: s.id, size: s.size }
-                    : { id: null, size: s.size, available: s.available },
-            ),
+            // Sizes are excluded entirely: adding/removing a size and
+            // adjusting stock are inventory mutations routed through the
+            // lock/commit flow below, not tracked as a form-dirty change.
         })
     }, [
         name,
@@ -160,8 +203,9 @@ export function ProductForm({
         material,
         color,
         colorHex,
+        attribute1,
+        attribute2,
         images,
-        sizes,
     ])
 
     useEffect(() => {
@@ -177,6 +221,12 @@ export function ProductForm({
     // When set, the user attempted to navigate to another tab while inventory
     // changes were pending. Gates navigation behind the confirm/discard modal.
     const [pendingNavTo, setPendingNavTo] = useState<Tab | null>(null)
+    // Existing sizes staged for removal (unlocked, not yet confirmed). Kept
+    // out of `sizes` so they disappear from the list immediately, but
+    // snapshotted here so Discard can restore them.
+    const [pendingRemovals, setPendingRemovals] = useState<
+        { id: string; size: string; available: number }[]
+    >([])
 
     function updateSize(index: number, field: 'size' | 'available', value: string | number) {
         const newSizes = [...sizes]
@@ -185,13 +235,28 @@ export function ProductForm({
     }
 
     function addSize() {
+        // Adding a size is an inventory mutation, not a form edit — only
+        // allowed while unlocked (same gate as adjusting stock counts).
+        // Products being created for the first time have no lock yet.
+        if (product && !inventoryUnlocked) return
         const usedSizes = sizes.map((s) => s.size)
-        const availableSize = AVAILABLE_SIZES.find((s) => !usedSizes.includes(s))
+        if (usedSizes.includes(ONE_SIZE)) return
+        const availableSize = AVAILABLE_SIZES.find((s) => s !== ONE_SIZE && !usedSizes.includes(s))
         if (availableSize) setSizes([...sizes, { size: availableSize, available: 0 }])
     }
 
     function removeSize(index: number) {
-        setSizes(sizes.filter((_, i) => i !== index))
+        const item = sizes[index]
+        if (item.id) {
+            // Persisted size: stage for removal via the lock/commit flow
+            // instead of deleting local state outright.
+            if (!inventoryUnlocked) return
+            setPendingRemovals((prev) => [
+                ...prev,
+                { id: item.id!, size: item.size, available: item.available },
+            ])
+        }
+        setSizes((prev) => prev.filter((_, i) => i !== index))
     }
 
     function bumpExistingSize(sizeId: string, dir: 1 | -1) {
@@ -220,7 +285,34 @@ export function ProductForm({
         })
         .filter((c) => c.delta !== 0)
 
-    const hasInventoryChanges = inventoryChanges.length > 0
+    // Unsaved new rows (no id yet) — staged additions.
+    const pendingAdditions = sizes.filter((s): s is { size: string; available: number } => !s.id)
+
+    const additionChanges: InventoryChange[] = pendingAdditions.map((s, i) => ({
+        sizeId: `new-${i}`,
+        sizeLabel: s.size,
+        before: 0,
+        after: s.available,
+        delta: s.available,
+        kind: 'add',
+    }))
+
+    const removalChanges: InventoryChange[] = pendingRemovals.map((s) => ({
+        sizeId: s.id,
+        sizeLabel: s.size,
+        before: s.available,
+        after: 0,
+        delta: -s.available,
+        kind: 'remove',
+    }))
+
+    const allInventoryChanges: InventoryChange[] = [
+        ...inventoryChanges,
+        ...additionChanges,
+        ...removalChanges,
+    ]
+
+    const hasInventoryChanges = allInventoryChanges.length > 0
 
     function handleLockClick() {
         if (!inventoryUnlocked) {
@@ -238,15 +330,30 @@ export function ProductForm({
         if (!product) return
         setInventorySaving(true)
         try {
-            await commitInventoryChanges(
+            const result = await commitInventoryChanges(
                 product.id,
                 inventoryChanges.map((c) => ({ sizeId: c.sizeId, delta: c.delta })),
+                pendingAdditions.map((s) => ({ size: s.size, available: s.available })),
+                pendingRemovals.map((s) => s.id),
             )
             setCommittedAvailable((prev) => {
                 const next = { ...prev }
                 for (const c of inventoryChanges) next[c.sizeId] = c.after
+                for (const s of result.createdSizes) next[s.id] = s.available
+                for (const s of pendingRemovals) delete next[s.id]
                 return next
             })
+            setSizes((prev) => {
+                const createdByLabel = new Map(result.createdSizes.map((s) => [s.size, s]))
+                return prev
+                    .filter((s) => !!s.id || createdByLabel.has(s.size))
+                    .map((s) => {
+                        if (s.id) return s
+                        const created = createdByLabel.get(s.size)!
+                        return { id: created.id, size: created.size, available: created.available }
+                    })
+            })
+            setPendingRemovals([])
             setInventoryConfirming(false)
             setInventoryUnlocked(false)
             if (pendingNavTo) {
@@ -259,14 +366,18 @@ export function ProductForm({
     }
 
     function handleInventoryDiscard() {
-        setSizes((prev) =>
-            prev.map((s) => {
-                if (!s.id) return s
-                const base = committedAvailable[s.id]
-                if (base === undefined) return s
-                return { ...s, available: base }
-            }),
-        )
+        setSizes((prev) => {
+            const reverted = prev
+                .filter((s) => !!s.id)
+                .map((s) => {
+                    const base = committedAvailable[s.id!]
+                    if (base === undefined) return s
+                    return { ...s, available: base }
+                })
+            const restored = pendingRemovals.map((s) => ({ id: s.id, size: s.size, available: s.available }))
+            return [...reverted, ...restored]
+        })
+        setPendingRemovals([])
         setInventoryConfirming(false)
         setInventoryUnlocked(false)
         if (pendingNavTo) {
@@ -357,7 +468,6 @@ export function ProductForm({
 
     const tabIndex = TABS.findIndex((t) => t.key === activeTab)
     const isLastTab = tabIndex === TABS.length - 1
-    const showPreview = tabIndex > 0 && !hidePreview
 
     const errors = warnings.filter((w) => w.severity === 'error')
 
@@ -446,13 +556,25 @@ export function ProductForm({
             material: material || undefined,
             color: color || undefined,
             colorHex: colorHex || undefined,
+            attribute1: attribute1 || undefined,
+            attribute2: attribute2 || undefined,
             price: Number(price),
             published,
             images,
             sizes: sizes.filter((s) => s.size),
         }
         if (product) {
-            await updateProduct(product.id, data)
+            try {
+                await updateProduct(product.id, data)
+                // Reset the dirty baseline so "Save Changes" goes idle, and
+                // pull fresh server state in case any field was normalized
+                // (e.g. auto-generated slug).
+                initialSignatureRef.current = currentSignature
+                setWarnings([])
+                router.refresh()
+            } finally {
+                setIsSubmitting(false)
+            }
         } else {
             await createProduct(data)
         }
@@ -461,39 +583,81 @@ export function ProductForm({
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
 
-            {showPreview && (
-                <GridItemPreview
-                    name={name}
-                    material={material}
-                    color={color}
-                    designerNames={designerNames}
-                    images={images}
-                />
-            )}
-
-            {/* ── Tab bar ── */}
-            {!hideTabs && (
-                <div className="flex items-baseline gap-4 flex-wrap border-b border-neutral-100 pb-3">
-                    {TABS.map((t) => (
-                        <button
-                            key={t.key}
-                            type="button"
-                            onClick={() => jumpToTab(t.key)}
-                            className="font-alte text-[26px] leading-none tracking-[-0.02em] text-black transition-opacity active:opacity-60"
-                            style={{ opacity: activeTab === t.key ? 1 : 0.18 }}
-                        >
-                            {t.label}
-                        </button>
-                    ))}
-                </div>
-            )}
+            {/* ── Tab bar (two-level: top groups + sub-tabs) ── */}
+            {!hideTabs && (() => {
+                const activeGroup = TAB_GROUP[activeTab]
+                const subTabs = TABS.filter((t) => TAB_GROUP[t.key] === activeGroup)
+                return (
+                    <div className="space-y-3 border-b border-neutral-100 pb-3">
+                        <div className="flex items-baseline gap-5 flex-wrap">
+                            {GROUPS.map((g) => {
+                                const firstSubTab = TABS.find((t) => TAB_GROUP[t.key] === g.key)
+                                if (!firstSubTab) return null
+                                return (
+                                    <button
+                                        key={g.key}
+                                        type="button"
+                                        onClick={() => {
+                                            if (activeGroup === g.key) return
+                                            jumpToTab(firstSubTab.key)
+                                        }}
+                                        className="font-alte text-[26px] leading-none tracking-[-0.02em] text-black transition-opacity active:opacity-60"
+                                        style={{ opacity: activeGroup === g.key ? 1 : 0.18 }}
+                                    >
+                                        {g.label}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                        {subTabs.length > 1 && (
+                            <div className="flex items-baseline gap-4 flex-wrap">
+                                {subTabs.map((t) => (
+                                    <button
+                                        key={t.key}
+                                        type="button"
+                                        onClick={() => jumpToTab(t.key)}
+                                        className="font-reformat text-[11px] tracking-[0.12em] uppercase text-black transition-opacity active:opacity-60"
+                                        style={{ opacity: activeTab === t.key ? 1 : 0.32 }}
+                                    >
+                                        {t.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )
+            })()}
 
             {/* ── Identity ── */}
             {activeTab === 'identity' && (
                 <div className="space-y-5">
                     <div>
                         <p className="text-sm font-bold mb-3">Product Images:</p>
-                        <ImageManager images={images} onChange={setImages} />
+                        {product ? (
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="flex gap-2 overflow-x-auto">
+                                    {images.slice(0, 6).map((image, index) => (
+                                        <div
+                                            key={image.url + index}
+                                            className="relative w-12 h-14 shrink-0 bg-neutral-100 overflow-hidden"
+                                        >
+                                            <Image src={image.url} alt="" fill className="object-cover" />
+                                        </div>
+                                    ))}
+                                    {images.length === 0 && (
+                                        <p className="text-xs text-neutral-400">No images yet</p>
+                                    )}
+                                </div>
+                                <Link
+                                    href={`/admin/products/${product.id}/images`}
+                                    className="text-xs font-bold underline underline-offset-2 whitespace-nowrap"
+                                >
+                                    Manage Images →
+                                </Link>
+                            </div>
+                        ) : (
+                            <ImageManager images={images} onChange={setImages} />
+                        )}
                     </div>
 
                     <div className="pt-3 border-t border-neutral-100">
@@ -547,6 +711,31 @@ export function ProductForm({
             {/* ── Look ── */}
             {activeTab === 'look' && (
                 <div className="space-y-5">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="attribute1" className={labelClass}>Attribute 1:</label>
+                            <input
+                                id="attribute1"
+                                type="text"
+                                value={attribute1}
+                                onChange={(e) => setAttribute1(e.target.value)}
+                                placeholder="Shown above description on PDP"
+                                className={inputClass}
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="attribute2" className={labelClass}>Attribute 2:</label>
+                            <input
+                                id="attribute2"
+                                type="text"
+                                value={attribute2}
+                                onChange={(e) => setAttribute2(e.target.value)}
+                                placeholder="Shown above description on PDP"
+                                className={inputClass}
+                            />
+                        </div>
+                    </div>
+
                     <div>
                         <label htmlFor="material" className={labelClass}>Material:</label>
                         <input
@@ -595,7 +784,12 @@ export function ProductForm({
                             <button
                                 type="button"
                                 onClick={addSize}
-                                disabled={sizes.length >= AVAILABLE_SIZES.length}
+                                disabled={
+                                    (!!product && !inventoryUnlocked) ||
+                                    sizes.length >= AVAILABLE_SIZES.length - 1 ||
+                                    sizes.some((s) => s.size === ONE_SIZE)
+                                }
+                                title={product && !inventoryUnlocked ? 'Unlock inventory to add a size' : undefined}
                                 className="text-xs underline hover:no-underline disabled:opacity-40"
                             >
                                 Add Size
@@ -627,7 +821,13 @@ export function ProductForm({
                                         className="px-4 py-3 bg-neutral-100 rounded-lg text-sm focus:outline-none focus:bg-neutral-200 transition-colors disabled:opacity-60"
                                     >
                                         {AVAILABLE_SIZES.map((size) => (
-                                            <option key={size} value={size}>{size}</option>
+                                            <option
+                                                key={size}
+                                                value={size}
+                                                disabled={size === ONE_SIZE && sizes.length > 1}
+                                            >
+                                                {size}
+                                            </option>
                                         ))}
                                     </select>
                                     {isExisting ? (
@@ -678,14 +878,37 @@ export function ProductForm({
                                             placeholder="Available"
                                         />
                                     )}
-                                    <button
-                                        type="button"
-                                        onClick={() => removeSize(index)}
-                                        disabled={sizes.length === 1}
-                                        className="text-xs text-neutral-400 hover:text-red-500 underline hover:no-underline disabled:opacity-30 whitespace-nowrap"
-                                    >
-                                        Remove
-                                    </button>
+                                    {(() => {
+                                        const committedStock = isExisting
+                                            ? committedAvailable[sizeItem.id!] ?? 0
+                                            : 0
+                                        const reserved = isExisting ? reservedById[sizeItem.id!] ?? 0 : 0
+                                        const hasUncommittedEdit = isExisting && delta !== 0
+                                        const lockedForExisting = isExisting && !!product && !inventoryUnlocked
+                                        const blocked =
+                                            lockedForExisting || committedStock > 0 || reserved > 0 || hasUncommittedEdit
+                                        const blockReason =
+                                            lockedForExisting
+                                                ? 'Unlock inventory to remove a size'
+                                                : reserved > 0
+                                                ? `${reserved} unit(s) reserved by open orders — cancel/fulfill first`
+                                                : committedStock > 0
+                                                  ? `Has ${committedStock} in stock — unlock inventory, decrement to 0, and confirm changes first`
+                                                  : hasUncommittedEdit
+                                                    ? 'Uncommitted inventory edit — confirm or discard it first'
+                                                    : undefined
+                                        return (
+                                            <button
+                                                type="button"
+                                                onClick={() => removeSize(index)}
+                                                disabled={sizes.length === 1 || blocked}
+                                                title={blockReason}
+                                                className="text-xs text-neutral-400 hover:text-red-500 underline hover:no-underline disabled:opacity-30 disabled:no-underline disabled:cursor-not-allowed whitespace-nowrap"
+                                            >
+                                                Remove
+                                            </button>
+                                        )
+                                    })()}
                                 </div>
                             )
                         })}
@@ -693,7 +916,7 @@ export function ProductForm({
                     {product && (
                         <p className="text-[10px] font-reformat tracking-[0.05em] text-neutral-400">
                             {inventoryUnlocked
-                                ? 'Inventory unlocked — adjust with +/−, then lock to confirm and log.'
+                                ? 'Inventory unlocked — adjust stock, add, or remove sizes, then lock to confirm and log.'
                                 : 'Inventory locked. Click the lock to make changes.'}
                         </p>
                     )}
@@ -704,7 +927,7 @@ export function ProductForm({
             {inventoryConfirming && product && (
                 <InventoryConfirmModal
                     productName={product.name}
-                    changes={inventoryChanges}
+                    changes={allInventoryChanges}
                     saving={inventorySaving}
                     onConfirm={handleInventoryConfirm}
                     onCancel={handleInventoryCancel}
@@ -876,81 +1099,6 @@ export function ProductForm({
             </div>
 
         </form>
-    )
-}
-
-// ── Grid Item Preview ────────────────────────────────────────────────────────
-// Mirrors the desktop layout of components/store/product-card.tsx at a fixed
-// width, pinned to the left edge of the screen. Updates live as the form fills.
-
-function GridItemPreview({
-    name,
-    material,
-    color,
-    designerNames,
-    images,
-}: {
-    name: string
-    material: string
-    color: string
-    designerNames: string[]
-    images: ImageData[]
-}) {
-    const primary =
-        images.find((i) => i.isDesktopPrimary)?.url ??
-        images.find((i) => i.isMobilePrimary)?.url ??
-        images[0]?.url ??
-        null
-    const designerLabel = formatDesignerNames(designerNames)
-    const keepDesignerSingleLine = designerNames.filter(Boolean).length < 3
-
-    return (
-        <div className="hidden lg:block fixed left-[8px] top-[120px] z-[55] w-[220px] pointer-events-none">
-            <p className="font-reformat text-[8px] tracking-[0.12em] uppercase text-neutral-500 mb-2 pl-1">
-                Grid Preview
-            </p>
-            <div className="relative bg-white border border-black/10">
-                <div className="relative" style={{ aspectRatio: '3587 / 4400' }}>
-                    {primary ? (
-                        <Image
-                            src={primary}
-                            alt=""
-                            fill
-                            className="object-cover"
-                            sizes="220px"
-                        />
-                    ) : (
-                        <div className="absolute inset-0 bg-neutral-50 flex items-center justify-center text-[8pt] text-neutral-300">
-                            No Image
-                        </div>
-                    )}
-                </div>
-                <div className="bg-gray-100/20 pt-6 pb-5 opacity-90">
-                    <div className="grid grid-cols-2 text-[6pt] font-bold">
-                        <div className="text-left pl-3">
-                            {material && (
-                                <p className="lowercase">{material}</p>
-                            )}
-                            {color && (
-                                <p className="lowercase mt-0.5">{color}</p>
-                            )}
-                        </div>
-                        <div className="text-right pr-3">
-                            <p className="truncate">{name || '—'}</p>
-                            {designerLabel && (
-                                <p
-                                    className={`mt-4 ${
-                                        keepDesignerSingleLine ? 'whitespace-nowrap' : ''
-                                    }`}
-                                >
-                                    {designerLabel}
-                                </p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
     )
 }
 

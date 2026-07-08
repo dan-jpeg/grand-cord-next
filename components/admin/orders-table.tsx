@@ -110,6 +110,7 @@ export function OrdersTable({ orders }: { orders: OrderWithItems[] }) {
                             key={order.id}
                             href={`/admin/orders/${order.id}`}
                             className={`grid items-center px-4 py-2 border-r  border-l-[2px] hover:border-b-[2px] hover:border-l-[3px] border-b border-black  transition-border
+                                gap-x-3 lg:gap-x-0
                                 grid-cols-[auto_auto_1fr_auto]
                                 lg:grid-cols-[1fr_3fr_4fr_5fr_3fr_5fr_3fr_3fr_4fr]
                                 ${index % 2 === 0 ? 'bg-white' : 'bg-white'}

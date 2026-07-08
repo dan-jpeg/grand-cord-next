@@ -1,0 +1,5 @@
+ALTER TABLE "Collection"
+  ADD COLUMN "showInCatalog" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN "showInSample"  BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN "showInSearch"  BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN "sortOrder"     INTEGER NOT NULL DEFAULT 0;

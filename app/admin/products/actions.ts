@@ -18,6 +18,8 @@ type ProductFormData = {
     material?: string
     color?: string
     colorHex?: string
+    attribute1?: string
+    attribute2?: string
     price: number
     published: boolean
     images: {
@@ -25,6 +27,10 @@ type ProductFormData = {
         isMobilePrimary: boolean
         isDesktopPrimary: boolean
         isCartPrimary: boolean
+        isGrid1x1Primary: boolean
+        isGrid2x2Primary: boolean
+        isGrid3x3Primary: boolean
+        showOnPdp: boolean
     }[]
     sizes: {
         size: string
@@ -87,6 +93,8 @@ export async function createProduct(data: ProductFormData) {
         material: data.material,
         color: data.color,
         colorHex: data.colorHex,
+        attribute1: data.attribute1,
+        attribute2: data.attribute2,
         price: data.price,
         published: data.published,
         images: JSON.parse(JSON.stringify(data.images)),
@@ -146,11 +154,11 @@ export async function updateProduct(id: string, data: ProductFormData) {
         }
     }
 
-    // Filter out duplicate sizes (keep only unique size values)
-    const uniqueSizes = data.sizes.filter((size, index, self) =>
-        index === self.findIndex(s => s.size === size.size)
-    )
-
+    // Sizes are intentionally not touched here. Adding/removing a size and
+    // adjusting its stock are all inventory mutations, not product-listing
+    // edits — they go through the lock/commit flow (commitInventoryChanges)
+    // so every change is atomic and shows up in the inventory log. This form
+    // submit is for name/price/images/etc. only.
     const updatePayload: Prisma.ProductUpdateInput = {
         name: data.name,
         slug: data.slug || slugify(data.name),
@@ -159,36 +167,21 @@ export async function updateProduct(id: string, data: ProductFormData) {
         material: data.material,
         color: data.color,
         colorHex: data.colorHex,
+        attribute1: data.attribute1,
+        attribute2: data.attribute2,
         price: data.price,
         published: data.published,
         images: JSON.parse(JSON.stringify(data.images)),
-        sizes: {
-            create: uniqueSizes.map(s => ({
-                size: s.size,
-                available: s.available,
-                committed: 0,
-                total: s.available,
-            })),
-        },
     }
     ;(updatePayload as Record<string, unknown>).keywords = keywords
 
-    // Use transaction to delete and create sizes
-    await prisma.$transaction([
-        // Delete existing sizes
-        prisma.productSize.deleteMany({
-            where: { productId: id },
-        }),
-        // Update product and create new sizes
-        prisma.product.update({
-            where: { id },
-            data: updatePayload,
-        }),
-    ])
+    await prisma.product.update({
+        where: { id },
+        data: updatePayload,
+    })
 
     revalidatePath('/admin/products')
     revalidatePath(`/admin/products/${id}/edit`)
-    redirect('/admin/products')
 }
 
 export async function updateSizeStock(sizeId: string, delta: number) {
@@ -208,8 +201,12 @@ export async function updateSizeStock(sizeId: string, delta: number) {
 export async function commitInventoryChanges(
     productId: string,
     changes: { sizeId: string; delta: number }[],
+    additions: { size: string; available: number }[] = [],
+    removals: string[] = [],
 ) {
-    if (!changes.length) return { ok: true as const }
+    if (!changes.length && !additions.length && !removals.length) {
+        return { ok: true as const, createdSizes: [] as { id: string; size: string; available: number }[] }
+    }
 
     const session = await auth()
     if (!session?.user) {
@@ -219,34 +216,55 @@ export async function commitInventoryChanges(
     const adminEmail = (session.user.email as string | undefined) ?? 'unknown'
     const adminName = (session.user.name as string | null | undefined) ?? null
 
+    const product = await prisma.product.findUnique({
+        where: { id: productId },
+        select: { id: true, name: true },
+    })
+    if (!product) throw new Error('Product not found')
+
     const sizes = await prisma.productSize.findMany({
         where: { id: { in: changes.map((c) => c.sizeId) } },
-        include: { product: { select: { id: true, name: true } } },
     })
     const sizeById = new Map(sizes.map((s) => [s.id, s]))
 
-    const ops: Prisma.PrismaPromise<unknown>[] = []
-    for (const { sizeId, delta } of changes) {
-        if (!delta) continue
-        const size = sizeById.get(sizeId)
-        if (!size) continue
-        const before = size.available
-        const after = Math.max(0, before + delta)
-        const effectiveDelta = after - before
-        if (effectiveDelta === 0) continue
+    // Adding a size is allowed unconditionally. Removing one is only allowed
+    // once its stock (and any order holds) have been zeroed out — the client
+    // guards this via the lock flow, but a stale payload could otherwise
+    // wipe stock here, so re-check server-side.
+    const removalSizes = removals.length
+        ? await prisma.productSize.findMany({ where: { id: { in: removals } } })
+        : []
+    const blocking = removalSizes.filter((s) => s.available > 0 || s.committed > 0)
+    if (blocking.length > 0) {
+        const detail = blocking
+            .map((s) => `${s.size} (${s.available} avail, ${s.committed} reserved)`)
+            .join(', ')
+        throw new Error(
+            `Cannot remove size with inventory: ${detail}. Zero out stock and fulfill/cancel any open orders first.`,
+        )
+    }
 
-        ops.push(
-            prisma.productSize.update({
+    const createdSizes: { id: string; size: string; available: number }[] = []
+
+    await prisma.$transaction(async (tx) => {
+        for (const { sizeId, delta } of changes) {
+            if (!delta) continue
+            const size = sizeById.get(sizeId)
+            if (!size) continue
+            const before = size.available
+            const after = Math.max(0, before + delta)
+            const effectiveDelta = after - before
+            if (effectiveDelta === 0) continue
+
+            await tx.productSize.update({
                 where: { id: sizeId },
                 data: { available: after, total: after + size.committed },
-            }),
-        )
-        ops.push(
-            prisma.inventoryChangeLog.create({
+            })
+            await tx.inventoryChangeLog.create({
                 data: {
-                    productId: size.product.id,
+                    productId: product.id,
                     productSizeId: size.id,
-                    productName: size.product.name,
+                    productName: product.name,
                     sizeLabel: size.size,
                     delta: effectiveDelta,
                     before,
@@ -255,18 +273,50 @@ export async function commitInventoryChanges(
                     adminEmail,
                     adminName,
                 },
-            }),
-        )
-    }
+            })
+        }
 
-    if (ops.length) {
-        await prisma.$transaction(ops)
-    }
+        for (const a of additions) {
+            const label = a.size.trim()
+            if (!label) continue
+            const available = Math.max(0, a.available)
+            const created = await tx.productSize.create({
+                data: {
+                    productId: product.id,
+                    size: label,
+                    available,
+                    committed: 0,
+                    total: available,
+                },
+            })
+            createdSizes.push({ id: created.id, size: created.size, available: created.available })
+            if (available > 0) {
+                await tx.inventoryChangeLog.create({
+                    data: {
+                        productId: product.id,
+                        productSizeId: created.id,
+                        productName: product.name,
+                        sizeLabel: label,
+                        delta: available,
+                        before: 0,
+                        after: available,
+                        adminUserId,
+                        adminEmail,
+                        adminName,
+                    },
+                })
+            }
+        }
+
+        for (const s of removalSizes) {
+            await tx.productSize.delete({ where: { id: s.id } })
+        }
+    })
 
     revalidatePath('/admin/products')
     revalidatePath(`/admin/products/${productId}/edit`)
     revalidatePath('/admin/logs')
-    return { ok: true as const }
+    return { ok: true as const, createdSizes }
 }
 
 export async function deleteProduct(id: string) {

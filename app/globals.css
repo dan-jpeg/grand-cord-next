@@ -118,4 +118,5 @@ html {
 
 html, body {
   overscroll-behavior: none;
+  text-size-adjust: 100%;
 }

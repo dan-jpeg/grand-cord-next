@@ -190,8 +190,8 @@ export function ProductsSidebarView({ products }: { products: ProductWithSizes[]
                    state — far more reliable than ::view-transition-* in this
                    layout because the whole DOM tree re-mounts on state change. */
                 @keyframes rowFadeUp {
-                    from { opacity: 0; transform: translateY(10px); }
-                    to   { opacity: 1; transform: translateY(0); }
+                    from { opacity: 0; }
+                    to   { opacity: 1; }
                 }
                 .row-stagger > * {
                     animation: rowFadeUp 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -366,7 +366,6 @@ export function ProductsSidebarView({ products }: { products: ProductWithSizes[]
                                         product={selected}
                                         orders={detail?.orders ?? []}
                                         inventoryLogs={detail?.inventoryLogs ?? []}
-                                        hidePreview
                                     />
                                 </div>
                             </div>

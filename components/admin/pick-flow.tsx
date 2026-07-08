@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { motion, AnimatePresence, LayoutGroup, useMotionValue, useTransform, animate } from 'framer-motion'
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
 import { markOrderShipped, partialRefundItem, cancelOrder } from '@/app/admin/pick/actions'
 import { RoomOverviewSheet } from './room-overview-sheet'
 import { AdminNav } from './admin-nav'
@@ -213,7 +213,6 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
     const [phase, setPhase] = useState<Phase>('queue')
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(orders.map(o => o.id)))
     const [tasks, setTasks] = useState<PickTask[]>([])
-    const [taskIndex, setTaskIndex] = useState(0)
     // Per-detail state: key = `${taskIndex}__${detailIndex}`. Each task detail
     // (one order's line in a shared SKU pull) tracks two flags independently
     // so we can express "Order A got it, Order B didn't" within a single task.
@@ -223,13 +222,6 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
     const [shipIndex, setShipIndex] = useState(0)
     const [showOverview, setShowOverview] = useState(false)
     const [runOrders, setRunOrders] = useState<FlowOrder[]>([])
-
-    const dragX = useMotionValue(0)
-    const dragRotate = useTransform(dragX, [-200, 200], [-3, 3])
-    const swipeNextOpacity = useTransform(dragX, [-120, -30], [1, 0])
-    const swipePrevOpacity = useTransform(dragX, [30, 120], [0, 1])
-
-    useEffect(() => { dragX.set(0) }, [taskIndex, dragX])
 
     const allSelected = selectedIds.size === orders.length
     const noneSelected = selectedIds.size === 0
@@ -250,7 +242,6 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
         setTasks(builtTasks)
         setShipOrders(builtShip)
         setRunOrders(selected)
-        setTaskIndex(0)
         setPickedDetails(new Set())
         setMissingDetails(new Set())
         setShipIndex(0)
@@ -282,24 +273,6 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
         return pickedCount === pickable
     }
 
-    // A task is "resolved" (nothing more to do) when every detail has been
-    // either picked or marked missing.
-    function isTaskResolved(
-        ti: number,
-        taskList: PickTask[] = tasks,
-        picked: Set<string> = pickedDetails,
-        missing: Set<string> = missingDetails,
-    ): boolean {
-        const t = taskList[ti]
-        if (!t) return false
-        for (let di = 0; di < t.details.length; di++) {
-            const k = detailKey(ti, di)
-            if (missing.has(k)) continue
-            if (!picked.has(k)) return false
-        }
-        return true
-    }
-
     function isTaskFullyMissing(
         ti: number,
         taskList: PickTask[] = tasks,
@@ -308,24 +281,6 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
         const t = taskList[ti]
         if (!t || t.details.length === 0) return false
         return t.details.every((_, di) => missing.has(detailKey(ti, di)))
-    }
-
-    // Bulk: mark every detail of a task missing. Used by the single-order
-    // unavailable sheet (where one detail == the whole task) and by callers
-    // that want the legacy "whole task missing" behavior.
-    function markTaskMissing(index: number) {
-        const t = tasks[index]
-        if (!t) return
-        setMissingDetails(prev => {
-            const next = new Set(prev)
-            for (let di = 0; di < t.details.length; di++) next.add(detailKey(index, di))
-            return next
-        })
-        setPickedDetails(prev => {
-            const next = new Set(prev)
-            for (let di = 0; di < t.details.length; di++) next.delete(detailKey(index, di))
-            return next
-        })
     }
 
     // Per-row unavailable: mark a subset of details missing and (optionally)
@@ -353,28 +308,6 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
         }
     }
 
-    // Swipe-card "I picked this product" toggle: flips ALL non-missing details
-    // of the task between picked and unpicked together. Per-detail toggles
-    // still happen via the overview (togglePickedDetail).
-    function toggleAllPickedForTask(index: number) {
-        const t = tasks[index]
-        if (!t) return
-        const pickableIndices = t.details
-            .map((_, di) => di)
-            .filter(di => !missingDetails.has(detailKey(index, di)))
-        if (pickableIndices.length === 0) return
-        setPickedDetails(prev => {
-            const next = new Set(prev)
-            const currentlyAll = pickableIndices.every(di => next.has(detailKey(index, di)))
-            if (currentlyAll) {
-                for (const di of pickableIndices) next.delete(detailKey(index, di))
-            } else {
-                for (const di of pickableIndices) next.add(detailKey(index, di))
-            }
-            return next
-        })
-    }
-
     function togglePickedDetail(taskIndex: number, detailIndex: number) {
         // Missing details can't be toggled to picked — they were resolved
         // through the unavailable flow.
@@ -388,9 +321,9 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
         })
     }
 
-    // Derived view of task-level status, used by ProgressStrip + overview
-    // for the missing/picked decoration. 'missing' here means EVERY detail
-    // of the task was marked unavailable.
+    // Derived view of task-level status, passed to the overview for the
+    // missing/picked decoration. 'missing' here means EVERY detail of the
+    // task was marked unavailable.
     const taskStatusesDerived: Record<number, TaskStatus> = (() => {
         const out: Record<number, TaskStatus> = {}
         tasks.forEach((_, i) => {
@@ -399,33 +332,6 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
         })
         return out
     })()
-
-    function advanceTask(removedOrderId?: string, autoResolveCurrent?: boolean) {
-        if (removedOrderId) {
-            setShipOrders(prev => prev.filter(o => o.id !== removedOrderId))
-        }
-        const resolvedIndices = new Set<number>()
-        for (let i = 0; i < tasks.length; i++) {
-            if (isTaskResolved(i)) resolvedIndices.add(i)
-        }
-        if (autoResolveCurrent) resolvedIndices.add(taskIndex)
-
-        const nextUnresolved = tasks.findIndex((_, i) => i !== taskIndex && !resolvedIndices.has(i))
-        if (nextUnresolved !== -1) {
-            const forward = tasks.findIndex((_, i) => i > taskIndex && !resolvedIndices.has(i))
-            setTaskIndex(forward !== -1 ? forward : nextUnresolved)
-            return
-        }
-
-        const remaining = removedOrderId
-            ? shipOrders.filter(o => o.id !== removedOrderId)
-            : shipOrders
-        if (remaining.length === 0) {
-            router.push('/admin/orders')
-        } else {
-            setPhase('shipping')
-        }
-    }
 
     const batchDotColor = mostUrgentColor(orders)
 
@@ -451,7 +357,7 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                         <div className="flex flex-col bg-[#e8e8e8] w-full h-full md:max-w-screen-sm md:border md:border-black">
                             {orders.length === 0 ? (
                                 <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
-                                    <span className="font-alte text-[36px] tracking-[-0.03em] leading-none opacity-20">Pick Queue</span>
+                                    <span className="font-alte text-[36px] tracking-[-0.03em] leading-none opacity-20">Pick Session</span>
                                     <span className="text-[13px] font-medium text-neutral-400 text-center leading-relaxed">
                                         No orders waiting to ship.
                                     </span>
@@ -460,7 +366,7 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                             <>
                             <div className="flex-1 overflow-y-auto">
                                 <div className="flex items-start justify-center pt-12 pb-10 gap-[4px]">
-                                    <span className="font-alte text-[36px] tracking-[-0.03em] leading-none">Pick Queue</span>
+                                    <span className="font-alte text-[36px] tracking-[-0.03em] leading-none">Pick Session</span>
                                     <span
                                         className="flex-shrink-0 rounded-full bg-black flex items-center justify-center text-white font-bold leading-none select-none"
                                         style={{ width: 10, height: 10, fontSize: 7, marginTop: 3 }}
@@ -579,376 +485,16 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.18 }}
                 >
-                    <CalculatingBody onContinue={() => setPhase('picking')} />
+                    <CalculatingBody onContinue={() => {
+                        setPhase('picking')
+                        setShowOverview(true)
+                    }} />
                 </motion.div>
             )}
 
-            {/* ── Picking ── */}
-            {phase === 'picking' && tasks.length > 0 && (() => {
-                const current = tasks[taskIndex]
-                const totalQty = current.details.reduce((s, d) => s + d.quantity, 0)
-                // An order is fully resolved only when, for every task containing it,
-                // either the task is marked missing OR every detail of that order
-                // within the task has been picked.
-                const orderIsFullyResolved = (orderId: string): boolean => {
-                    for (let i = 0; i < tasks.length; i++) {
-                        const t = tasks[i]
-                        for (let di = 0; di < t.details.length; di++) {
-                            if (t.details[di].orderId !== orderId) continue
-                            const k = detailKey(i, di)
-                            if (missingDetails.has(k)) continue
-                            if (!pickedDetails.has(k)) return false
-                        }
-                    }
-                    return true
-                }
-                // Past: unique orders from already-completed tasks
-                const pastPills: Array<{ orderId: string; label: string; createdAt: Date; done: boolean }> = []
-                const seenOrders = new Set<string>()
-                for (let i = 0; i < taskIndex; i++) {
-                    for (const d of tasks[i].details) {
-                        if (!seenOrders.has(d.orderId)) {
-                            seenOrders.add(d.orderId)
-                            pastPills.push({ orderId: d.orderId, label: d.orderLabel, createdAt: d.createdAt, done: orderIsFullyResolved(d.orderId) })
-                        }
-                    }
-                }
-                // Current (dedupe against past, mark as seen so upcoming dedupes)
-                const currentPills: Array<{ orderId: string; label: string; createdAt: Date }> = []
-                for (const d of current.details) {
-                    if (!seenOrders.has(d.orderId)) {
-                        seenOrders.add(d.orderId)
-                        currentPills.push({ orderId: d.orderId, label: d.orderLabel, createdAt: d.createdAt })
-                    }
-                }
-                // Upcoming: next unique orders
-                const upcomingPills: Array<{ orderId: string; label: string; createdAt: Date }> = []
-                for (let i = taskIndex + 1; i < tasks.length && upcomingPills.length < 4; i++) {
-                    for (const d of tasks[i].details) {
-                        if (!seenOrders.has(d.orderId) && upcomingPills.length < 4) {
-                            seenOrders.add(d.orderId)
-                            upcomingPills.push({ orderId: d.orderId, label: d.orderLabel, createdAt: d.createdAt })
-                        }
-                    }
-                }
-
-                return (
-                    <motion.div
-                        key="picking"
-                        className="fixed inset-0 flex flex-col bg-[#f2f2f2]"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.18 }}
-                    >
-                        {/* White header slab */}
-                        <div className="flex-shrink-0 bg-white pt-8 pb-5 px-5 relative">
-                            <button
-                                onClick={() => taskIndex > 0 ? setTaskIndex(i => i - 1) : setPhase('queue')}
-                                className="absolute right-5 top-8 text-[11px] font-medium text-neutral-400"
-                            >
-                                ← back
-                            </button>
-                            <div className="flex items-baseline gap-[14px] mb-4">
-                                <span className="font-alte text-[53px] leading-none tracking-[-0.03em] text-black">
-                                    Queue
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowOverview(true)}
-                                    className="font-alte text-[53px] leading-none tracking-[-0.03em] text-black opacity-[0.18] active:opacity-40 transition-opacity"
-                                >
-                                    Overview
-                                </button>
-                            </div>
-                            <div className="flex gap-[6px] overflow-x-auto [&::-webkit-scrollbar]:hidden">
-                                <AnimatePresence>
-                                    {pastPills.map((p) => (
-                                        <motion.div
-                                            key={p.orderId}
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 0.45 }}
-                                            exit={{ opacity: 0 }}
-                                            transition={{ duration: 0.2 }}
-                                        >
-                                            <OrderBadge label={p.label} createdAt={p.createdAt} done={p.done} />
-                                        </motion.div>
-                                    ))}
-                                    {currentPills.map((p) => (
-                                        <motion.div
-                                            key={p.orderId}
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            exit={{ opacity: 0 }}
-                                            transition={{ duration: 0.2 }}
-                                        >
-                                            <OrderBadge label={p.label} createdAt={p.createdAt} />
-                                        </motion.div>
-                                    ))}
-                                    {upcomingPills.map((p) => (
-                                        <motion.div
-                                            key={p.orderId}
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 0.2 }}
-                                            exit={{ opacity: 0 }}
-                                            transition={{ duration: 0.2 }}
-                                        >
-                                            <OrderBadge label={p.label} createdAt={p.createdAt} />
-                                        </motion.div>
-                                    ))}
-                                </AnimatePresence>
-                            </div>
-                        </div>
-
-                        <ProgressStrip
-                            tasks={tasks}
-                            taskIndex={taskIndex}
-                            taskStatuses={taskStatusesDerived}
-                            onJump={(i) => setTaskIndex(i)}
-                        />
-
-                        {/* Name badge + quantity */}
-                        <div className="px-5 pb-3 flex-shrink-0 flex items-center gap-4">
-                            <div className="bg-white px-[10px] py-[5px] max-w-[70%] overflow-hidden relative">
-                                <AnimatePresence mode="wait">
-                                    <motion.span
-                                        key={current.productName}
-                                        className="font-alte font-bold text-[22px] tracking-[-0.01em] leading-none block truncate"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        transition={{ duration: 0.2 }}
-                                    >
-                                        {current.productName}
-                                    </motion.span>
-                                </AnimatePresence>
-                            </div>
-                            <div className="overflow-hidden">
-                                <AnimatePresence mode="wait">
-                                    <motion.span
-                                        key={totalQty}
-                                        className="font-alte text-[22px] leading-none block"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        transition={{ duration: 0.2 }}
-                                    >
-                                        x{totalQty}
-                                    </motion.span>
-                                </AnimatePresence>
-                            </div>
-                        </div>
-
-                        {/* Swipe-to-navigate image area */}
-                        <motion.div
-                            className="flex-1 mx-auto relative w-full max-w-[240px]"
-                            drag="x"
-                            dragConstraints={{ left: -140, right: 140 }}
-                            dragElastic={0.25}
-                            style={{ x: dragX, rotate: dragRotate }}
-                            onDragEnd={(_, info) => {
-                                const snap = { type: 'spring', stiffness: 400, damping: 30 } as const
-                                const swipedLeft = info.offset.x < -80 || info.velocity.x < -400
-                                const swipedRight = info.offset.x > 80 || info.velocity.x > 400
-                                if (swipedLeft) {
-                                    let target: number | null = null
-                                    if (taskIndex < tasks.length - 1) {
-                                        target = taskIndex + 1
-                                    } else {
-                                        const firstUnresolved = tasks.findIndex((_, i) => !isTaskResolved(i))
-                                        if (firstUnresolved !== -1 && firstUnresolved !== taskIndex) target = firstUnresolved
-                                    }
-                                    if (target !== null) {
-                                        const next = target
-                                        animate(dragX, -300, { duration: 0.2, ease: 'easeIn' }).then(() => {
-                                            dragX.set(0)
-                                            setTaskIndex(next)
-                                        })
-                                    } else {
-                                        animate(dragX, 0, { type: 'spring', stiffness: 400, damping: 30 })
-                                    }
-                                } else if (swipedRight && taskIndex > 0) {
-                                    animate(dragX, 300, { duration: 0.2, ease: 'easeIn' }).then(() => {
-                                        dragX.set(0)
-                                        setTaskIndex(i => i - 1)
-                                    })
-                                } else {
-                                    animate(dragX, 0, snap)
-                                }
-                            }}
-                        >
-                            <AnimatePresence>
-                                <motion.div
-                                    key={taskIndex}
-                                    className="absolute inset-0"
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    exit={{ opacity: 0 }}
-                                    transition={{ duration: 0.15 }}
-                                >
-                                    {/* Float animation decoupled from enter/exit */}
-                                    <motion.div
-                                        className="absolute inset-0"
-                                        animate={{ y: [0, -14, 0], scale: [1, 1.025, 1] }}
-                                        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', delay: 0.15 }}
-                                    >
-                                        {current.cartPhoto ? (
-                                            <Image
-                                                src={current.cartPhoto}
-                                                alt={current.productName}
-                                                fill
-                                                className="object-contain"
-                                                sizes="(max-width: 768px) 100vw, 320px"
-                                                priority
-                                            />
-                                        ) : (
-                                            <div className="absolute inset-0" />
-                                        )}
-                                    </motion.div>
-                                </motion.div>
-                            </AnimatePresence>
-
-                            {/* Swipe-right → next */}
-                            <motion.div
-                                style={{ opacity: swipeNextOpacity }}
-                                className="absolute inset-0 pointer-events-none flex items-center justify-end pr-6"
-                            >
-                                <span className="text-black/30 font-bold text-[28px]">›</span>
-                            </motion.div>
-                            {/* Swipe-left → prev */}
-                            <motion.div
-                                style={{ opacity: swipePrevOpacity }}
-                                className="absolute inset-0 pointer-events-none flex items-center justify-start pl-6"
-                            >
-                                <span className="text-black/30 font-bold text-[28px]">‹</span>
-                            </motion.div>
-                        </motion.div>
-
-                        {/* Caret navigation */}
-                        <div className="flex items-center justify-between px-5 pt-3 pb-1 flex-shrink-0">
-                            <button
-                                onClick={() => taskIndex > 0 && setTaskIndex(i => i - 1)}
-                                disabled={taskIndex === 0}
-                                className="text-[32px] leading-none font-bold text-black/25 disabled:opacity-0 active:text-black/50 transition-opacity px-2 py-1"
-                                aria-label="Previous item"
-                            >
-                                ‹
-                            </button>
-                            <button
-                                onClick={() => {
-                                    if (taskIndex < tasks.length - 1) {
-                                        setTaskIndex(i => i + 1)
-                                    } else {
-                                        const firstUnresolved = tasks.findIndex((_, i) => !isTaskResolved(i))
-                                        if (firstUnresolved !== -1 && firstUnresolved !== taskIndex) setTaskIndex(firstUnresolved)
-                                    }
-                                }}
-                                disabled={taskIndex === tasks.length - 1}
-                                className="text-[32px] leading-none font-bold text-black/25 disabled:opacity-0 active:text-black/50 transition-opacity px-2 py-1"
-                                aria-label="Next item"
-                            >
-                                ›
-                            </button>
-                        </div>
-
-                        {/* Color swatch + size */}
-                        <div className="flex items-center justify-between px-5 pt-3 pb-4 flex-shrink-0">
-                            <div className="overflow-hidden">
-                                <AnimatePresence mode="wait">
-                                    <motion.div
-                                        key={current.color ?? 'none'}
-                                        className="px-[8px] py-[3px]"
-                                        style={{
-                                            backgroundColor: pickColor(current.colorHex, current.color),
-                                            color: '#ffffff',
-                                        }}
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: current.color ? 1 : 0 }}
-                                        exit={{ opacity: 0 }}
-                                        transition={{ duration: 0.2 }}
-                                    >
-                                        <span className="font-reformat text-[20px] tracking-[-0.01em] uppercase leading-none">
-                                            {current.color ?? ''}
-                                        </span>
-                                    </motion.div>
-                                </AnimatePresence>
-                            </div>
-                            <div className="flex flex-col items-end gap-[5px]">
-                                {current.details.map((d, di) => {
-                                    const isMissing = missingDetails.has(detailKey(taskIndex, di))
-                                    return (
-                                        <div
-                                            key={`${d.orderId}-${d.size}-${di}`}
-                                            className="flex items-center gap-[6px]"
-                                            style={{ opacity: isMissing ? 0.45 : 1, textDecoration: isMissing ? 'line-through' : undefined }}
-                                        >
-                                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
-                                                <path d="M2 5L8 2L14 5L8 8L2 5Z" stroke="#1a1a1a" strokeWidth="1.2" strokeLinejoin="round" />
-                                                <path d="M2 5V11L8 14V8" stroke="#1a1a1a" strokeWidth="1.2" strokeLinejoin="round" />
-                                                <path d="M14 5V11L8 14" stroke="#1a1a1a" strokeWidth="1.2" strokeLinejoin="round" />
-                                            </svg>
-                                            <span className="font-alte font-bold text-[15px] leading-none text-black">
-                                                {d.boxNumber}
-                                            </span>
-                                            <span className="font-reformat text-[11px] tracking-[0.06em] text-neutral-500 leading-none">
-                                                S:{d.size} ×{d.quantity}
-                                            </span>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        </div>
-
-                        <div className="px-5 pb-3 flex-shrink-0">
-                            <ItemUnavailableButton
-                                task={current}
-                                alreadyMissingIndices={new Set(
-                                    current.details
-                                        .map((_, di) => di)
-                                        .filter(di => missingDetails.has(detailKey(taskIndex, di)))
-                                )}
-                                onApplied={(missingIndices, cancelledOrderIds) => {
-                                    applyUnavailable(taskIndex, missingIndices, cancelledOrderIds)
-                                    const projectedMissing = new Set(missingDetails)
-                                    for (const di of missingIndices) projectedMissing.add(detailKey(taskIndex, di))
-                                    const resolved = isTaskResolved(taskIndex, tasks, pickedDetails, projectedMissing)
-                                    if (resolved) {
-                                        advanceTask(cancelledOrderIds[0], true)
-                                    }
-                                }}
-                            />
-                        </div>
-
-                        {(() => {
-                            const totalQty = tasks.reduce((sum, t, i) =>
-                                isTaskFullyMissing(i) ? sum : sum + t.details.reduce((s, d, di) => missingDetails.has(detailKey(i, di)) ? s : s + d.quantity, 0), 0)
-                            const pickedQty = tasks.reduce((sum, t, i) => {
-                                if (isTaskFullyMissing(i)) return sum
-                                return sum + t.details.reduce((s, d, di) => {
-                                    const k = detailKey(i, di)
-                                    if (missingDetails.has(k)) return s
-                                    if (!pickedDetails.has(k)) return s
-                                    return s + d.quantity
-                                }, 0)
-                            }, 0)
-                            return (
-                                <PickToggleBar
-                                    status={isTaskFullyMissing(taskIndex) ? 'missing' : (isTaskFullyPicked(taskIndex) ? 'picked' : undefined)}
-                                    allResolved={tasks.every((_, i) => isTaskResolved(i))}
-                                    accent={pickColor(current.colorHex, current.color)}
-                                    onToggle={() => toggleAllPickedForTask(taskIndex)}
-                                    onDone={() => {
-                                        if (shipOrders.length === 0) router.push('/admin/orders')
-                                        else setPhase('shipping')
-                                    }}
-                                    pickedQty={pickedQty}
-                                    totalQty={totalQty}
-                                />
-                            )
-                        })()}
-                    </motion.div>
-                )
-            })()}
+            {/* Picking phase has no standalone view — the Overview sheet (rendered
+                below, auto-opened from the calculating step) is the working surface
+                for the session. */}
 
             {/* ── Shipping ── */}
             {phase === 'shipping' && shipOrders.length > 0 && (() => {
@@ -982,7 +528,7 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                                         setShipIndex(i => i - 1)
                                     } else {
                                         setPhase('picking')
-                                        setTaskIndex(tasks.length - 1)
+                                        setShowOverview(true)
                                     }
                                 }}
                                 className="absolute right-5 top-8 text-[11px] font-medium text-neutral-400"
@@ -1133,7 +679,12 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                 missingDetails={phase !== 'queue' ? missingDetails : undefined}
                 onTogglePickedDetail={phase !== 'queue' ? togglePickedDetail : undefined}
                 onApplyUnavailable={phase !== 'queue' ? applyUnavailable : undefined}
-                onClose={() => setShowOverview(false)}
+                onClose={() => {
+                    setShowOverview(false)
+                    // In picking phase the overview IS the screen — closing it
+                    // means the user wants to revise their selection.
+                    if (phase === 'picking') setPhase('queue')
+                }}
                 onDone={phase !== 'queue' ? () => {
                     setShowOverview(false)
                     if (shipOrders.length === 0) router.push('/admin/orders')
@@ -1142,196 +693,6 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
             />
 
         </LayoutGroup>
-    )
-}
-
-// ── Progress Strip ────────────────────────────────────────────────────────────
-
-function ProgressStrip({
-    tasks,
-    taskIndex,
-    taskStatuses,
-    onJump,
-}: {
-    tasks: PickTask[]
-    taskIndex: number
-    taskStatuses: Record<number, TaskStatus>
-    onJump?: (index: number) => void
-}) {
-    const currentRef = useRef<HTMLButtonElement>(null)
-
-    useEffect(() => {
-        currentRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
-    }, [taskIndex])
-
-    return (
-        <div className="flex gap-[5px] overflow-x-auto px-5 pt-4 pb-3 flex-shrink-0 [&::-webkit-scrollbar]:hidden">
-            {tasks.map((t, i) => {
-                const status = taskStatuses[i]
-                const isCurrent = i === taskIndex
-                const isFuture = !isCurrent && !status
-                const lid = `photo-${tasks[i].details[0].orderId}-${tasks[i].productId}`
-
-                return (
-                    <button
-                        key={i}
-                        ref={isCurrent ? currentRef : undefined}
-                        type="button"
-                        onClick={() => onJump?.(i)}
-                        className="flex flex-col items-center gap-[4px] flex-shrink-0 cursor-pointer active:scale-95 transition-transform"
-                        aria-label={`Jump to item ${i + 1}`}
-                    >
-                        <motion.div
-                            layoutId={lid}
-                            initial={{ opacity: 0, x: -16 }}
-                            animate={
-                                isCurrent
-                                    ? { opacity: 1, x: 0, scale: [1, 1.06, 1] }
-                                    : { opacity: 1, x: 0, scale: 1 }
-                            }
-                            transition={
-                                isCurrent
-                                    ? {
-                                        ...spring,
-                                        delay: i * 0.04,
-                                        opacity: { duration: 0.2, delay: i * 0.04 },
-                                        scale: { duration: 1.8, repeat: Infinity, ease: 'easeInOut' },
-                                    }
-                                    : { ...spring, delay: i * 0.04, opacity: { duration: 0.2, delay: i * 0.04 } }
-                            }
-                            className="relative rounded-[4px] overflow-hidden flex-shrink-0"
-                            style={{ width: 26, height: 34 }}
-                        >
-                            {t.cartPhoto ? (
-                                <Image
-                                    src={t.cartPhoto}
-                                    alt=""
-                                    fill
-                                    className={`object-cover ${isFuture ? 'grayscale opacity-35' : ''}`}
-                                    sizes="26px"
-                                />
-                            ) : (
-                                <div className={`absolute inset-0 bg-neutral-300 ${isFuture ? 'opacity-35' : ''}`} />
-                            )}
-                            {status === 'missing' && (
-                                <div className="absolute inset-0 bg-red-500/40" />
-                            )}
-                        </motion.div>
-                        <motion.span
-                            className="rounded-full flex-shrink-0"
-                            style={{
-                                width: 4,
-                                height: 4,
-                                backgroundColor: isCurrent ? '#3b82f6' : status === 'picked' ? '#22c55e' : status === 'missing' ? '#f87171' : 'transparent',
-                            }}
-                            animate={isCurrent ? { opacity: [1, 0.4, 1] } : { opacity: 1 }}
-                            transition={isCurrent ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' } : undefined}
-                        />
-                    </button>
-                )
-            })}
-        </div>
-    )
-}
-
-// ── Pick Toggle Bar ──────────────────────────────────────────────────────────
-
-function PickToggleBar({
-    status,
-    allResolved,
-    accent,
-    onToggle,
-    onDone,
-    pickedQty,
-    totalQty,
-}: {
-    status: TaskStatus | undefined
-    allResolved: boolean
-    accent: string
-    onToggle: () => void
-    onDone: () => void
-    pickedQty: number
-    totalQty: number
-}) {
-    const isPicked = status === 'picked'
-    const isMissing = status === 'missing'
-
-    return (
-        <div className="flex-shrink-0 bg-white px-5 pt-5 pb-8 flex items-center justify-between gap-4">
-            {/* Left slot: item counter — dims when all resolved */}
-            <motion.span
-                animate={{ opacity: allResolved ? 0.32 : 0.45 }}
-                transition={{ duration: 0.22 }}
-                className="text-[15px] font-semibold tracking-tight text-black"
-            >
-                {pickedQty}/{totalQty} items
-            </motion.span>
-
-            {/* Right slot: toggle button → Continue to shipping */}
-            <AnimatePresence mode="wait" initial={false}>
-                {allResolved ? (
-                    <motion.button
-                        key="continue"
-                        onClick={onDone}
-                        initial={{ opacity: 0, x: 8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 8 }}
-                        transition={{ duration: 0.22 }}
-                        className="text-[15px] font-semibold tracking-tight flex items-center gap-1"
-                        style={{ color: accent }}
-                    >
-                        Continue to shipping
-                        <span className="text-[16px] leading-none">→</span>
-                    </motion.button>
-                ) : (
-                    <motion.div
-                        key="toggle"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.18 }}
-                    >
-                        <button
-                            onClick={onToggle}
-                            disabled={isMissing}
-                            className="flex items-center gap-3 disabled:opacity-50"
-                        >
-                            <span className="text-[15px] font-semibold tracking-tight">
-                                {isPicked ? 'Picked' : isMissing ? 'Unavailable' : 'Mark as picked'}
-                            </span>
-                            <motion.span
-                                whileTap={{ scale: 0.9 }}
-                                className="rounded-full border-2 flex items-center justify-center transition-colors"
-                                style={{
-                                    width: 36,
-                                    height: 36,
-                                    borderColor: isPicked ? accent : isMissing ? '#f87171' : '#d4d4d4',
-                                    backgroundColor: isPicked ? accent : isMissing ? '#fee2e2' : 'transparent',
-                                }}
-                            >
-                                {isPicked && (
-                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                        <polyline
-                                            points="2,7.5 5.5,11 12,3.5"
-                                            stroke="white"
-                                            strokeWidth="2.2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        />
-                                    </svg>
-                                )}
-                                {isMissing && (
-                                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                                        <line x1="3" y1="3" x2="9" y2="9" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" />
-                                        <line x1="9" y1="3" x2="3" y2="9" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" />
-                                    </svg>
-                                )}
-                            </motion.span>
-                        </button>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
     )
 }
 
@@ -1464,49 +825,6 @@ function TrackingSheet({
 }
 
 // ── Item Unavailable ──────────────────────────────────────────────────────────
-
-function ItemUnavailableButton({
-    task,
-    alreadyMissingIndices,
-    onApplied,
-}: {
-    task: PickTask
-    alreadyMissingIndices: Set<number>
-    onApplied: (missingDetailIndices: number[], cancelledOrderIds: string[]) => void
-}) {
-    const [showSheet, setShowSheet] = useState(false)
-    const remainingDetails = task.details.length - alreadyMissingIndices.size
-    const isMulti = remainingDetails > 1
-
-    return (
-        <>
-            <button
-                onClick={() => setShowSheet(true)}
-                className="text-[10px] text-neutral-400 font-medium"
-            >
-                Item unavailable?
-            </button>
-
-            {showSheet && (
-                isMulti ? (
-                    <MultiOrderUnavailableSheet
-                        task={task}
-                        alreadyMissingIndices={alreadyMissingIndices}
-                        onClose={() => setShowSheet(false)}
-                        onApplied={(missing, cancelled) => { setShowSheet(false); onApplied(missing, cancelled) }}
-                    />
-                ) : (
-                    <ItemUnavailableSheet
-                        task={task}
-                        alreadyMissingIndices={alreadyMissingIndices}
-                        onClose={() => setShowSheet(false)}
-                        onApplied={(missing, cancelled) => { setShowSheet(false); onApplied(missing, cancelled) }}
-                    />
-                )
-            )}
-        </>
-    )
-}
 
 export function ItemUnavailableSheet({
     task,

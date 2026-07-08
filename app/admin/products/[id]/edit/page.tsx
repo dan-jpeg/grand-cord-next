@@ -60,6 +60,20 @@ export default async function ProductDetailPage({
         <div className="absolute inset-0 bg-white overflow-auto">
             <div className="min-h-full flex items-start justify-center py-10 px-6">
                 <div className="w-full max-w-2xl bg-white border border-neutral-200 text-[0.8em]" style={{borderRadius: '2px'}}>
+                    <div className="flex items-center justify-end gap-4 px-4 pt-3">
+                        <Link
+                            href={`/admin/products/${product.id}/images`}
+                            className="text-[10pt] font-bold underline underline-offset-2"
+                        >
+                            Manage images →
+                        </Link>
+                        <Link
+                            href={`/admin/products/${product.id}/sizing`}
+                            className="text-[10pt] font-bold underline underline-offset-2"
+                        >
+                            Manage sizing →
+                        </Link>
+                    </div>
                     <ProductDetailView product={product} orders={orders} inventoryLogs={inventoryLogs} />
                 </div>
             </div>

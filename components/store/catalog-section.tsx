@@ -10,18 +10,28 @@ type ProductWithSizes = Product & {
     sizes: ProductSize[]
 }
 
+type NavConfig = {
+    showSearch: boolean
+    showSample: boolean
+    scrollToTopOnTapMobile: boolean
+    scrollToTopOnTapDesktop: boolean
+    groups: { id: string; name: string; slug: string }[]
+}
+
 type CatalogSectionProps = {
     products: ProductWithSizes[]
     mobileLayout?: '1x1' | '2x2' | '3x3'
     onLayoutChange?: (layout: '1x1' | '2x2' | '3x3') => void
     productCount?: number
+    navConfig?: NavConfig
 }
 
 export function CatalogSection({
                                    products,
                                    mobileLayout = '1x1',
                                    onLayoutChange,
-                                   productCount
+                                   productCount,
+                                   navConfig,
                                }: CatalogSectionProps) {
     const [searchQuery, setSearchQuery] = useState('')
 
@@ -43,6 +53,10 @@ export function CatalogSection({
 
     return (
         <section id="catalog" className="py-24 ">
+            {/* Non-sticky marker for scroll-to-top targeting. The nav below is
+                position: sticky, so once it's pinned its own rect always
+                reads top:0 and scrollIntoView on it becomes a no-op. */}
+            <div data-catalog-scroll-anchor className="hidden lg:block h-0" />
             {/* Only show CatalogNav on desktop */}
             <div className="hidden lg:block sticky top-0 z-50">
                 <CatalogNav
@@ -50,6 +64,7 @@ export function CatalogSection({
                     onSearchChange={setSearchQuery}
                     mobileLayout={mobileLayout}
                     onLayoutChange={onLayoutChange}
+                    navConfig={navConfig}
                 />
             </div>
 
@@ -59,7 +74,7 @@ export function CatalogSection({
                 </div>
             ) : (
                 <>
-                    <div className={`grid gap-x-1.5 gap-y-16 pb-0 ${gridClasses}`}>
+                    <div className={`grid gap-x-[1.5vw] lg:gap-x-2 gap-y-0 pb-0 ${gridClasses}`}>
                         {filteredProducts.map((product, index) => (
                             <ProductCard
                                 key={product.id}
@@ -70,7 +85,7 @@ export function CatalogSection({
                             />
                         ))}
                     </div>
-                    <div className={`grid gap-x-1.5 gap-y-16 pb-0 ${gridClasses}`}>
+                    <div className={`grid gap-x-[1.5vw] lg:gap-x-2 gap-y-0 pb-0 ${gridClasses}`}>
                         {filteredProducts.map((product, index) => (
                             <ProductCard
                                 key={product.id}
@@ -81,28 +96,8 @@ export function CatalogSection({
                             />
                         ))}
                     </div>
-                    <div className={`grid gap-x-1.5 gap-y-16 pb-0 ${gridClasses}`}>
-                        {filteredProducts.map((product, index) => (
-                            <ProductCard
-                                key={product.id}
-                                product={product}
-                                index={index}
-                                compact={mobileLayout === '2x2' || mobileLayout === '3x3'}
-                                cols={mobileLayout === '3x3' ? 3 : mobileLayout === '2x2' ? 2 : 1}
-                            />
-                        ))}
-                    </div>
-                    <div className={`grid gap-x-1.5 gap-y-16 pb-0 ${gridClasses}`}>
-                        {filteredProducts.map((product, index) => (
-                            <ProductCard
-                                key={product.id}
-                                product={product}
-                                index={index}
-                                compact={mobileLayout === '2x2' || mobileLayout === '3x3'}
-                                cols={mobileLayout === '3x3' ? 3 : mobileLayout === '2x2' ? 2 : 1}
-                            />
-                        ))}
-                    </div>
+
+
                 </>
             )}
         </section>

@@ -920,7 +920,6 @@ export function ProductsSplitView({ products }: { products: ProductWithSizes[] }
                                         product={selected}
                                         orders={detail?.orders ?? []}
                                         inventoryLogs={detail?.inventoryLogs ?? []}
-                                        hidePreview
                                         hideTabs
                                         initialTab={activeTab}
                                     />

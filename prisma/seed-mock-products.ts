@@ -52,7 +52,7 @@ const DESIGNERS = [
     'Lila Adair',
     'Saul Vance',
 ]
-const SIZES = ['XS', 'S', 'M', 'L', 'XL']
+const SIZES = ['1', '2', '3', '4', '5']
 
 function pick<T>(arr: T[], i: number): T {
     return arr[i % arr.length]

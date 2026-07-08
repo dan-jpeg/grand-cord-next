@@ -13,7 +13,21 @@ export default async function ProductPage({
 
     const product = await prisma.product.findUnique({
         where: { slug },
-        include: { sizes: true },
+        include: {
+            sizes: {
+                include: {
+                    measurements: { select: { sizingAttributeId: true, value: true } },
+                },
+            },
+            sizingAttributes: {
+                orderBy: { sortOrder: 'asc' },
+                include: {
+                    sizingAttribute: {
+                        select: { id: true, title: true, description: true },
+                    },
+                },
+            },
+        },
     })
 
     if (!product || !product.published) {

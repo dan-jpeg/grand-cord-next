@@ -5,12 +5,21 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useCart } from '@/contexts/cart-context'
 
+type NavConfig = {
+    showSearch: boolean
+    showSample: boolean
+    scrollToTopOnTapMobile: boolean
+    scrollToTopOnTapDesktop: boolean
+    groups: { id: string; name: string; slug: string }[]
+}
+
 type CatalogNavProps = {
     productCount: number
     onSearchChange?: (query: string) => void
     mobileLayout?: '1x1' | '2x2' | '3x3'
     onLayoutChange?: (layout: '1x1' | '2x2' | '3x3') => void
     isLocked?: boolean
+    navConfig?: NavConfig
 }
 
 export function CatalogNav({
@@ -18,7 +27,8 @@ export function CatalogNav({
                                onSearchChange,
                                mobileLayout = '1x1',
                                onLayoutChange,
-                               isLocked = false
+                               isLocked = false,
+                               navConfig,
                            }: CatalogNavProps) {
     const BACKSPACE_SPEED = 300
     const TYPE_SPEED = 120
@@ -98,56 +108,9 @@ export function CatalogNav({
         }
     }, [isDesktop])
 
-    useEffect(() => {
-        if (isDesktop) return
-
-        const handleScroll = () => {
-            const currentScrollY = window.scrollY
-            const isScrollingUp = currentScrollY < lastScrollY
-
-            // Keep search input state stable while user is actively typing.
-            if (isSearchOpen) {
-                setShowLayout(false)
-                setLastScrollY(currentScrollY)
-                return
-            }
-
-            // Keep nav closed and stable while showing mobile search results.
-            if (isMobileSearchLocked) {
-                setShowLayout(false)
-                setIsExpanded(false)
-                wasLockedRef.current = isLocked
-                setLastScrollY(currentScrollY)
-                return
-            }
-
-            // If manually opened while at top (isLocked), keep it open
-            if (manuallyOpenedRef.current && isLocked) {
-                setLastScrollY(currentScrollY)
-                return
-            }
-
-            // Reset manual flag if we scroll down past threshold
-            if (!isLocked) {
-                manuallyOpenedRef.current = false
-            }
-
-            // Only show if locked, scrolling up, AND was previously locked
-            if (isLocked && isScrollingUp && wasLockedRef.current) {
-                setShowLayout(true)
-                setIsExpanded(true)
-            } else {
-                setShowLayout(false)
-                setIsExpanded(false)
-            }
-
-            wasLockedRef.current = isLocked
-            setLastScrollY(currentScrollY)
-        }
-
-        window.addEventListener('scroll', handleScroll, { passive: true })
-        return () => window.removeEventListener('scroll', handleScroll)
-    }, [lastScrollY, isDesktop, isLocked, isMobileSearchLocked, isSearchOpen])
+    // Scroll-based auto-open was removed: nav only opens via explicit tap on
+    // "Catalog". Other scroll effects (sheet growth in the wrapper, isStuck
+    // detection, layout fade-out at bottom) are untouched.
 
     // Layout fade-out at bottom
     useEffect(() => {
@@ -242,13 +205,16 @@ export function CatalogNav({
     )
 
     const handleToggleExpand = () => {
+        const newExpandedState = !isExpanded
+
         if (!isDesktop) {
             // Re-open full catalog controls only when user explicitly taps Catalog.
             if (isMobileSearchLocked) {
                 setIsMobileSearchLocked(false)
             }
-            const newExpandedState = !isExpanded
-            setIsExpanded(newExpandedState)
+            // Layout switcher used to be driven by scroll; tie it to the
+            // explicit toggle now so it appears whenever the nav is open.
+            setShowLayout(newExpandedState)
 
             // Track if user manually opened it while at top
             if (newExpandedState && isLocked) {
@@ -257,6 +223,22 @@ export function CatalogNav({
                 manuallyOpenedRef.current = false
             }
         }
+
+        setIsExpanded(newExpandedState)
+    }
+
+    // Click handler attached to the nav's outer container. Fires whenever
+    // the user clicks the navbar background or any non-link child. Skipped
+    // when the click lands on a real link (cart, sample, group links) so
+    // navigation isn't hijacked.
+    const handleNavBackgroundClick = (e: React.MouseEvent) => {
+        const scrollEnabled = isDesktop
+            ? navConfig?.scrollToTopOnTapDesktop
+            : navConfig?.scrollToTopOnTapMobile
+        if (!scrollEnabled) return
+        const target = e.target as HTMLElement | null
+        if (target?.closest('a')) return
+        scrollToCatalogTop()
     }
 
     const handleSearchChange = (v: string) => {
@@ -303,7 +285,25 @@ export function CatalogNav({
         setIsExpanded(true)
     }
     const scrollToCatalogTop = () => {
-        document.getElementById('catalog')?.scrollIntoView({
+        // The page renders two <CatalogSection> instances (mobile + desktop
+        // branches), so two elements with id="catalog" exist in the DOM. On
+        // desktop the mobile one comes first and is hidden (rect 0,0,0,0),
+        // which made getElementById + scrollIntoView a silent no-op. Pick the
+        // first visible #catalog instead.
+        const section = Array.from(document.querySelectorAll<HTMLElement>('#catalog'))
+            .find(el => el.getBoundingClientRect().height > 0)
+        if (!section) return
+
+        // The section has its own top padding, so scrolling the section into
+        // view lands above the nav with a padding gap showing. On desktop,
+        // scroll a zero-height marker (placed right after that padding)
+        // into view instead so it lands flush at the top of the viewport.
+        // (Can't target the sticky nav itself: once pinned, its rect always
+        // reads top:0, making scrollIntoView on it a no-op.)
+        const anchor = section.querySelector<HTMLElement>('[data-catalog-scroll-anchor]')
+        const target = anchor && anchor.offsetParent !== null ? anchor : section
+
+        target.scrollIntoView({
             behavior: !isDesktop && isIOSMobile() ? 'auto' : 'smooth',
             block: 'start',
         })
@@ -323,111 +323,197 @@ export function CatalogNav({
         setIsMobileSearchLocked(hasQuery)
     }
     const showingBreadcrumb = !isSearchOpen && searchQuery
-    const isDesktopSearchMode = isDesktop && !!searchQuery.trim() && !isSearchOpen
-    const showMainContent = isDesktop
-        ? !isDesktopSearchMode
-        : isExpanded || (!isDesktop && isMobileSearchLocked && isSearchOpen)
+    const isDesktopSearchMode = !!searchQuery.trim() && !isSearchOpen
+    const showMainContentMobile = isExpanded || (isMobileSearchLocked && isSearchOpen)
+    const showMainContentDesktop = isExpanded && !isDesktopSearchMode
+    const isDesktopCollapsed = !isExpanded && !isDesktopSearchMode
 
+    /*
+     * Two separate JSX trees — one for mobile, one for desktop. Both share
+     * all state, effects, and handlers in this component, but their markup
+     * and styling can diverge freely without `lg:` prefixes.
+     *
+     * `lg:hidden` shows the mobile tree only below the lg breakpoint;
+     * `hidden lg:block` shows the desktop tree only at lg and above.
+     */
     return (
-        <div
-            ref={navRef}
-            className={`bg-transparent lg:bg-white w-full ${isDesktopSearchMode ? 'min-h-0' : 'min-h-[120px]'}`}
-            data-catalog-nav
-        >
-            <div className={`flex flex-col pl-4 pr-10 lg:pr-[2vw] lg:pl-[calc(5vw+0px)] pt-6 relative transition-all ${
-                isDesktop && isStuck && !isDesktopSearchMode ? 'lg:border-b-[0.5px]' : ''
-            } ${isDesktopSearchMode ? 'gap-4 pb-0' : 'gap-3 pb-6'}`}>
-                {/* Header Row */}
-                <div className="flex items-center justify-between relative z-10 w-full">
-                    <button onClick={handleToggleExpand}>
-                        <h2 className="text-[9pt] font-bold">Catalog</h2>
-                    </button>
-                    <Link href="/cart" className="relative text-right flex items-end gap-2">
-                        <span className="inline-flex items-end text-right min-w-[20px] text-[9pt] font-bold tabular-nums">
-                            {displayNumber}{cursor}
-                        </span>
-                    </Link>
-                </div>
-
-                {/* Mobile Search Breadcrumb */}
-                {!isDesktop && showingBreadcrumb && !isExpanded && (
-                    <div className="-ml-4 -mr-10 pl-4 pr-10 py-2 bg-[#FCFDF0] z-10">
-                        <button onClick={editSearch} className="text-[9pt] font-bold text-left">▸ {searchQuery}</button>
+        <>
+            {/* ============================== MOBILE ============================== */}
+            <div
+                className="lg:hidden bg-transparent w-full min-h-[120px]"
+                data-catalog-nav
+                onClick={handleNavBackgroundClick}
+            >
+                <div className="flex flex-col pl-4 pr-10 relative transition-all gap-3 pt-6 pb-6">
+                    {/* Header Row */}
+                    <div className="flex items-center justify-between relative z-10 w-full">
+                        <button onClick={handleToggleExpand}>
+                            <h2 className="text-[8.5pt] pl-8 font-bold opacity-90">Catalog</h2>
+                        </button>
+                        <Link href="/cart" className="relative text-right flex items-end gap-2">
+                            <span className="inline-flex items-end text-right min-w-[20px] text-[9pt] font-bold tabular-nums">
+                                {displayNumber}{cursor}
+                            </span>
+                        </Link>
                     </div>
-                )}
 
-                {/* Desktop Search Breadcrumb Strip */}
-                {isDesktop && isDesktopSearchMode && (
-                    <div className="-mx-[calc(5vw+16px)] -mr-[2vw] bg-[#FCFDF0] px-[calc(5vw+16px)] pr-[2vw] py-4 text-[9pt] z-10">
-                        {isSearchOpen ? (
-                            <form
-                                className="flex items-center gap-2"
-                                onSubmit={(e) => {
-                                    e.preventDefault()
-                                    submitSearch()
-                                }}
+                    {/* Search Breadcrumb (collapsed) */}
+                    {showingBreadcrumb && !isExpanded && (
+                        <div className="-ml-4 -mr-10 pl-4 pr-10 py-2 bg-[#FCFDF0] z-10">
+                            <button onClick={editSearch} className="text-[9pt] font-bold text-left">▸ {searchQuery}</button>
+                        </div>
+                    )}
+
+                    {/* Expanded Content */}
+                    <AnimatePresence>
+                        {showMainContentMobile && (
+                            <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0 }}
+                                className={`flex flex-col gap-3 ${
+                                    isSearchOpen ? 'overflow-visible' : 'overflow-hidden'
+                                }`}
                             >
-                                <span aria-hidden className="font-bold">▸</span>
-                                <input
-                                    autoFocus
-                                    className="bg-transparent text-[9pt] outline-none z-10 w-full"
-                                    value={searchQuery}
-                                    onChange={(e) => handleSearchChange(e.target.value)}
-                                    onBlur={handleSearchBlur}
-                                    enterKeyHint="search"
-                                    autoCapitalize="none"
-                                    autoCorrect="off"
-                                    spellCheck={false}
-                                    placeholder=""
-                                />
-                            </form>
-                        ) : (
-                            <button onClick={editSearch} className="hover:underline">▸ {searchQuery}</button>
+                                {!isMobileSearchLocked && (
+                                    <div className="flex flex-col gap-3 text-[9pt] z-10">
+                                        {(navConfig?.showSample ?? true) && (
+                                            <Link href="/sample" className="hover:underline">Sample</Link>
+                                        )}
+                                        {(navConfig?.showSearch ?? true) && (
+                                            <button onClick={() => setIsSearchOpen(!isSearchOpen)} className="text-left hover:underline">Search</button>
+                                        )}
+                                        {navConfig?.groups?.map((g) => (
+                                            <Link
+                                                key={g.id}
+                                                href={`/?group=${g.slug}`}
+                                                className="hover:underline"
+                                            >
+                                                {g.name}
+                                            </Link>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {isSearchOpen && (
+                                    <form
+                                        className="flex items-center gap-2 -ml-4 -mr-10 pl-4 pr-10 py-2 bg-[#FCFDF0]"
+                                        onSubmit={(e) => {
+                                            e.preventDefault()
+                                            submitSearch()
+                                        }}
+                                    >
+                                        {isMobileSearchLocked && (
+                                            <span
+                                                aria-hidden
+                                                className="text-[9pt] font-bold"
+                                                style={{ visibility: showSearchArrow ? 'visible' : 'hidden' }}
+                                            >
+                                                ▸
+                                            </span>
+                                        )}
+                                        <input
+                                            autoFocus
+                                            className="bg-transparent text-[9pt] outline-none z-10 w-full min-w-0"
+                                            value={searchQuery}
+                                            onChange={(e) => handleSearchChange(e.target.value)}
+                                            onBlur={handleSearchBlur}
+                                            enterKeyHint="search"
+                                            autoCapitalize="none"
+                                            autoCorrect="off"
+                                            spellCheck={false}
+                                            placeholder=""
+                                        />
+                                    </form>
+                                )}
+
+                                {showingBreadcrumb && (
+                                    <div className="text-[9pt] z-10">
+                                        <button onClick={editSearch} className="hover:underline">▸ {searchQuery}</button>
+                                    </div>
+                                )}
+                            </motion.div>
                         )}
-                    </div>
-                )}
+                    </AnimatePresence>
 
-                {/* Main Content Area */}
-                <AnimatePresence>
-                    {showMainContent && (
-                        <motion.div
-                            initial={isDesktop ? false : { opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            transition={!isDesktop ? { duration: 0 } : undefined}
-                            className={`flex flex-col gap-3 ${
-                                !isDesktop && isSearchOpen ? 'overflow-visible' : 'overflow-hidden'
-                            }`}
-                        >
-                            {(!isMobileSearchLocked || isDesktop) && !isDesktopSearchMode && (
-                                <div className="flex flex-col gap-3 text-[9pt] z-10">
-                                    <Link href="/sample" className="hover:underline">Sample</Link>
-                                    <button onClick={() => setIsSearchOpen(!isSearchOpen)} className="text-left hover:underline">Search</button>
+                    {/* Layout Switcher (mobile only) */}
+                    <AnimatePresence>
+                        {showLayout && !isMobileSearchLocked && !isSearchOpen && (
+                            <motion.div
+                                ref={layoutRef}
+                                initial={{ opacity: 0, y: -40 }}
+                                animate={{ opacity: layoutOpacity, y: 0 }}
+                                exit={{ opacity: 0, y: -40 }}
+                                transition={{ duration: 0.17 }}
+                                className="absolute left-0 right-0 top-full -mt-2 pt-4 pb-4 grid grid-cols-[auto_1fr_auto] bg-white items-center text-[9pt] pl-12  md:px-8"
+                            >
+                                <span>Layout</span>
+                                <div className="flex gap-20 justify-center">
+                                    {(['1x1', '2x2', '3x3'] as const).map((l) => (
+                                        <button
+                                            key={l}
+                                            onClick={() => onLayoutChange?.(l)}
+                                            className={mobileLayout === l ? 'font-bold' : 'text-neutral-400'}
+                                        >
+                                            {l.replace('x', ' × ')}
+                                        </button>
+                                    ))}
                                 </div>
-                            )}
+                                <div />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+            </div>
 
-                            {isSearchOpen && (
+            {/* ============================== DESKTOP ============================== */}
+            <div
+                ref={navRef}
+                className={`hidden lg:block bg-white w-full ${
+                    isDesktopSearchMode
+                        ? 'min-h-0'
+                        : isDesktopCollapsed
+                            ? 'min-h-[72px]'
+                            : 'min-h-[120px]'
+                }`}
+                data-catalog-nav
+                onClick={handleNavBackgroundClick}
+            >
+                <div className={`flex flex-col pr-[2vw] pl-[calc(5vw+0px)] relative transition-all ${
+                    isDesktopSearchMode
+                        ? 'gap-4 pt-6 pb-0'
+                        : isDesktopCollapsed
+                            ? 'gap-3 pt-4 pb-4'
+                            : 'gap-3 pt-6 pb-6'
+                }`}>
+                    {/* Header Row */}
+                    <div className="flex items-center justify-between relative z-10 w-full">
+                        <button onClick={handleToggleExpand}>
+                            <h2 className="text-[8.5pt]  font-bold opacity-90">Catalog</h2>
+                        </button>
+                        <Link href="/cart" className="relative text-right flex items-end gap-2">
+                            <span className="inline-flex items-end text-right min-w-[20px] text-[9pt] font-bold tabular-nums">
+                                {displayNumber}{cursor}
+                            </span>
+                        </Link>
+                    </div>
+
+                    {/* Search Breadcrumb Strip */}
+                    {isDesktopSearchMode && (
+                        <div className="-mx-[calc(5vw+16px)] -mr-[2vw] bg-[#FCFDF0] px-[calc(5vw+16px)] pr-[2vw] py-4 text-[9pt] z-10">
+                            {isSearchOpen ? (
                                 <form
-                                    className={`flex items-center gap-2 ${
-                                        !isDesktop ? '-ml-4 -mr-10 pl-4 pr-10 py-2 bg-[#FCFDF0]' : ''
-                                    }`}
+                                    className="flex items-center gap-2"
                                     onSubmit={(e) => {
                                         e.preventDefault()
                                         submitSearch()
                                     }}
                                 >
-                                    {isMobileSearchLocked && !isDesktop && (
-                                        <span
-                                            aria-hidden
-                                            className="text-[9pt] font-bold"
-                                            style={{ visibility: showSearchArrow ? 'visible' : 'hidden' }}
-                                        >
-                                            ▸
-                                        </span>
-                                    )}
+                                    <span aria-hidden className="font-bold">▸</span>
                                     <input
                                         autoFocus
-                                        className="bg-transparent text-[9pt] outline-none z-10 w-full min-w-0"
+                                        className="bg-transparent text-[9pt] outline-none z-10 w-full"
                                         value={searchQuery}
                                         onChange={(e) => handleSearchChange(e.target.value)}
                                         onBlur={handleSearchBlur}
@@ -438,45 +524,68 @@ export function CatalogNav({
                                         placeholder=""
                                     />
                                 </form>
+                            ) : (
+                                <button onClick={editSearch} className="hover:underline">▸ {searchQuery}</button>
                             )}
-
-                            {!isDesktop && showingBreadcrumb && (
-                                <div className="text-[9pt] z-10">
-                                    <button onClick={editSearch} className="hover:underline">▸ {searchQuery}</button>
-                                </div>
-                            )}
-                        </motion.div>
+                        </div>
                     )}
-                </AnimatePresence>
 
-                {/* Layout Switcher */}
-                <AnimatePresence>
-                    {showLayout && !isDesktop && !isMobileSearchLocked && !isSearchOpen && (
-                        <motion.div
-                            ref={layoutRef}
-                            initial={{ opacity: 0, y: -40 }}
-                            animate={{ opacity: layoutOpacity, y: 0 }}
-                            exit={{ opacity: 0, y: -40 }}
-                            transition={{ duration: 0.17 }}
-                            className="absolute left-0 right-0 top-full -mt-2 pt-4 pb-4 grid grid-cols-[auto_1fr_auto] bg-white items-center text-[9pt] px-4 md:px-8"
-                        >
-                            <span>Layout</span>
-                            <div className="flex gap-20 justify-center">
-                                {(['1x1', '2x2', '3x3'] as const).map((l) => (
-                                    <button
-                                        key={l}
-                                        onClick={() => onLayoutChange?.(l)}
-                                        className={mobileLayout === l ? 'font-bold' : 'text-neutral-400'}
+                    {/* Expanded Content */}
+                    <AnimatePresence>
+                        {showMainContentDesktop && (
+                            <motion.div
+                                initial={false}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="flex flex-col gap-3 overflow-hidden"
+                            >
+                                {!isDesktopSearchMode && (
+                                    <div className="flex flex-col gap-3 text-[9pt] z-10">
+                                        {(navConfig?.showSample ?? true) && (
+                                            <Link href="/sample" className="hover:underline">Sample</Link>
+                                        )}
+                                        {(navConfig?.showSearch ?? true) && (
+                                            <button onClick={() => setIsSearchOpen(!isSearchOpen)} className="text-left hover:underline">Search</button>
+                                        )}
+                                        {navConfig?.groups?.map((g) => (
+                                            <Link
+                                                key={g.id}
+                                                href={`/?group=${g.slug}`}
+                                                className="hover:underline"
+                                            >
+                                                {g.name}
+                                            </Link>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {isSearchOpen && (
+                                    <form
+                                        className="flex items-center gap-2"
+                                        onSubmit={(e) => {
+                                            e.preventDefault()
+                                            submitSearch()
+                                        }}
                                     >
-                                        {l.replace('x', ' × ')}
-                                    </button>
-                                ))}
-                            </div>
-                            <div />
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                                        <input
+                                            autoFocus
+                                            className="bg-transparent text-[9pt] outline-none z-10 w-full min-w-0"
+                                            value={searchQuery}
+                                            onChange={(e) => handleSearchChange(e.target.value)}
+                                            onBlur={handleSearchBlur}
+                                            enterKeyHint="search"
+                                            autoCapitalize="none"
+                                            autoCorrect="off"
+                                            spellCheck={false}
+                                            placeholder=""
+                                        />
+                                    </form>
+                                )}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
             </div>
-        </div>
+        </>
     )
 }

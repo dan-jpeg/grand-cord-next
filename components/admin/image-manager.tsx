@@ -9,15 +9,11 @@ export type ImageData = {
     isMobilePrimary: boolean
     isDesktopPrimary: boolean
     isCartPrimary: boolean
+    isGrid1x1Primary: boolean
+    isGrid2x2Primary: boolean
+    isGrid3x3Primary: boolean
+    showOnPdp: boolean
 }
-
-type RoleKey = 'isMobilePrimary' | 'isDesktopPrimary' | 'isCartPrimary'
-
-const ROLES: { key: RoleKey; label: string }[] = [
-    { key: 'isMobilePrimary', label: 'Mobile' },
-    { key: 'isDesktopPrimary', label: 'Desktop' },
-    { key: 'isCartPrimary', label: 'Cart' },
-]
 
 export function ImageManager({
     images,
@@ -41,6 +37,10 @@ export function ImageManager({
                     isMobilePrimary: images.length === 0 && index === 0,
                     isDesktopPrimary: images.length === 0 && index === 0,
                     isCartPrimary: images.length === 0 && index === 0,
+                    isGrid1x1Primary: images.length === 0 && index === 0,
+                    isGrid2x2Primary: images.length === 0 && index === 0,
+                    isGrid3x3Primary: images.length === 0 && index === 0,
+                    showOnPdp: true,
                 }))
                 onChange([...images, ...newImages])
             }
@@ -53,20 +53,15 @@ export function ImageManager({
         }
     }
 
-    function setRole(index: number, role: RoleKey) {
-        const updated = images.map((img, i) => ({
-            ...img,
-            [role]: i === index,
-        }))
-        onChange(updated)
-    }
-
     function remove(index: number) {
         const updated = images.filter((_, i) => i !== index)
         if (updated.length > 0) {
             if (!updated.some((img) => img.isMobilePrimary)) updated[0].isMobilePrimary = true
             if (!updated.some((img) => img.isDesktopPrimary)) updated[0].isDesktopPrimary = true
             if (!updated.some((img) => img.isCartPrimary)) updated[0].isCartPrimary = true
+            if (!updated.some((img) => img.isGrid1x1Primary)) updated[0].isGrid1x1Primary = true
+            if (!updated.some((img) => img.isGrid2x2Primary)) updated[0].isGrid2x2Primary = true
+            if (!updated.some((img) => img.isGrid3x3Primary)) updated[0].isGrid3x3Primary = true
         }
         onChange(updated)
     }
@@ -92,24 +87,6 @@ export function ImageManager({
                                 fill
                                 className="object-cover"
                             />
-                        </div>
-
-                        {/* Roles */}
-                        <div className="mt-2 space-y-0.5">
-                            {ROLES.map(({ key, label }) => (
-                                <button
-                                    key={key}
-                                    type="button"
-                                    onClick={() => setRole(index, key)}
-                                    className={`block text-left w-full text-[7pt] font-bold uppercase transition-colors ${
-                                        image[key]
-                                            ? 'text-black underline underline-offset-2'
-                                            : 'text-neutral-300 hover:text-neutral-600'
-                                    }`}
-                                >
-                                    {label}
-                                </button>
-                            ))}
                         </div>
 
                         {/* Actions */}

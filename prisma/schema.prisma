@@ -17,6 +17,8 @@ model Product {
   material        String?
   color           String?
   colorHex        String?
+  attribute1      String?
+  attribute2      String?
   price           Float
   images          Json     @default("[]") // Change from String[] to Json
   published       Boolean  @default(false)
@@ -24,8 +26,9 @@ model Product {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  sizes       ProductSize[]
-  collections CollectionProduct[]
+  sizes            ProductSize[]
+  collections      CollectionProduct[]
+  sizingAttributes ProductSizingAttribute[]
 
   @@index([slug])
   @@index([published])
@@ -41,19 +44,24 @@ model ProductSize {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product      Product                  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  measurements ProductSizeMeasurement[]
 
   @@unique([productId, size])
   @@index([productId])
 }
 
 model Collection {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  description   String?
+  showInCatalog Boolean  @default(false)
+  showInSample  Boolean  @default(false)
+  showInSearch  Boolean  @default(false)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   products CollectionProduct[]
 
@@ -144,6 +152,60 @@ model AdminUser {
   inventoryChanges InventoryChangeLog[]
 
   @@index([email])
+}
+
+model SizingAttribute {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  category    String
+  enabled     Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products     ProductSizingAttribute[]
+  measurements ProductSizeMeasurement[]
+
+  @@index([category])
+}
+
+// Declares which sizing attributes apply to a given product, and in what order.
+model ProductSizingAttribute {
+  productId         String
+  sizingAttributeId String
+  sortOrder         Int    @default(0)
+
+  product         Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sizingAttribute SizingAttribute @relation(fields: [sizingAttributeId], references: [id], onDelete: Cascade)
+
+  @@id([productId, sizingAttributeId])
+  @@index([productId])
+  @@index([sizingAttributeId])
+}
+
+// One measurement value per product size per sizing attribute.
+model ProductSizeMeasurement {
+  productSizeId     String
+  sizingAttributeId String
+  value             String
+
+  productSize     ProductSize     @relation(fields: [productSizeId], references: [id], onDelete: Cascade)
+  sizingAttribute SizingAttribute @relation(fields: [sizingAttributeId], references: [id], onDelete: Cascade)
+
+  @@id([productSizeId, sizingAttributeId])
+  @@index([productSizeId])
+  @@index([sizingAttributeId])
+}
+
+model SiteSettings {
+  // Single-row table — `id` is fixed to "default".
+  id                              String   @id @default("default")
+  showSearchInNav                 Boolean  @default(true)
+  showSampleInNav                 Boolean  @default(true)
+  scrollToTopOnCatalogTapMobile   Boolean  @default(false)
+  scrollToTopOnCatalogTapDesktop  Boolean  @default(false)
+  updatedAt                       DateTime @updatedAt
 }
 
 model InventoryChangeLog {

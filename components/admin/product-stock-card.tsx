@@ -36,7 +36,7 @@ const STATUS_DOT: Record<StockStatus, string> = {
     UNPUBLISHED: '#ffffff',
 }
 
-const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
+const SIZE_ORDER = ['1', '2', '3', '4', '5', 'o/s']
 
 export function ProductStockCard({ product }: { product: ProductWithSizes }) {
     const [baseSizes, setBaseSizes] = useState(product.sizes)
