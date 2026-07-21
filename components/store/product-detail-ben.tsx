@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { useCart } from '@/contexts/cart-context'
 import type { Product, ProductSize } from '@prisma/client'
 import { motion } from 'framer-motion'
@@ -108,28 +109,34 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
     return (
         <div className="min-h-screen bg-white lg:h-screen lg:overflow-hidden">
             {/* Desktop Layout */}
-            <div className="hidden lg:grid h-screen max-w-[1700px] mx-auto grid-cols-11 font-inter">
+            <div className="hidden lg:grid h-full max-w-[1700px] mx-auto grid-cols-11 font-inter">
                 {/* Product Info - 5 columns. Padding is per-section so the sizing bg can fill full width. */}
                 <div className="col-span-5 pt-4">
-                    {/* Header */}
-                    <div className="flex items-start justify-between mb-12 pl-[20%] pr-[8vw]">
-                        <h1 className="text-[12px]">{product.name}</h1>
+                    {/* Header — Catalog link on the left (replaces the global sticky nav on PDPs),
+                        product name + designer on the right. */}
+                    <div className="flex items-baseline justify-between mb-12 pl-[20%] pr-[8vw]">
+                        <div className="flex items-baseline gap-8">
+                            <Link href="/#catalog-desktop" scroll={false} className="text-[12px] hover:underline">
+                                Catalog
+                            </Link>
+                            <h1 className="text-[12px]">{product.name}</h1>
+                        </div>
                         {designerLabel && (
-                            <p className={`text-[11px] tracking-tight font-bold transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
+                            <p className={`text-[11px] tracking-tight font-medium transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
                                 {designerLabel}
                             </p>
                         )}
                     </div>
 
                     {/* Manufacturing Info */}
-                    <div className={`mb-8 pt-32 pl-[20%] pr-[8vw] transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
-                        <p className="text-[7pt] tracking-wide font-inter font-bold">Manufactured in the USA for Grand-Cord</p>
+                    <div className={`mb-8 pt-32 pl-[20%] pr-[8vw] transition-opacity ${showSizing ? 'opacity-50' : 'opacity-80'}`}>
+                        <p className="text-[8pt] tracking-wide font-inter font-bold">Manufactured in the USA for Grand-Cord</p>
                     </div>
 
                     {/* Materials */}
-                    <div className={`mb-20 flex gap-8 pl-[20%] pr-[8vw] font-inter transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
+                    <div className={`mb-20 flex gap-8 pl-[20%] pr-[8vw] font-inter transition-opacity ${showSizing ? 'opacity-50' : 'opacity-80'}`}>
                         {product.attribute1 && (
-                            <p className="text-[8pt]">{product.attribute1}</p>
+                            <p className="text-[8pt] capitalize">{product.attribute1}</p>
                         )}
                         {product.attribute2 && (
                             <p className="text-[8pt]">{product.attribute2}</p>
@@ -138,13 +145,13 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
 
                     {/* Description */}
                     {product.description && (
-                        <div className={`mb-20 w-full pl-[20%] pr-[8vw] font-inter min-h-[200px] transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
-                            <p className="text-[7.5pt] leading-[1.8] tracking-[1.2] text-justify">{product.description}</p>
+                        <div className={`mb-20 w-full pl-[20%] pr-[8vw] font-inter min-h-[200px] transition-opacity ${showSizing ? 'opacity-50' : 'opacity-80'}`}>
+                            <p className="text-[7.5pt] leading-[1.8] tracking-[1.0] text-justify">{product.description}</p>
                         </div>
                     )}
 
                     {/* Size Selector — wrapper gets yellow bg when open. Negative margins extend the yellow up/left while matching padding keeps content in place. */}
-                    <div className={`font-inter ${showSizing ? '-mt-[160px] pt-[160px] -ml-[100vw] pl-[100vw] pb-40 bg-[#FCFDF0]' : 'mb-8'}`}>
+                    <div className={`font-inter ${showSizing ? '-mt-[160px] pt-[160px] -ml-[100vw] pl-[100vw] pb-[100vh] bg-[#FCFDF0]' : 'mb-8'}`}>
                         <div className="pl-[20%] pr-[8vw]">
                             {/* Numbers and Price Row */}
                             <div className="flex items-center justify-between mb-6">
@@ -220,7 +227,7 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                 </div>
 
                 {/* Scrollable Images - 5 columns */}
-                <div className="col-span-5 overflow-y-scroll h-screen snap-y snap-mandatory scroll-smooth scrollbar-hide">
+                <div className="col-span-5 overflow-y-scroll h-full snap-y snap-mandatory scroll-smooth scrollbar-hide">
                     {imageArray.map((img, index) => (
                         <div key={index} className="w-full snap-start snap-always">
                             {img ? (
@@ -257,7 +264,8 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                             {product.name}
                         </h1>
                         {product.designerNames && product.designerNames.length > 0 && (
-                            <div className={`flex gap-4 text-right transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
+                            <div
+                                className={`flex gap-4 text-right transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
                                 {product.designerNames.map((name) => (
                                     <p key={name} className="text-[10px] tracking-tight">{name}</p>
                                 ))}
@@ -276,13 +284,15 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                     </div>
 
                     {/* Content area with conditional background */}
-                    <div className={`transition-colors   ${showSizing ? 'bg-[#FCFDF0] -mx-[100vw] px-[100vw] pt-4 pb-24' : ''}`}>
+                    <div
+                        className={`transition-colors   ${showSizing ? 'bg-[#FCFDF0] -mx-[100vw] px-[100vw] pt-4 pb-24' : ''}`}>
 
 
                         {/* Manufacturing Info - only show when sizing is closed */}
                         {!showSizing && (
                             <div className="pb-8">
-                                <p className="text-[9pt] opacity-70 pb-20 font-semibold text-[9pt] tracking-[1.1] ">Manufactured in the USA</p>
+                                <p className="text-[9pt] opacity-70 pb-20 font-semibold text-[9pt] tracking-[1.1] ">Manufactured
+                                    in the USA</p>
                             </div>
                         )}
 
@@ -297,7 +307,8 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                                         <div key={index}
                                              className="grid  grid-cols-[28px_40px_60px_1fr] gap-x-2 items-baseline text-[8pt] whitespace-nowrap">
                                             <span className="font-bold">{displayValue(measurement.value)}</span>
-                                            <button onClick={toggleUnit} className="text-[7pt] text-neutral-500 text-left">
+                                            <button onClick={toggleUnit}
+                                                    className="text-[7pt] text-neutral-500 text-left">
                                                 <span className={unit === 'in' ? '' : 'opacity-30'}>in</span>
                                                 <span className="opacity-30">/</span>
                                                 <span className={unit === 'cm' ? '' : 'opacity-30'}>cm</span>
@@ -346,7 +357,7 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                                     <span className="  text-[6pt]">{showSizing ? '▲' : '▼'}</span>
                                 </button>
                             ) : (
-                                <span />
+                                <span/>
                             )}
                             <p className="text-sm">
                                 $ {product.price.toFixed(2).replace('.', '. ')}
@@ -370,7 +381,7 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                 <div className=" -mx-6  mb-4 scale-105ç h-[59vh] snap-y snap-mandatory scroll-smooth">
                     {imageArray.map((img, index) => (
                         <div key={index} className="w-full snap-start snap-always">
-                            {img ? (
+                       {img ? (
                                 <div className="relative w-full aspect-[3/4]">
                                     <Image
                                         src={img}

@@ -39,6 +39,7 @@ export default async function ProductImagesPage({
             isGrid1x1Primary: image.isGrid1x1Primary ?? index === 0,
             isGrid2x2Primary: image.isGrid2x2Primary ?? index === 0,
             isGrid3x3Primary: image.isGrid3x3Primary ?? index === 0,
+            isInventoryPrimary: image.isInventoryPrimary,
             showOnPdp: image.showOnPdp ?? true,
         }
     })

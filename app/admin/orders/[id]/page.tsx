@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { formatPrice } from '@/lib/utils'
 import { notFound } from 'next/navigation'
 import { OrderStatusForm } from '@/components/admin/order-status-form'
+import { OrderDetailMobile } from '@/components/admin/order-detail-mobile'
 
 import { OrderItem } from "@prisma/client";
 
@@ -32,8 +33,26 @@ export default async function OrderDetailPage({
         country: string
     }
 
+    // productId -> best thumbnail (inventory shot preferred) for the mobile
+    // detail view's product shots.
+    const products = await prisma.product.findMany({
+        where: { id: { in: order.items.map((i: OrderItem) => i.productId) } },
+        select: { id: true, images: true },
+    })
+    const productImages: Record<string, string> = {}
+    for (const p of products) {
+        const imgs = Array.isArray(p.images) ? (p.images as { url?: string; isInventoryPrimary?: boolean; isCartPrimary?: boolean }[]) : []
+        const url =
+            imgs.find((i) => i?.isInventoryPrimary)?.url ??
+            imgs.find((i) => i?.isCartPrimary)?.url ??
+            imgs[0]?.url
+        if (url) productImages[p.id] = url
+    }
+
     return (
-        <div className="max-w-5xl mx-auto px-6 py-8">
+        <>
+        <OrderDetailMobile order={order} shippingAddress={shippingAddress} productImages={productImages} />
+        <div className="hidden lg:block max-w-5xl mx-auto px-6 py-8">
             <div className="mb-8">
                 <h2 className="text-2xl font-bold mb-2">Order {order.orderNumber}</h2>
                 <p className="text-neutral-600">
@@ -121,5 +140,6 @@ export default async function OrderDetailPage({
                 </div>
             </div>
         </div>
+        </>
     )
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useRef, useCallback, useEffect } from 'react'
@@ -12,6 +13,17 @@ function handleLogout() {
 type AdminNavProps = {
     active: 'orders' | 'inventory' | 'catalog' | 'manage-catalog' | 'more' | 'pick' | 'logs' | 'members'
     variant?: 'centered' | 'top-left'
+    /**
+     * Mobile presentation:
+     *  - 'eye' (default): compact eye icon in top-left; tap to open the fullscreen hub nav
+     *  - 'hub': fullscreen hub nav always visible (used by the /admin index page)
+     */
+    mobileVariant?: 'eye' | 'hub'
+    /**
+     * Optional short label rendered next to the mobile eye icon (e.g. "Inventory",
+     * "Orders"). Tapping the label opens the hub, same as the eye.
+     */
+    mobileLabel?: string
     pickUrgency?: string | null
     topClass?: string
     leftClass?: string
@@ -20,7 +32,7 @@ type AdminNavProps = {
 const PRIMARY_NAV_ITEMS = [
     { key: 'orders' as const, label: 'Orders', href: '/admin/orders' },
     { key: 'pick' as const, label: 'Pick', href: '/admin/pick' },
-    { key: 'inventory' as const, label: 'Inventory', href: '/admin/products' },
+    { key: 'inventory' as const, label: 'Inventory', href: '/admin/products-new' },
 ]
 
 const MORE_ITEMS = [
@@ -45,7 +57,7 @@ type AnimState = {
     activeKey: string
 }
 
-function MobileHubNav({ active, pickUrgency }: { active: AdminNavProps['active']; pickUrgency?: string | null }) {
+function MobileHubNav({ active, pickUrgency, onClose }: { active: AdminNavProps['active']; pickUrgency?: string | null; onClose?: () => void }) {
     const router = useRouter()
     const [anim, setAnim] = useState<AnimState | null>(null)
     const [moreOpen, setMoreOpen] = useState(false)
@@ -106,7 +118,7 @@ function MobileHubNav({ active, pickUrgency }: { active: AdminNavProps['active']
                     />
                 </svg>
             )}
-            <div className="fixed inset-0 flex z-[200]">
+            <div className="fixed inset-0 flex z-[200] bg-white">
                 {PRIMARY_NAV_ITEMS.map((item, i) => (
                     <div
                         key={item.key}
@@ -176,127 +188,6 @@ function MobileHubNav({ active, pickUrgency }: { active: AdminNavProps['active']
                 </div>
             </div>
         </>
-    )
-}
-
-function MobileTopNav({ active, pickUrgency }: { active: AdminNavProps['active']; pickUrgency?: string | null }) {
-    const router = useRouter()
-    const [anim, setAnim] = useState<AnimState | null>(null)
-    const [moreOpen, setMoreOpen] = useState(false)
-    const labelRefs = useRef<(HTMLSpanElement | null)[]>([])
-    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-    const moreActive = active === 'more' || isMoreKey(active) || moreOpen
-
-    const handlePress = useCallback((e: React.PointerEvent, index: number) => {
-        const item = PRIMARY_NAV_ITEMS[index]
-        const labelEl = labelRefs.current[index]
-        if (!labelEl) return
-
-        const rect = labelEl.getBoundingClientRect()
-        const labelX = rect.left + rect.width / 2
-        const labelY = rect.top + rect.height / 2
-
-        const dx = labelX - e.clientX
-        const dy = labelY - e.clientY
-        const dist = Math.sqrt(dx * dx + dy * dy)
-        const toX = dist > 20 ? labelX - (dx / dist) * 20 : e.clientX
-        const toY = dist > 20 ? labelY - (dy / dist) * 20 : e.clientY
-
-        if (timerRef.current) clearTimeout(timerRef.current)
-
-        setAnim({ fromX: e.clientX, fromY: e.clientY, toX, toY, fading: false, activeKey: item.key })
-
-        timerRef.current = setTimeout(() => {
-            setAnim(prev => prev ? { ...prev, fading: true } : null)
-            setTimeout(() => {
-                router.push(item.href)
-                setAnim(null)
-            }, 150)
-        }, 400)
-    }, [router])
-
-    return (
-        <div className="sticky top-0 left-0 right-0 h-[60px] flex z-[200] bg-white">
-            {anim && (
-                <svg
-                    className="absolute inset-0 w-full h-full pointer-events-none z-[10]"
-                    style={{ opacity: anim.fading ? 0 : 1, transition: 'opacity 0.15s ease-out' }}
-                >
-                    <line
-                        x1={anim.fromX} y1={anim.fromY}
-                        x2={anim.toX} y2={anim.toY}
-                        stroke="black" strokeWidth="1.5"
-                    />
-                </svg>
-            )}
-            {PRIMARY_NAV_ITEMS.map((item, i) => (
-                <div
-                    key={item.key}
-                    className="flex-1 flex items-center justify-center cursor-pointer select-none"
-                    onPointerDown={(e) => handlePress(e, i)}
-                >
-                    <span
-                        ref={el => { labelRefs.current[i] = el }}
-                        className={`text-[8pt] font-bold inline-flex items-center gap-[5px] ${
-                            active === item.key || anim?.activeKey === item.key
-                                ? 'underline decoration-2 underline-offset-3'
-                                : ''
-                        }`}
-                    >
-                        {item.label}
-                        {item.key === 'pick' && pickUrgency && (
-                            <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: pickUrgency, flexShrink: 0 }} />
-                        )}
-                    </span>
-                </div>
-            ))}
-            <div
-                className="flex-1 flex items-center justify-center cursor-pointer select-none relative"
-                onPointerDown={(e) => {
-                    e.stopPropagation()
-                    setMoreOpen((v) => !v)
-                }}
-            >
-                <span
-                    className={`text-[8pt] font-bold ${
-                        moreActive ? 'underline decoration-2 underline-offset-3' : ''
-                    }`}
-                >
-                    More
-                </span>
-                {moreOpen && (
-                    <div className="absolute top-full left-0 right-0 bg-white border-t border-neutral-100 flex flex-col items-center py-3 gap-[10px] z-[201]">
-                        {MORE_ITEMS.map((item) => (
-                            <span
-                                key={item.key}
-                                onPointerDown={(e) => {
-                                    e.stopPropagation()
-                                    router.push(item.href)
-                                }}
-                                className={`text-[8pt] font-bold ${
-                                    active === item.key
-                                        ? 'underline decoration-2 underline-offset-3'
-                                        : ''
-                                }`}
-                            >
-                                {item.label}
-                            </span>
-                        ))}
-                        <button
-                            type="button"
-                            onPointerDown={(e) => {
-                                e.stopPropagation()
-                                handleLogout()
-                            }}
-                            className="text-[8pt] font-bold text-neutral-400"
-                        >
-                            Logout
-                        </button>
-                    </div>
-                )}
-            </div>
-        </div>
     )
 }
 
@@ -370,14 +261,70 @@ function DesktopMoreMenu({
     )
 }
 
-export function AdminNav({ active, variant = 'top-left', pickUrgency, topClass = 'top-3', leftClass = 'left-3' }: AdminNavProps) {
+function MobileEyeHub({ active, pickUrgency, label }: { active: AdminNavProps['active']; pickUrgency?: string | null; label?: string }) {
+    // Two-phase open/close so the hub can fade in/out cleanly:
+    // `mounted` decides whether it lives in the tree at all; `visible` drives
+    // the opacity class. On close we flip visible first, then unmount after
+    // the transition completes.
+    const [mounted, setMounted] = useState(false)
+    const [visible, setVisible] = useState(false)
+
+    const toggle = useCallback(() => {
+        if (mounted && visible) {
+            setVisible(false)
+            setTimeout(() => setMounted(false), 180)
+        } else {
+            setMounted(true)
+            requestAnimationFrame(() => setVisible(true))
+        }
+    }, [mounted, visible])
+
+    const close = useCallback(() => {
+        setVisible(false)
+        setTimeout(() => setMounted(false), 180)
+    }, [])
+
+    return (
+        <>
+            <button
+                type="button"
+                aria-label={visible ? 'Close menu' : 'Open menu'}
+                onClick={toggle}
+                className="fixed top-[7px] left-[11px] z-[400] p-2 flex items-center gap-2"
+            >
+                <Image src="/eye.svg" alt="" width={20} height={10} priority />
+                {label && (
+                    <>
+                        <span className="text-[12px] font-bold leading-none opacity-40">—</span>
+                        <span className="text-[12px] font-bold leading-none">{label}</span>
+                    </>
+                )}
+            </button>
+            {mounted && (
+                <div
+                    className={`fixed inset-0 z-[200] transition-opacity duration-200 ease-out ${
+                        visible ? 'opacity-100' : 'opacity-0'
+                    }`}
+                >
+                    <MobileHubNav active={active} pickUrgency={pickUrgency} onClose={close} />
+                </div>
+            )}
+        </>
+    )
+}
+
+export function AdminNav({ active, variant = 'top-left', mobileVariant = 'eye', mobileLabel, pickUrgency, topClass = 'top-3', leftClass = 'left-3' }: AdminNavProps) {
+    const mobile = mobileVariant === 'hub'
+        ? <MobileHubNav active={active} pickUrgency={pickUrgency} />
+        : <MobileEyeHub active={active} pickUrgency={pickUrgency} label={mobileLabel} />
+
     if (variant === 'top-left') {
         return (
             <>
-                <div className="md:hidden">
-                    <MobileHubNav active={active} pickUrgency={pickUrgency} />
+                <div className="lg:hidden">
+                    {mobile}
                 </div>
-                <div className={`hidden md:flex absolute ${topClass} ${leftClass} z-[300] items-start text-[8pt] font-bold gap-4`}>
+                <div className={`hidden lg:flex absolute ${topClass} ${leftClass} z-[300] items-start text-[8pt] font-bold gap-4`}>
                     {PRIMARY_NAV_ITEMS.map(item => (
                         <Link
                             key={item.key}
@@ -398,10 +345,10 @@ export function AdminNav({ active, variant = 'top-left', pickUrgency, topClass =
 
     return (
         <>
-            <div className="md:hidden">
-                <MobileTopNav active={active} pickUrgency={pickUrgency} />
+            <div className="lg:hidden">
+                {mobile}
             </div>
-            <div className="hidden md:flex absolute top-3 left-3 z-[300] items-start text-[8pt] font-bold gap-4">
+            <div className="hidden lg:flex absolute top-3 left-3 z-[300] items-start text-[8pt] font-bold gap-4">
                 {PRIMARY_NAV_ITEMS.map(item => (
                     <Link
                         key={item.key}

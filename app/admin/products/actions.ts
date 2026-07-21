@@ -30,6 +30,7 @@ type ProductFormData = {
         isGrid1x1Primary: boolean
         isGrid2x2Primary: boolean
         isGrid3x3Primary: boolean
+        isInventoryPrimary?: boolean
         showOnPdp: boolean
     }[]
     sizes: {
@@ -341,4 +342,5 @@ export async function deleteProduct(id: string) {
     })
 
     revalidatePath('/admin/products')
+    revalidatePath('/admin/products-new')
 }

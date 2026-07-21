@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { createProduct, updateProduct, commitInventoryChanges } from '@/app/admin/products/actions'
+import { createProduct, updateProduct, deleteProduct, commitInventoryChanges } from '@/app/admin/products/actions'
 import { ImageManager, type ImageData } from '@/components/admin/image-manager'
 import { InventoryConfirmModal, LockIcon, type InventoryChange } from './inventory-confirm-modal'
 import { formatPrice } from '@/lib/utils'
@@ -23,7 +23,7 @@ const AVAILABLE_SIZES = ['1', '2', '3', '4', '5', 'o/s']
 const ONE_SIZE = 'o/s'
 const MAX_DESIGNERS = 8
 
-type Tab = 'identity' | 'look' | 'sizing' | 'listing' | 'sales' | 'history'
+export type Tab = 'identity' | 'look' | 'sizing' | 'listing' | 'sales' | 'history'
 type TabGroup = 'listing' | 'inventory'
 
 // Each tab belongs to one of two top-level groups. The wizard order goes
@@ -77,6 +77,7 @@ export function ProductForm({
     const router = useRouter()
     const TABS = product ? TABS_EDIT : TABS_CREATE
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [isDeleting, setIsDeleting] = useState(false)
     const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? 'identity')
     const [warnings, setWarnings] = useState<Array<{ tab: Tab; severity: 'error' | 'warning'; message: string }>>([])
 
@@ -103,6 +104,7 @@ export function ProductForm({
                     isGrid1x1Primary?: boolean
                     isGrid2x2Primary?: boolean
                     isGrid3x3Primary?: boolean
+                    isInventoryPrimary?: boolean
                     showOnPdp?: boolean
                 }
                 return {
@@ -113,6 +115,7 @@ export function ProductForm({
                     isGrid1x1Primary: image.isGrid1x1Primary ?? (index === 0),
                     isGrid2x2Primary: image.isGrid2x2Primary ?? (index === 0),
                     isGrid3x3Primary: image.isGrid3x3Primary ?? (index === 0),
+                    isInventoryPrimary: image.isInventoryPrimary,
                     showOnPdp: image.showOnPdp ?? true,
                 }
             })
@@ -186,6 +189,7 @@ export function ProductForm({
                 isGrid1x1Primary: !!i.isGrid1x1Primary,
                 isGrid2x2Primary: !!i.isGrid2x2Primary,
                 isGrid3x3Primary: !!i.isGrid3x3Primary,
+                isInventoryPrimary: !!i.isInventoryPrimary,
                 showOnPdp: !!i.showOnPdp,
             })),
             // Sizes are excluded entirely: adding/removing a size and
@@ -577,6 +581,20 @@ export function ProductForm({
             }
         } else {
             await createProduct(data)
+        }
+    }
+
+    async function handleDelete() {
+        if (!product) return
+        if (!confirm(`Delete "${product.name}"? This can't be undone.`)) return
+
+        setIsDeleting(true)
+        try {
+            await deleteProduct(product.id)
+            router.push('/admin/products-new')
+        } catch {
+            alert('Failed to delete product')
+            setIsDeleting(false)
         }
     }
 
@@ -1052,13 +1070,25 @@ export function ProductForm({
 
             {/* ── Wizard footer ── */}
             <div className="pt-4 border-t border-neutral-100 flex items-center justify-between gap-6">
-                <button
-                    type="button"
-                    onClick={() => router.back()}
-                    className="text-sm text-neutral-400 hover:text-black underline hover:no-underline"
-                >
-                    Cancel
-                </button>
+                <div className="flex items-center gap-6">
+                    <button
+                        type="button"
+                        onClick={() => router.back()}
+                        className="text-sm text-neutral-400 hover:text-black underline hover:no-underline"
+                    >
+                        Cancel
+                    </button>
+                    {product && (
+                        <button
+                            type="button"
+                            onClick={handleDelete}
+                            disabled={isDeleting}
+                            className="text-sm text-red-600 hover:text-red-800 underline hover:no-underline disabled:opacity-40"
+                        >
+                            {isDeleting ? 'Deleting...' : 'Delete Product'}
+                        </button>
+                    )}
+                </div>
 
                 <div className="flex items-center gap-6">
                     {tabIndex > 0 && (

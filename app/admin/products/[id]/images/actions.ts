@@ -12,6 +12,9 @@ export type ImageRecord = {
     isGrid1x1Primary: boolean
     isGrid2x2Primary: boolean
     isGrid3x3Primary: boolean
+    // Background-less inventory shot used by admin inventory views. Optional
+    // (falls back to the desktop/cart primary when absent).
+    isInventoryPrimary?: boolean
     showOnPdp: boolean
 }
 

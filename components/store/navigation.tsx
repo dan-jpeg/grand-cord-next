@@ -140,26 +140,13 @@ export function Navigation() {
 
     return (
         <nav className="fixed top-0 left-0 right-0 z-20">
-            {/* Desktop */}
-            <div className="hidden lg:flex mx-auto px-8 py-12 md:py-4 items-center justify-end">
-                <Link
-                    href="/cart"
-                    className="relative px-2 rounded-full flex items-center gap-2"
-                    onMouseEnter={() => setIsCartHovered(true)}
-                    onMouseLeave={() => setIsCartHovered(false)}
-                >
-
-                    {totalItems > 0 && (
-                        <span className="inline-flex items-center min-w-[20px] text-[9pt] font-bold tabular-nums">
-                            {displayNumber}
-                            {cursor}
-                        </span>
-                    )}
-                </Link>
-            </div>
+            {/* Desktop cart moved into GlobalCatalogNav (sticky above every page). */}
 
             {/* Mobile */}
-            <div className="flex lg:hidden mx-auto px-10 py-4 h-[64px] bg-[#FCFDF0] items-center justify-end">
+            <div className="flex lg:hidden mx-auto px-10 py-4 h-[64px] bg-[#FCFDF0] items-center justify-between">
+                <Link href="/" className="text-[8.5pt] font-bold opacity-90">
+                    Catalog
+                </Link>
                 <Link
                     href="/cart"
                     className="flex items-center gap-2"

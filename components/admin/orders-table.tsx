@@ -21,7 +21,154 @@ const STATUS_COLORS = {
     CANCELLED: '#ef4444', // red
 }
 
-export function OrdersTable({ orders }: { orders: OrderWithItems[] }) {
+// Mobile Filter button cycles through these; ALL is the unfiltered "Filter" state.
+const MOBILE_FILTER_CYCLE: StatusFilter[] = ['ALL', 'SHIPPED', 'PENDING', 'PAID']
+
+function MobileOrdersView({
+    orders,
+    productImages,
+    statusFilter,
+    setStatusFilter,
+    search,
+    setSearch,
+}: {
+    orders: OrderWithItems[]
+    productImages: Record<string, string>
+    statusFilter: StatusFilter
+    setStatusFilter: (s: StatusFilter) => void
+    search: string
+    setSearch: (s: string) => void
+}) {
+    const [showImages, setShowImages] = useState(false)
+    const [sortDesc, setSortDesc] = useState(true)
+    const [searchOpen, setSearchOpen] = useState(false)
+
+    const sorted = useMemo(
+        () =>
+            [...orders].sort((a, b) =>
+                sortDesc
+                    ? +new Date(b.createdAt) - +new Date(a.createdAt)
+                    : +new Date(a.createdAt) - +new Date(b.createdAt),
+            ),
+        [orders, sortDesc],
+    )
+
+    const cycleFilter = () => {
+        const i = MOBILE_FILTER_CYCLE.indexOf(statusFilter)
+        setStatusFilter(MOBILE_FILTER_CYCLE[(i + 1) % MOBILE_FILTER_CYCLE.length])
+    }
+
+    const fmtDate = (d: Date | string) =>
+        new Date(d).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })
+
+    const fmtStatus = (s: string) => s.charAt(0) + s.slice(1).toLowerCase()
+
+    return (
+        // Top-anchored layout: the eye · Orders nav sits top-left with Sort /
+        // Filter top-right, Search and Show Images right-aligned below, then the
+        // order rows fill the rest. Matches Figma node 1718:2874.
+        <div className="lg:hidden fixed inset-0 z-[100] bg-white flex flex-col text-[12px] font-bold">
+            {/* Header cluster. The eye · Orders nav on the left is supplied by
+                <AdminNav> (MobileEyeHub, top-left) — we only render the
+                right-aligned Sort / Filter controls here. */}
+            <div className="shrink-0 px-[12px] pt-[8px]">
+                <div className="flex items-center justify-end gap-[26px] pr-[2px]">
+                    <button
+                        type="button"
+                        onClick={() => setSortDesc((v) => !v)}
+                        className={`px-[11px] py-[7px] leading-none ${!sortDesc ? 'bg-[#d9d9d9]/40' : ''}`}
+                    >
+                        Sort
+                    </button>
+                    <button
+                        type="button"
+                        onClick={cycleFilter}
+                        className={`px-[11px] py-[7px] leading-none ${statusFilter !== 'ALL' ? 'bg-[#d9d9d9]/40' : ''}`}
+                    >
+                        {statusFilter === 'ALL' ? 'Filter' : fmtStatus(statusFilter)}
+                    </button>
+                </div>
+
+                {/* Search — right-aligned, dropped below the header. */}
+                <div className="flex justify-end pr-[2px] pt-[120px]">
+                    <button type="button" onClick={() => setSearchOpen((v) => !v)}>
+                        Search
+                    </button>
+                </div>
+
+                {searchOpen && (
+                    <input
+                        autoFocus
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        onBlur={() => { if (!search.trim()) setSearchOpen(false) }}
+                        placeholder="Order number or e-mail"
+                        className="w-full mt-3 bg-[#d9d9d9]/20 px-2 py-1 text-[12px] font-bold outline-none"
+                    />
+                )}
+
+                {/* Show / Hide Images — right-aligned, faded. */}
+                <div className="flex justify-end pr-[2px] pt-[8px] pb-[10px]">
+                    <button
+                        type="button"
+                        onClick={() => setShowImages((v) => !v)}
+                        className="opacity-[0.32]"
+                    >
+                        {showImages ? 'Hide Images' : 'Show Images'}
+                    </button>
+                </div>
+            </div>
+
+            {/* Order rows — fill the rest, scrollable. Alternating grey blocks;
+                each block is the text row plus (when shown) its images. */}
+            <div className="flex-1 overflow-y-auto px-[12px]">
+                {sorted.map((order, index) => (
+                    <Link
+                        key={order.id}
+                        href={`/admin/orders/${order.id}`}
+                        className={`block ${index % 2 === 0 ? 'bg-[#d9d9d9]/20' : 'bg-white'}`}
+                    >
+                        <div className="grid grid-cols-3 px-[7px] items-center h-[36px]">
+                            <span>{order.orderNumber.startsWith('O-') ? order.orderNumber : `O-${order.orderNumber}`}</span>
+                            <span className="text-center">{fmtStatus(order.status)}</span>
+                            <span className="text-right">{fmtDate(order.createdAt)}</span>
+                        </div>
+                        {showImages && (
+                            <div className="grid grid-cols-3 px-[7px] items-end gap-y-3 pb-4">
+                                {order.items.map((item, i) => {
+                                    const src = productImages[item.productId]
+                                    return (
+                                        <span key={item.id} className={`flex h-[56px] items-end ${i % 3 === 1 ? 'justify-center' : i % 3 === 2 ? 'justify-end' : 'justify-start'}`}>
+                                            {src ? (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img
+                                                    src={src}
+                                                    alt={item.productName}
+                                                    draggable={false}
+                                                    className="max-h-full max-w-[48px] object-contain"
+                                                />
+                                            ) : (
+                                                <span className="text-neutral-300">—</span>
+                                            )}
+                                        </span>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </Link>
+                ))}
+            </div>
+        </div>
+    )
+}
+
+export function OrdersTable({
+    orders,
+    productImages = {},
+}: {
+    orders: OrderWithItems[]
+    productImages?: Record<string, string>
+}) {
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
     const [currentPage, setCurrentPage] = useState(1)
@@ -51,7 +198,16 @@ export function OrdersTable({ orders }: { orders: OrderWithItems[] }) {
     const paginatedOrders = filteredOrders.slice(startIndex, startIndex + ITEMS_PER_PAGE)
 
     return (
-        <div className="space-y-6 max-w-[1381px] mx-auto text-[8pt]">
+        <>
+        <MobileOrdersView
+            orders={filteredOrders}
+            productImages={productImages}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            search={search}
+            setSearch={setSearch}
+        />
+        <div className="hidden lg:block space-y-6 max-w-[1381px] mx-auto text-[8pt]">
             {/* Search */}
             <div className="flex items-center justify-between mb-4">
                 <div className="flex-1 relative">
@@ -190,5 +346,6 @@ export function OrdersTable({ orders }: { orders: OrderWithItems[] }) {
                 </div>
             )}
         </div>
+        </>
     )
 }

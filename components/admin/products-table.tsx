@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { ProductStockCard } from './product-stock-card'
 import { STOCK_THRESHOLDS, STOCK_COLORS } from '@/lib/constants'
@@ -83,6 +84,17 @@ function StockChip({
     )
 }
 
+// Renders children into <body>, escaping the page's custom scroll container
+// (`absolute inset-0 overflow-auto`). On iOS Safari a `position: fixed` element
+// nested inside such a scroller gets trapped and scrolls with it; portaling to
+// body keeps it truly pinned to the viewport (same as the top-level AdminNav).
+function BodyPortal({ children }: { children: React.ReactNode }) {
+    const [mounted, setMounted] = useState(false)
+    useEffect(() => setMounted(true), [])
+    if (!mounted) return null
+    return createPortal(children, document.body)
+}
+
 export function ProductsTable({ products }: { products: ProductWithSizes[] }) {
     const [search, setSearch] = useState('')
     const [stockFilter, setStockFilter] = useState<StockFilter>('ALL')
@@ -148,8 +160,51 @@ export function ProductsTable({ products }: { products: ProductWithSizes[] }) {
         )
     }
 
+    const filterChips = (
+        <>
+            <StockChip
+                label={`All · ${products.length}`}
+                active={!filterActive}
+                dimmed={filterActive}
+                onClick={() => {
+                    setStockFilter('ALL')
+                    setCurrentPage(1)
+                }}
+            />
+            <StockChip
+                label={`${counts.inStock} In Stock`}
+                dot={DOT.IN_STOCK}
+                active={stockFilter === 'IN_STOCK'}
+                dimmed={filterActive && stockFilter !== 'IN_STOCK'}
+                onClick={() => toggleFilter('IN_STOCK')}
+            />
+            <StockChip
+                label={`${counts.lowStock} Low`}
+                dot={DOT.LOW_STOCK}
+                active={stockFilter === 'LOW_STOCK'}
+                dimmed={filterActive && stockFilter !== 'LOW_STOCK'}
+                onClick={() => toggleFilter('LOW_STOCK')}
+            />
+            <StockChip
+                label={`${counts.noStock} Out`}
+                dot={DOT.NO_STOCK}
+                active={stockFilter === 'NO_STOCK'}
+                dimmed={filterActive && stockFilter !== 'NO_STOCK'}
+                onClick={() => toggleFilter('NO_STOCK')}
+            />
+            <StockChip
+                label={`${counts.unpub} Unpublished`}
+                dot="#ffffff"
+                bordered
+                active={stockFilter === 'UNPUBLISHED'}
+                dimmed={filterActive && stockFilter !== 'UNPUBLISHED'}
+                onClick={() => toggleFilter('UNPUBLISHED')}
+            />
+        </>
+    )
+
     return (
-        <div className="w-full max-w-screen-md mx-auto pt-3 pb-16">
+        <div className="w-full max-w-screen-md mx-auto pt-3 pb-40 md:pb-16">
             {/* ── White slab header ── */}
             <div className="bg-white pt-8 pb-5 ">
                 <div className="flex items-baseline gap-[14px] mb-4 flex-wrap">
@@ -178,46 +233,10 @@ export function ProductsTable({ products }: { products: ProductWithSizes[] }) {
                     )}
                 </div>
 
-                {/* Filter chips — replaces StockKey + alert bar */}
-                <div className="flex gap-[6px] overflow-x-auto [&::-webkit-scrollbar]:hidden">
-                    <StockChip
-                        label={`All · ${products.length}`}
-                        active={!filterActive}
-                        dimmed={filterActive}
-                        onClick={() => {
-                            setStockFilter('ALL')
-                            setCurrentPage(1)
-                        }}
-                    />
-                    <StockChip
-                        label={`${counts.inStock} In Stock`}
-                        dot={DOT.IN_STOCK}
-                        active={stockFilter === 'IN_STOCK'}
-                        dimmed={filterActive && stockFilter !== 'IN_STOCK'}
-                        onClick={() => toggleFilter('IN_STOCK')}
-                    />
-                    <StockChip
-                        label={`${counts.lowStock} Low`}
-                        dot={DOT.LOW_STOCK}
-                        active={stockFilter === 'LOW_STOCK'}
-                        dimmed={filterActive && stockFilter !== 'LOW_STOCK'}
-                        onClick={() => toggleFilter('LOW_STOCK')}
-                    />
-                    <StockChip
-                        label={`${counts.noStock} Out`}
-                        dot={DOT.NO_STOCK}
-                        active={stockFilter === 'NO_STOCK'}
-                        dimmed={filterActive && stockFilter !== 'NO_STOCK'}
-                        onClick={() => toggleFilter('NO_STOCK')}
-                    />
-                    <StockChip
-                        label={`${counts.unpub} Unpublished`}
-                        dot="#ffffff"
-                        bordered
-                        active={stockFilter === 'UNPUBLISHED'}
-                        dimmed={filterActive && stockFilter !== 'UNPUBLISHED'}
-                        onClick={() => toggleFilter('UNPUBLISHED')}
-                    />
+                {/* Filter chips — desktop only; on mobile these live in the fixed
+                    bottom bar (see below) so they stay pinned instead of scrolling. */}
+                <div className="hidden md:flex gap-[6px] overflow-x-auto [&::-webkit-scrollbar]:hidden">
+                    {filterChips}
                 </div>
             </div>
 
@@ -285,15 +304,40 @@ export function ProductsTable({ products }: { products: ProductWithSizes[] }) {
                 </div>
             )}
 
-            {/* ── Add Product (floating chip) ── */}
+            {/* ── Mobile fixed bottom bar — Stock/Photos toggle + status chips,
+                pinned to the viewport so they never scroll away. ── */}
+            {isMobile && (
+                <BodyPortal>
+                    <div className="fixed bottom-0 left-0 right-0 z-[65] bg-white/95 backdrop-blur-sm px-4 pt-3 pb-5 flex flex-col gap-3">
+                        <div className="flex gap-[6px] overflow-x-auto [&::-webkit-scrollbar]:hidden">
+                            {filterChips}
+                        </div>
+                        <div className="flex gap-[24px] font-alte text-[16px] leading-none tracking-[-0.03em] text-black">
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('stock')}
+                                style={{ opacity: 1 }}
+                            >
+                                Stock
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('photo')}
+                                style={{ opacity: 0.18 }}
+                            >
+                                Photos
+                            </button>
+                        </div>
+                    </div>
+                </BodyPortal>
+            )}
+
+            {/* ── New Item (floating pill) ── */}
             <Link
                 href="/admin/products/new"
-                className="fixed bottom-5 right-5 bg-white pl-[10px] pr-[12px] py-[7px] flex items-center gap-[6px] shadow-sm z-[70]"
+                className="fixed bottom-5 right-5 z-[70] bg-neutral-200/30 rounded-full px-3 py-1 text-[12px] font-bold opacity-40 hover:opacity-70"
             >
-                <span className="text-[13px] leading-none">+</span>
-                <span className="font-reformat text-[9px] font-bold tracking-[0.1em] uppercase">
-                    Add Product
-                </span>
+                New Item +
             </Link>
         </div>
     )
@@ -446,7 +490,7 @@ function PhotosView({
                 view: {viewIndex + 1}
             </p>
 
-            {/* Center Stock / Photos toggle — sits behind the photo strip */}
+            {/* Center Stock / Photos toggle — sits behind the photo strip. */}
             <div className="absolute left-1/2 -translate-x-1/2 top-[36%] flex gap-[44px] text-[12px] font-bold z-[5]">
                 <button
                     type="button"

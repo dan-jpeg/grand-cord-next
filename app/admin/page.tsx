@@ -20,7 +20,7 @@ export default async function AdminDashboard() {
 
     return (
         <div className="min-h-screen bg-white relative">
-            <AdminNav active="more" variant="top-left" pickUrgency={pickUrgency} />
+            <AdminNav active="more" variant="top-left" mobileVariant="hub" pickUrgency={pickUrgency} />
         </div>
     )
 }

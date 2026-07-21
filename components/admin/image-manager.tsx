@@ -12,6 +12,8 @@ export type ImageData = {
     isGrid1x1Primary: boolean
     isGrid2x2Primary: boolean
     isGrid3x3Primary: boolean
+    // Optional background-less inventory shot used in admin inventory views.
+    isInventoryPrimary?: boolean
     showOnPdp: boolean
 }
 

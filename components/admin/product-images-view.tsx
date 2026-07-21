@@ -3,7 +3,6 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { motion, AnimatePresence } from 'framer-motion'
 import { useUploadThing } from '@/lib/uploadthing'
 import { updateProductImages, type ImageRecord } from '@/app/admin/products/[id]/images/actions'
 
@@ -15,13 +14,15 @@ type RoleKey =
     | 'isGrid3x3Primary'
     | 'isMobilePrimary'
     | 'isDesktopPrimary'
+    | 'isInventoryPrimary'
 
-const CATALOG_TAGS: { key: RoleKey; label: string }[] = [
-    { key: 'isGrid1x1Primary', label: '1x1' },
-    { key: 'isGrid2x2Primary', label: '2x2' },
-    { key: 'isGrid3x3Primary', label: '3x3' },
-    { key: 'isMobilePrimary', label: 'mobile' },
-    { key: 'isDesktopPrimary', label: 'desktop' },
+const CATALOG_TAGS: { key: RoleKey; shortcut: string; label: string }[] = [
+    { key: 'isGrid1x1Primary', shortcut: '1', label: '1x1' },
+    { key: 'isGrid2x2Primary', shortcut: '2', label: '2x2' },
+    { key: 'isGrid3x3Primary', shortcut: '3', label: '3x3' },
+    { key: 'isMobilePrimary', shortcut: 'm', label: 'mobile' },
+    { key: 'isDesktopPrimary', shortcut: 'd', label: 'desktop' },
+    { key: 'isInventoryPrimary', shortcut: 'i', label: 'inventory' },
 ]
 
 function withFallbackRoles(next: ImageRecord[]): ImageRecord[] {
@@ -35,6 +36,22 @@ function withFallbackRoles(next: ImageRecord[]): ImageRecord[] {
     return next
 }
 
+function RadioDot({ filled, shortcut }: { filled: boolean; shortcut?: string }) {
+    return (
+        <span
+            className={`inline-flex items-center justify-center w-[14px] h-[14px] shrink-0 rounded-full border border-black ${
+                filled ? 'bg-black' : 'bg-white'
+            }`}
+        >
+            {shortcut && (
+                <span className={`text-[7px] font-bold leading-none ${filled ? 'text-white' : 'text-black'}`}>
+                    {shortcut}
+                </span>
+            )}
+        </span>
+    )
+}
+
 export function ProductImagesView({
     product,
     initialImages,
@@ -46,7 +63,6 @@ export function ProductImagesView({
     const [selectedIndex, setSelectedIndex] = useState(0)
     const [isUploading, setIsUploading] = useState(false)
     const [isReplacing, setIsReplacing] = useState(false)
-    const [showMaybe, setShowMaybe] = useState(true)
     const [pending, startTransition] = useTransition()
     const { startUpload } = useUploadThing('productImage')
 
@@ -121,25 +137,129 @@ export function ProductImagesView({
 
     return (
         <div className="absolute inset-0 bg-white font-alte flex flex-col">
-            {/* Header row — product badge, level with the admin nav */}
-            <div className="h-10 shrink-0 flex items-center justify-end pr-8 md:pr-4">
-                <Link
-                    href={`/admin/products/${product.id}/edit`}
-                    className="bg-neutral-200 px-1 text-[12px] font-bold"
-                >
-                    {product.name}
-                </Link>
+            {/* Mobile header — right-aligned badge + tabs stacked vertically (matches Figma) */}
+            <div className="md:hidden shrink-0 pt-3 pr-4 pl-14 flex justify-end">
+                <div className="flex flex-col items-end gap-[5px]">
+                    <Link
+                        href={`/admin/products/${product.id}/edit`}
+                        className="bg-neutral-200 px-1 text-[12px] font-bold"
+                    >
+                        {product.name}
+                    </Link>
+                    <Link
+                        href={`/admin/products/${product.id}/edit?tab=identity`}
+                        className="text-[12px] font-bold opacity-40"
+                    >
+                        Listing
+                    </Link>
+                    <Link
+                        href={`/admin/products/${product.id}/edit?tab=sizing`}
+                        className="text-[12px] font-bold opacity-40"
+                    >
+                        Inventory
+                    </Link>
+                    <span className="text-[12px] font-bold underline underline-offset-2">Images</span>
+                </div>
             </div>
 
-            {/* Divider under the nav / header row */}
-            <div className="h-px shrink-0 bg-black" />
+            {/* Desktop header — product badge row, full-width divider, then Listing/Inventory/Images tabs.
+                The box's left border spans both rows, crossing over the divider. */}
+            <div className="hidden md:flex h-10 shrink-0 justify-end">
+                <div className="w-[240px] border-l border-black pl-4 pr-8 md:pr-4 flex items-center justify-end">
+                    <Link
+                        href={`/admin/products/${product.id}/edit`}
+                        className="bg-neutral-200 px-1 text-[12px] font-bold"
+                    >
+                        {product.name}
+                    </Link>
+                </div>
+            </div>
 
-            <div className="flex-1 flex overflow-hidden">
-                {/* Big preview — fills the left side, full height, flush with the edge */}
-                <div className="h-full flex-[1.3] shrink-0 pt-4 pb-4 pl-4">
-                    <div className="relative w-full h-full">
+            <div className="hidden md:block h-px shrink-0 bg-black" />
+
+            <div className="hidden md:flex h-8 shrink-0 justify-end">
+                <div className="w-[240px] border-l border-b border-black pl-4 pr-8 md:pr-4 flex items-center">
+                    <nav className="flex gap-4 justify-end text-[12px] font-bold w-full">
+                        <Link
+                            href={`/admin/products/${product.id}/edit?tab=identity`}
+                            className="opacity-40 hover:opacity-70"
+                        >
+                            Listing
+                        </Link>
+                        <Link
+                            href={`/admin/products/${product.id}/edit?tab=sizing`}
+                            className="opacity-40 hover:opacity-70"
+                        >
+                            Inventory
+                        </Link>
+                        <span className="underline underline-offset-2">Images</span>
+                    </nav>
+                </div>
+            </div>
+
+            {/* Mobile grid — 2 columns, role dots overlaid on each cell */}
+            <div className="md:hidden flex-1 overflow-y-auto px-4 pt-6 pb-8">
+                {images.length === 0 ? (
+                    <div className="w-full py-16 flex items-center justify-center text-[12px] text-neutral-400">
+                        No images yet
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-6">
+                        {images.map((img, i) => {
+                            const assigned = CATALOG_TAGS.filter(({ key }) => img[key])
+                            return (
+                                <button
+                                    key={img.url + i}
+                                    type="button"
+                                    onClick={() => setSelectedIndex(i)}
+                                    className="relative aspect-[171/245] bg-neutral-100"
+                                >
+                                    <Image src={img.url} alt="" fill className="object-contain" />
+                                    {assigned.length > 0 && (
+                                        <span className="absolute top-1 left-1/2 -translate-x-1/2 flex gap-1">
+                                            {assigned.map(({ key, shortcut }) => (
+                                                <RadioDot key={key} filled shortcut={shortcut} />
+                                            ))}
+                                        </span>
+                                    )}
+                                </button>
+                            )
+                        })}
+                    </div>
+                )}
+            </div>
+
+            <div className="hidden md:flex flex-1 overflow-hidden">
+                {/* Selection grid — 3 columns, contiguous rows, radio dot marks the previewed image */}
+                <div className="h-full flex-[1.4] shrink-0 overflow-y-auto p-4">
+                    {images.length === 0 ? (
+                        <div className="w-full h-full flex items-center justify-center text-[12px] text-neutral-400">
+                            No images yet
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-3 gap-x-[3px] gap-y-0">
+                            {images.map((img, i) => (
+                                <button
+                                    key={img.url + i}
+                                    type="button"
+                                    onClick={() => setSelectedIndex(i)}
+                                    className="relative aspect-[157/224] bg-neutral-100"
+                                >
+                                    <Image src={img.url} alt="" fill className="object-contain p-3" />
+                                    <span className="absolute top-1.5 right-1.5">
+                                        <RadioDot filled={i === selectedIndex} />
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Big preview */}
+                <div className="h-full flex-[1.4] pt-4 pb-4 px-4">
+                    <div className="relative w-full h-full bg-neutral-100">
                         {selected?.url ? (
-                            <Image src={selected.url} alt="" fill className="object-contain object-left" priority />
+                            <Image src={selected.url} alt="" fill className="object-contain" priority />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-[12px] text-neutral-400">
                                 No images yet
@@ -148,30 +268,9 @@ export function ProductImagesView({
                     </div>
                 </div>
 
-                {/* Controls — right-aligned so it lines up under the product badge */}
-                <div className="flex-1 min-w-[320px] overflow-y-auto pl-8 md:pl-16 pr-8 md:pr-4 py-8">
-                    <div className="flex justify-end mb-2">
-                        <span className="text-[12px] font-bold underline underline-offset-2">Images</span>
-                    </div>
-
-                    {/* Thumbnails — right-aligned, grow outward toward the left */}
-                    <div className="flex flex-wrap gap-1.5 mb-2 justify-end">
-                        {images.map((img, i) => (
-                            <button
-                                key={img.url + i}
-                                type="button"
-                                onClick={() => setSelectedIndex(i)}
-                                className={`relative w-10 h-12 shrink-0 bg-neutral-100 overflow-hidden border transition-opacity ${
-                                    i === selectedIndex
-                                        ? 'border-black'
-                                        : 'border-transparent opacity-40 hover:opacity-100'
-                                }`}
-                            >
-                                <Image src={img.url} alt="" fill className="object-cover" />
-                            </button>
-                        ))}
-                    </div>
-                    <div className="flex justify-end mb-32">
+                {/* Controls */}
+                <div className="w-[260px] shrink-0 flex flex-col overflow-y-auto pl-8 md:pl-4 pr-8 md:pr-4 py-8">
+                    <div className="flex justify-end">
                         <input
                             type="file"
                             multiple
@@ -183,75 +282,45 @@ export function ProductImagesView({
                         />
                         <label
                             htmlFor="images-upload-new"
-                            className={`text-[12px] font-bold cursor-pointer opacity-40 hover:opacity-70 ${
+                            className={`bg-neutral-200/30 rounded-full px-3 py-1 text-[12px] font-bold cursor-pointer opacity-40 hover:opacity-70 ${
                                 isUploading ? 'cursor-wait' : ''
                             }`}
                         >
-                            {isUploading ? 'Uploading…' : 'Upload New ↖'}
+                            {isUploading ? 'Uploading…' : 'Upload New'}
                         </label>
                     </div>
 
+                    <div className="flex-1" />
+
                     {selected && (
                         <>
-                            {/* Show on PDP / catalog tags */}
-                            <div className="grid grid-cols-[auto_1fr] gap-x-10 gap-y-4 text-[12px] font-bold mb-32">
-                                <span className="whitespace-nowrap">Show on product display page:</span>
-                                <div className="flex gap-8 justify-end">
-                                    <motion.button
-                                        layout
-                                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                            <div className="flex flex-col gap-2.5 items-start mb-10">
+                                {CATALOG_TAGS.map(({ key, shortcut, label }) => (
+                                    <button
+                                        key={key}
                                         type="button"
                                         disabled={pending}
-                                        onClick={() => setPdpVisible(true)}
-                                        className={selected.showOnPdp ? '' : 'opacity-20'}
+                                        onClick={() => setTag(key)}
+                                        className="flex items-center gap-2 text-[12px] font-bold"
                                     >
-                                        Yes
-                                    </motion.button>
-                                    <motion.button
-                                        layout
-                                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                                        type="button"
-                                        disabled={pending}
-                                        onClick={() => setPdpVisible(false)}
-                                        className={!selected.showOnPdp ? '' : 'opacity-20'}
-                                    >
-                                        No
-                                    </motion.button>
-                                    <AnimatePresence>
-                                        {showMaybe && (
-                                            <motion.button
-                                                layout
-                                                initial={false}
-                                                exit={{ opacity: 0, scale: 0.5 }}
-                                                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                                                type="button"
-                                                onClick={() => setShowMaybe(false)}
-                                                className="opacity-20 hover:opacity-60"
-                                            >
-                                                Maybe
-                                            </motion.button>
-                                        )}
-                                    </AnimatePresence>
-                                </div>
-
-                                <span className="whitespace-nowrap">Use on catalog:</span>
-                                <div className="flex gap-8 justify-end">
-                                    {CATALOG_TAGS.map(({ key, label }) => (
-                                        <button
-                                            key={key}
-                                            type="button"
-                                            disabled={pending}
-                                            onClick={() => setTag(key)}
-                                            className={selected[key] ? '' : 'opacity-20'}
-                                        >
-                                            {label}
-                                        </button>
-                                    ))}
-                                </div>
+                                        <RadioDot filled={!!selected[key]} shortcut={shortcut} />
+                                        {label}
+                                    </button>
+                                ))}
                             </div>
 
+                            <button
+                                type="button"
+                                disabled={pending}
+                                onClick={() => setPdpVisible(!selected.showOnPdp)}
+                                className="flex items-center gap-2 text-[12px] font-bold mb-10"
+                            >
+                                <RadioDot filled={selected.showOnPdp} />
+                                Show on product page?
+                            </button>
+
                             {/* Delete / Replace */}
-                            <div className="flex items-center justify-end gap-6">
+                            <div className="flex items-center justify-end gap-6 mt-auto">
                                 <button
                                     type="button"
                                     disabled={pending}

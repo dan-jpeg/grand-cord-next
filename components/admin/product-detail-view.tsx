@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ProductForm } from './product-form'
+import { ProductForm, type Tab } from './product-form'
 import type { Product, ProductSize, Order, OrderItem, InventoryChangeLog } from '@prisma/client'
 
 type ProductWithSizes = Product & {
@@ -16,10 +16,12 @@ export function ProductDetailView({
     product,
     orders,
     inventoryLogs,
+    initialTab,
 }: {
     product: ProductWithSizes
     orders: OrderWithItems[]
     inventoryLogs: InventoryChangeLog[]
+    initialTab?: Tab
 }) {
     return (
         <div className="p-8">
@@ -31,7 +33,7 @@ export function ProductDetailView({
                 <h1 className="text-[9pt] font-bold uppercase">{product.name}</h1>
             </div>
 
-            <ProductForm product={product} orders={orders} inventoryLogs={inventoryLogs} />
+            <ProductForm product={product} orders={orders} inventoryLogs={inventoryLogs} initialTab={initialTab} />
         </div>
     )
 }

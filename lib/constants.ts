@@ -6,5 +6,5 @@ export const STOCK_COLORS = {
 } as const
 
 export const STOCK_THRESHOLDS = {
-    LOW_STOCK: 5, // Items below this count are "low stock"
+    LOW_STOCK: 3, // Items at or below this count are "low stock"
 } as const

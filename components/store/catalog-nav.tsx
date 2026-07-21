@@ -20,6 +20,13 @@ type CatalogNavProps = {
     onLayoutChange?: (layout: '1x1' | '2x2' | '3x3') => void
     isLocked?: boolean
     navConfig?: NavConfig
+    /**
+     * When set, the "Catalog" heading becomes a link to this href instead of
+     * toggling the expanded menu. Used when the nav is rendered above pages
+     * that don't own the catalog grid (product, cart, checkout, order) so
+     * clicking Catalog navigates back to the catalog home.
+     */
+    catalogHomeHref?: string
 }
 
 export function CatalogNav({
@@ -29,6 +36,7 @@ export function CatalogNav({
                                onLayoutChange,
                                isLocked = false,
                                navConfig,
+                               catalogHomeHref,
                            }: CatalogNavProps) {
     const BACKSPACE_SPEED = 300
     const TYPE_SPEED = 120
@@ -350,9 +358,15 @@ export function CatalogNav({
                 <div className="flex flex-col pl-4 pr-10 relative transition-all gap-3 pt-6 pb-6">
                     {/* Header Row */}
                     <div className="flex items-center justify-between relative z-10 w-full">
-                        <button onClick={handleToggleExpand}>
-                            <h2 className="text-[8.5pt] pl-8 font-bold opacity-90">Catalog</h2>
-                        </button>
+                        {catalogHomeHref ? (
+                            <Link href={catalogHomeHref} scroll={false}>
+                                <h2 className="text-[8.5pt] pl-8 font-bold opacity-90">Catalog</h2>
+                            </Link>
+                        ) : (
+                            <button onClick={handleToggleExpand}>
+                                <h2 className="text-[8.5pt] pl-8 font-bold opacity-90">Catalog</h2>
+                            </button>
+                        )}
                         <Link href="/cart" className="relative text-right flex items-end gap-2">
                             <span className="inline-flex items-end text-right min-w-[20px] text-[9pt] font-bold tabular-nums">
                                 {displayNumber}{cursor}
@@ -487,14 +501,20 @@ export function CatalogNav({
                     isDesktopSearchMode
                         ? 'gap-4 pt-6 pb-0'
                         : isDesktopCollapsed
-                            ? 'gap-3 pt-4 pb-3 '
+                            ? 'gap-3 pt-4 pb-'
                             : 'gap-3 pt-6 pb-6'
                 }`}>
                     {/* Header Row */}
                     <div className="flex items-center justify-between relative z-10 w-full">
-                        <button onClick={handleToggleExpand}>
-                            <h2 className="text-[8.5pt]  font-bold opacity-90">Catalog</h2>
-                        </button>
+                        {catalogHomeHref ? (
+                            <Link href={catalogHomeHref} scroll={false}>
+                                <h2 className="text-[8.5pt]  font-bold opacity-90">Catalog</h2>
+                            </Link>
+                        ) : (
+                            <button onClick={handleToggleExpand}>
+                                <h2 className="text-[8.5pt]  font-bold opacity-90">Catalog</h2>
+                            </button>
+                        )}
                         <Link href="/cart" className="relative text-right flex items-end gap-2">
                             <span className="inline-flex items-end text-right min-w-[20px] text-[9pt] font-bold tabular-nums">
                                 {displayNumber}{cursor}

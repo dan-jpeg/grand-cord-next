@@ -59,8 +59,9 @@ function getImages(p: ProductWithSizes): { url: string }[] {
 
 function primaryImage(p: ProductWithSizes): string | undefined {
     const imgs = getImages(p)
+    const inventory = imgs.find((img) => (img as { isInventoryPrimary?: boolean }).isInventoryPrimary)
     const cart = imgs.find((img) => (img as { isCartPrimary?: boolean }).isCartPrimary)
-    return cart?.url ?? imgs[0]?.url
+    return inventory?.url ?? cart?.url ?? imgs[0]?.url
 }
 
 function deriveCode(p: ProductWithSizes): string {

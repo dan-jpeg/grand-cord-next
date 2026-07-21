@@ -69,7 +69,7 @@ export default async function HomePage() {
                 </div>
 
                 <div className="pt-20">
-                    <CatalogSection products={products} navConfig={navConfig} />
+                    <CatalogSection products={products} navConfig={navConfig} desktopAnchorId="catalog-desktop" />
                 </div>
             </div>
         </>

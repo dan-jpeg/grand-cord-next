@@ -42,8 +42,11 @@ function getImages(p: ProductWithSizes): { url: string }[] {
 
 function primaryImage(p: ProductWithSizes): string | undefined {
     const imgs = getImages(p)
+    // Admin/inventory views prefer the background-less "inventory" shot when set;
+    // fall back to the cart primary and then any image.
+    const inventory = imgs.find((img) => (img as { isInventoryPrimary?: boolean }).isInventoryPrimary)
     const cart = imgs.find((img) => (img as { isCartPrimary?: boolean }).isCartPrimary)
-    return cart?.url ?? imgs[0]?.url
+    return inventory?.url ?? cart?.url ?? imgs[0]?.url
 }
 
 export function ProductsSidebarView({ products }: { products: ProductWithSizes[] }) {
@@ -225,154 +228,172 @@ export function ProductsSidebarView({ products }: { products: ProductWithSizes[]
                 variant="top-left"
                 topClass="top-[14px]"
                 leftClass="left-[18px]"
+                mobileLabel="Inventory"
+            />
+
+            {/* ─── Mobile / tablet layout (below lg) ─────────────────────────── */}
+            <MobileInventoryPhotosView
+                filteredProducts={filtered}
+                stockFilter={stockFilter}
+                setStockFilter={setStockFilter}
+                counts={counts}
+                totalProducts={products.length}
             />
 
             {/* Stock / Photos toggle — anchored right of sidebar in collapsed/open,
-                centered at the top of the viewport in expanded mode. */}
-            <div
-                className="hidden md:flex absolute top-[14px] z-[300] items-center gap-[52px] text-[8pt] font-bold"
-                style={
-                    sidebarWidth === null
-                        ? { left: '50%', transform: 'translateX(-50%)' }
-                        : { right: `calc(100% - ${sidebarWidth}px + 18px)` }
-                }
-            >
-                <Link
-                    href="/admin/products"
-                    className="opacity-60 hover:opacity-100 px-[6px] py-[2px] rounded-[2px]"
-                >
-                    Stock
-                </Link>
-                <span className="px-[6px] py-[2px] rounded-[2px] bg-[#d9d9d9]">
-                    Photos
-                </span>
-            </div>
+                        centered at the top of the viewport in expanded mode. */}
+                    <div
+                        className="hidden lg:flex absolute top-[14px] z-[300] items-center gap-[52px] text-[8pt] font-bold"
+                        style={
+                            sidebarWidth === null
+                                ? { left: '50%', transform: 'translateX(-50%)' }
+                                : { right: `calc(100% - ${sidebarWidth}px + 18px)` }
+                        }
+                    >
+                        <Link
+                            href="/admin/products"
+                            className="opacity-60 hover:opacity-100 px-[6px] py-[2px] rounded-[2px]"
+                        >
+                            Stock
+                        </Link>
+                        <span className="px-[6px] py-[2px] rounded-[2px] bg-[#d9d9d9]">
+                            Photos
+                        </span>
+                    </div>
 
-            {/* 8x8 black box — top-right corner: jump to fully expanded mode */}
-            <button
-                type="button"
-                onClick={() => changeState('expanded')}
-                title="Expand"
-                className="absolute top-[10px] right-4 z-[300] w-[8px] h-[8px] bg-black hover:opacity-70"
-            />
+                    {/* New Item — styled like the images editor's "Upload New" pill */}
+                    <Link
+                        href="/admin/products/new"
+                        className="hidden lg:block absolute top-[10px] right-16 z-[300] bg-neutral-200/30 rounded-full px-3 py-1 text-[12px] font-bold opacity-40 hover:opacity-70"
+                    >
+                        New Item +
+                    </Link>
 
-            {/* 8x8 black box — center of sidebar's right edge: expand to fullscreen */}
-            {sidebarWidth !== null && (
-                <button
-                    type="button"
-                    onClick={() => changeState('expanded')}
-                    title="Expand"
-                    className="absolute z-[300] w-[8px] h-[8px] bg-black hover:opacity-70 -translate-y-1/2 -translate-x-1/2"
-                    style={{ left: `${sidebarWidth}px`, top: '50%' }}
-                />
-            )}
+                    {/* 8x8 black box — top-right corner: jump to fully expanded mode */}
+                    <button
+                        type="button"
+                        onClick={() => changeState('expanded')}
+                        title="Expand"
+                        className="hidden lg:block absolute top-[10px] right-4 z-[300] w-[8px] h-[8px] bg-black hover:opacity-70"
+                    />
 
-            {/* Vertical divider — absolute so it can translate across the screen
-                as a view-transition shared element. */}
-            <div
-                className="absolute top-0 bottom-0 w-[2px] bg-black z-[5] pointer-events-none"
-                style={
-                    {
-                        // In expanded mode the line slides off to the LEFT
-                        // (past the viewport edge) AND fades out so the
-                        // layout reads as having no divider, not as the line
-                        // stuck at the right edge.
-                        left: sidebarWidth === null ? '-4px' : `${sidebarWidth}px`,
-                        opacity: sidebarWidth === null ? 0 : 1,
-                        transition:
-                            'opacity 460ms cubic-bezier(0.4, 0, 0.2, 1) 200ms',
-                        viewTransitionName: 'sidebar-divider',
-                    } as React.CSSProperties
-                }
-            />
-
-            {/* Main grid — extends from top of screen. */}
-            <div
-                className="flex-1 grid overflow-hidden"
-                style={{
-                    gridTemplateColumns:
-                        sidebarWidth === null
-                            ? '1fr'
-                            : `${sidebarWidth}px 1fr`,
-                }}
-            >
-                {/* ── SIDEBAR ────────────────────────────────────────────── */}
-                <aside className="overflow-hidden border-t-2 border-black mt-[40px]">
-                    {sidebarState === 'collapsed' && (
-                        <CollapsedSidebar
-                            products={filtered}
-                            selectedId={selectedId}
-                            onSelect={setSelectedId}
-                            onExpand={() => setSidebarState('open')}
+                    {/* 8x8 black box — center of sidebar's right edge: expand to fullscreen */}
+                    {sidebarWidth !== null && (
+                        <button
+                            type="button"
+                            onClick={() => changeState('expanded')}
+                            title="Expand"
+                            className="hidden lg:block absolute z-[300] w-[8px] h-[8px] bg-black hover:opacity-70 -translate-y-1/2 -translate-x-1/2"
+                            style={{ left: `${sidebarWidth}px`, top: '50%' }}
                         />
                     )}
-                    {sidebarState === 'open' && (
-                        <OpenSidebar
-                            products={filtered}
-                            materials={materials}
-                            materialFilter={materialFilter}
-                            setMaterialFilter={setMaterialFilter}
-                            stockFilter={stockFilter}
-                            setStockFilter={setStockFilter}
-                            counts={counts}
-                            totalProducts={products.length}
-                            search={search}
-                            setSearch={setSearch}
-                            selectedId={selectedId}
-                            onSelect={setSelectedId}
-                        />
-                    )}
-                    {sidebarState === 'expanded' && (
-                        <ExpandedSidebar
-                            products={filtered}
-                            materials={materials}
-                            materialFilter={materialFilter}
-                            setMaterialFilter={setMaterialFilter}
-                            stockFilter={stockFilter}
-                            setStockFilter={setStockFilter}
-                            counts={counts}
-                            totalProducts={products.length}
-                            search={search}
-                            setSearch={setSearch}
-                            selectedId={selectedId}
-                            onSelect={selectFromExpanded}
-                        />
-                    )}
-                </aside>
+
+                    {/* Vertical divider — absolute so it can translate across the screen
+                        as a view-transition shared element. */}
+                    <div
+                        className="hidden lg:block absolute top-0 bottom-0 w-[2px] bg-black z-[5] pointer-events-none"
+                        style={
+                            {
+                                // In expanded mode the line slides off to the LEFT
+                                // (past the viewport edge) AND fades out so the
+                                // layout reads as having no divider, not as the line
+                                // stuck at the right edge.
+                                left: sidebarWidth === null ? '-4px' : `${sidebarWidth}px`,
+                                opacity: sidebarWidth === null ? 0 : 1,
+                                transition:
+                                    'opacity 460ms cubic-bezier(0.4, 0, 0.2, 1) 200ms',
+                                viewTransitionName: 'sidebar-divider',
+                            } as React.CSSProperties
+                        }
+                    />
+
+                    {/* Main grid — extends from top of screen. */}
+                    <div
+                        className="hidden lg:grid flex-1 overflow-hidden"
+                        style={{
+                            gridTemplateColumns:
+                                sidebarWidth === null
+                                    ? '1fr'
+                                    : `${sidebarWidth}px 1fr`,
+                        }}
+                    >
+                        {/* ── SIDEBAR ────────────────────────────────────────────── */}
+                        <aside className="overflow-hidden border-t-2 border-black mt-[40px]">
+                            {sidebarState === 'collapsed' && (
+                                <CollapsedSidebar
+                                    products={filtered}
+                                    selectedId={selectedId}
+                                    onSelect={setSelectedId}
+                                    onExpand={() => setSidebarState('open')}
+                                />
+                            )}
+                            {sidebarState === 'open' && (
+                                <OpenSidebar
+                                    products={filtered}
+                                    materials={materials}
+                                    materialFilter={materialFilter}
+                                    setMaterialFilter={setMaterialFilter}
+                                    stockFilter={stockFilter}
+                                    setStockFilter={setStockFilter}
+                                    counts={counts}
+                                    totalProducts={products.length}
+                                    search={search}
+                                    setSearch={setSearch}
+                                    selectedId={selectedId}
+                                    onSelect={setSelectedId}
+                                />
+                            )}
+                            {sidebarState === 'expanded' && (
+                                <ExpandedSidebar
+                                    products={filtered}
+                                    materials={materials}
+                                    materialFilter={materialFilter}
+                                    setMaterialFilter={setMaterialFilter}
+                                    stockFilter={stockFilter}
+                                    setStockFilter={setStockFilter}
+                                    counts={counts}
+                                    totalProducts={products.length}
+                                    search={search}
+                                    setSearch={setSearch}
+                                    selectedId={selectedId}
+                                    onSelect={selectFromExpanded}
+                                />
+                            )}
+                        </aside>
 
 
-                {/* ── DETAIL ─────────────────────────────────────────────── */}
-                {sidebarWidth !== null && (
-                    <main className="relative overflow-y-auto">
-                        {!showDetail && (
-                            <div className="h-full flex items-center justify-center text-[10px] tracking-[0.1em] uppercase opacity-40">
-                                Select a product
-                            </div>
-                        )}
-                        {showDetail && selected && (
-                            <div className="min-h-full flex flex-col items-center py-16 px-8">
-                                {selectedImg && (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                        src={selectedImg}
-                                        alt={selected.name}
-                                        className="max-h-[60vh] w-auto object-contain mb-8"
-                                        draggable={false}
-                                    />
+                        {/* ── DETAIL ─────────────────────────────────────────────── */}
+                        {sidebarWidth !== null && (
+                            <main className="relative overflow-y-auto">
+                                {!showDetail && (
+                                    <div className="h-full flex items-center justify-center text-[10px] tracking-[0.1em] uppercase opacity-40">
+                                        Select a product
+                                    </div>
                                 )}
-                                <div className="w-full max-w-2xl bg-white text-[0.8em]">
-                                    <ProductForm
-                                        key={selected.id}
-                                        product={selected}
-                                        orders={detail?.orders ?? []}
-                                        inventoryLogs={detail?.inventoryLogs ?? []}
-                                    />
-                                </div>
-                            </div>
+                                {showDetail && selected && (
+                                    <div className="min-h-full flex flex-col items-center py-16 px-8">
+                                        {selectedImg && (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img
+                                                src={selectedImg}
+                                                alt={selected.name}
+                                                className="max-h-[60vh] w-auto object-contain mb-8"
+                                                draggable={false}
+                                            />
+                                        )}
+                                        <div className="w-full max-w-2xl bg-white text-[0.8em]">
+                                            <ProductForm
+                                                key={selected.id}
+                                                product={selected}
+                                                orders={detail?.orders ?? []}
+                                                inventoryLogs={detail?.inventoryLogs ?? []}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </main>
                         )}
-                    </main>
-                )}
-            </div>
+                    </div>
         </div>
     )
 }
@@ -814,5 +835,119 @@ function MaterialList({
                 </button>
             )}
         </>
+    )
+}
+
+// ─── Mobile / tablet inventory view (photos) ──────────────────────────────
+function MobileInventoryPhotosView({
+    filteredProducts,
+    stockFilter,
+    setStockFilter,
+    counts,
+    totalProducts,
+}: {
+    filteredProducts: ProductWithSizes[]
+    stockFilter: StockFilter
+    setStockFilter: (s: StockFilter) => void
+    counts: { inStock: number; lowStock: number; noStock: number; unpub: number; total: number }
+    totalProducts: number
+}) {
+    return (
+        <div className="lg:hidden absolute inset-0 flex flex-col bg-white z-[10]">
+            {/* Top-right Stock / Photos tabs. Eye + "Inventory" label are
+                rendered by AdminNav (mobileLabel prop) at top-left. Active
+                tab gets the grey pill background (per Figma). */}
+            <div className="fixed top-[4px] right-4 z-[20] flex items-center gap-2 text-[12px] font-bold">
+                <Link href="/admin/products" className="px-[10px] py-[6px] opacity-60 hover:opacity-100">
+                    Stock
+                </Link>
+                <span className="px-[10px] py-[6px] bg-[#d9d9d9]/40">
+                    Photos
+                </span>
+            </div>
+
+            {/* Product grid — 3 columns, centered labels, generous horizontal padding */}
+            <div className="flex-1 overflow-y-auto pt-32 pb-24 px-6">
+                <div className="grid grid-cols-3 gap-x-4 gap-y-10">
+                        {filteredProducts.map((p) => {
+                            const src = primaryImage(p)
+                            const status = statusOf(p)
+                            const dotColor =
+                                status === 'IN_STOCK' ? STOCK_COLORS.IN_STOCK :
+                                status === 'LOW_STOCK' ? STOCK_COLORS.LOW_STOCK :
+                                status === 'NO_STOCK' ? STOCK_COLORS.NO_STOCK :
+                                '#ffffff'
+                            const dotBordered = status === 'UNPUBLISHED'
+                            return (
+                                <Link
+                                    key={p.id}
+                                    href={`/admin/products/${p.id}/images`}
+                                    className="flex flex-col items-center"
+                                >
+                                    <div className="w-full aspect-[3/4] flex items-center justify-center px-3">
+                                        {src ? (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img
+                                                src={src}
+                                                alt={p.name}
+                                                className="max-h-full max-w-full object-contain opacity-90"
+                                                draggable={false}
+                                            />
+                                        ) : (
+                                            <span className="text-neutral-300 text-[8pt]">—</span>
+                                        )}
+                                    </div>
+                                    <div className="mt-3 flex items-center gap-[6px]">
+                                        <span
+                                            className="inline-block w-[7px] h-[7px] rounded-full shrink-0"
+                                            style={{
+                                                backgroundColor: dotColor,
+                                                border: dotBordered ? '1px solid #1a1a1a' : 'none',
+                                            }}
+                                        />
+                                        <span className="text-[12px] font-bold leading-none">
+                                            {p.name}
+                                        </span>
+                                    </div>
+                                </Link>
+                            )
+                        })}
+                </div>
+            </div>
+
+            {/* Bottom filter chips */}
+            <div className="absolute bottom-4 inset-x-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.05em] flex-wrap gap-y-2">
+                <StockFilterChip
+                    label={`All${counts.total !== totalProducts ? ` · ${counts.total}` : ''}`}
+                    active={stockFilter === 'ALL'}
+                    onClick={() => setStockFilter('ALL')}
+                />
+                <StockFilterChip
+                    label={`${counts.inStock} In Stock`}
+                    dot={STOCK_COLORS.IN_STOCK}
+                    active={stockFilter === 'IN_STOCK'}
+                    onClick={() => setStockFilter(stockFilter === 'IN_STOCK' ? 'ALL' : 'IN_STOCK')}
+                />
+                <StockFilterChip
+                    label={`${counts.lowStock} Low`}
+                    dot={STOCK_COLORS.LOW_STOCK}
+                    active={stockFilter === 'LOW_STOCK'}
+                    onClick={() => setStockFilter(stockFilter === 'LOW_STOCK' ? 'ALL' : 'LOW_STOCK')}
+                />
+                <StockFilterChip
+                    label={`${counts.noStock} Out`}
+                    dot={STOCK_COLORS.NO_STOCK}
+                    active={stockFilter === 'NO_STOCK'}
+                    onClick={() => setStockFilter(stockFilter === 'NO_STOCK' ? 'ALL' : 'NO_STOCK')}
+                />
+                <StockFilterChip
+                    label={`${counts.unpub} Unpublished`}
+                    dot="#ffffff"
+                    bordered
+                    active={stockFilter === 'UNPUBLISHED'}
+                    onClick={() => setStockFilter(stockFilter === 'UNPUBLISHED' ? 'ALL' : 'UNPUBLISHED')}
+                />
+            </div>
+        </div>
     )
 }

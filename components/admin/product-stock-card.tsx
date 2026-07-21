@@ -17,6 +17,7 @@ type ImageEntry = {
     isCartPrimary?: boolean
     isMobilePrimary?: boolean
     isDesktopPrimary?: boolean
+    isInventoryPrimary?: boolean
 }
 
 type StockStatus = 'IN_STOCK' | 'LOW_STOCK' | 'NO_STOCK' | 'UNPUBLISHED'
@@ -64,6 +65,7 @@ export function ProductStockCard({ product }: { product: ProductWithSizes }) {
     const raw = product.images as unknown
     const imgs = (Array.isArray(raw) ? raw : []) as ImageEntry[]
     const cartImg =
+        imgs.find((i) => i?.isInventoryPrimary)?.url ??
         imgs.find((i) => i?.isCartPrimary)?.url ??
         imgs.find((i) => i?.isMobilePrimary)?.url ??
         imgs[0]?.url ??

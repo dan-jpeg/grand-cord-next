@@ -4,11 +4,16 @@ import { prisma } from '@/lib/prisma'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ProductDetailView } from '@/components/admin/product-detail-view'
+import type { Tab } from '@/components/admin/product-form'
+
+const VALID_TABS: Tab[] = ['identity', 'look', 'sizing', 'listing', 'sales', 'history']
 
 export default async function ProductDetailPage({
                                                     params,
+                                                    searchParams,
                                                 }: {
     params: Promise<{ id: string }>
+    searchParams: Promise<{ tab?: string }>
 }) {
     const session = await auth()
     if (!session) {
@@ -16,6 +21,8 @@ export default async function ProductDetailPage({
     }
 
     const { id } = await params
+    const { tab } = await searchParams
+    const initialTab = VALID_TABS.find((t) => t === tab)
 
     const product = await prisma.product.findUnique({
         where: { id },
@@ -74,7 +81,7 @@ export default async function ProductDetailPage({
                             Manage sizing →
                         </Link>
                     </div>
-                    <ProductDetailView product={product} orders={orders} inventoryLogs={inventoryLogs} />
+                    <ProductDetailView product={product} orders={orders} inventoryLogs={inventoryLogs} initialTab={initialTab} />
                 </div>
             </div>
         </div>
