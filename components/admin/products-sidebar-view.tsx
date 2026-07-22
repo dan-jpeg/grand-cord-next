@@ -897,7 +897,7 @@ function MobileInventoryPhotosView({
                                             <span className="text-neutral-300 text-[8pt]">—</span>
                                         )}
                                     </div>
-                                    <div className="mt-3 flex items-center gap-[6px]">
+                                    <div className="mt-[-12] flex items-center gap-[6px]">
                                         <span
                                             className="inline-block w-[7px] h-[7px] rounded-full shrink-0"
                                             style={{

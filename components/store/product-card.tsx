@@ -211,7 +211,7 @@ export function ProductCard({
                         <p className="">{product.name}</p>
 
                         {designerLabel && (
-                            <p className={`mt-12 ${keepDesignerSingleLine ? 'whitespace-nowrap' : ''}`}>{designerLabel}</p>
+                            <p className={`mt-12 text-[6.5pt] xl:text-[8pt] ${keepDesignerSingleLine ? 'whitespace-nowrap' : ''}`}>{designerLabel}</p>
                         )}
                     </div>
                 </div>

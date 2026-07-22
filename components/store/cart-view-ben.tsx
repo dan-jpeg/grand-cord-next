@@ -12,7 +12,7 @@ export function CartViewBen() {
     const isEmpty = items.length === 0
 
     return (
-        <div className="min-h-screen bg-white font-inter pb-16 overflow-x-hidden">
+        <div className="min-h-[100dvh] bg-white font-inter pb-16 max-lg:pb-40 overflow-x-hidden">
             <div className="max-w-6xl  px-8 md:max-w-7xl">
                 {/* Mobile Layout - Completely Original */}
                 <div className="lg:hidden flex flex-col gap-1.5">
@@ -25,11 +25,11 @@ export function CartViewBen() {
                         ))}
                     </AnimatePresence>
                     {isEmpty && (
-                        <div className="flex flex-col items-center justify-center gap-2 mt-16 min-h-[calc(100vh-204px)] text-center text-[8.5pt] font-medium">
-                            <span>You have nothing in your cart.</span>
+                        <div className="fixed inset-x-0 top-0 bottom-[140px] flex flex-col items-center justify-center gap-2 text-center text-[8.5pt] font-medium">
+
                             <Link href="/" className="flex items-center gap-2">
                                 <span className="text-[6px]">▶</span>
-                                <span className="underline underline-offset-4 hover:no-underline">Return to catalog</span>
+                                <span className="hover:underline hover:underline-offset-4 ">Return to catalog</span>
                             </Link>
                         </div>
                     )}

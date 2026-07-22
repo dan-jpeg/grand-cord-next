@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useCart } from '@/contexts/cart-context'
+import { CartIndicator } from '@/components/store/cart-indicator'
 import type { Product, ProductSize } from '@prisma/client'
 import { motion } from 'framer-motion'
 import { formatDesignerNames } from '@/lib/designers'
@@ -108,6 +109,9 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
 
     return (
         <div className="min-h-screen bg-white lg:h-screen lg:overflow-hidden">
+            {/* Desktop cart indicator — top-right, replaces the sticky nav that PDPs opt out of. */}
+            <CartIndicator className="hidden lg:flex fixed top-4 right-[2vw] z-30" />
+
             {/* Desktop Layout */}
             <div className="hidden lg:grid h-full max-w-[1700px] mx-auto grid-cols-11 font-inter">
                 {/* Product Info - 5 columns. Padding is per-section so the sizing bg can fill full width. */}

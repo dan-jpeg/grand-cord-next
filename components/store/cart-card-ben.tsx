@@ -15,10 +15,10 @@
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="grid grid-cols-[120px_120px_140px] items-start"
+                    className="grid w-full max-w-[380px] grid-cols-[120fr_120fr_140fr] items-start"
                 >
                     {/* PHOTO */}
-                    <div className="relative w-[119x] h-[160px] bg-[#f2f2f2]">
+                    <div className="relative w-full h-[160px] bg-[#f2f2f2]">
                         <Image
                             src={item.image}
                             alt={item.productName}
@@ -36,7 +36,7 @@
                         <div className="flex bg-blue-600/0 flex-col items-end gap-6">
                             <span>{formatPrice(item.price)}. 00</span>
 
-                            <span className="">
+                            <span className="lowercase">
                     size {item.size}
                 </span>
 
@@ -58,7 +58,7 @@
                         </div>
 
                         {/* Material */}
-                        <div>
+                        <div className="lowercase">
                             {item.material}
                         </div>
 

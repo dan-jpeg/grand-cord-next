@@ -82,7 +82,7 @@ export function ImageManager({
                 {images.map((image, index) => (
                     <div key={image.url + index}>
                         {/* Image */}
-                        <div className="relative aspect-[4/5] bg-neutral-100 overflow-hidden">
+                        <div className="relative aspect-[4/5] overflow-hidden">
                             <Image
                                 src={image.url}
                                 alt={`Product image ${index + 1}`}

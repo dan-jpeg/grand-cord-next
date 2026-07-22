@@ -68,7 +68,7 @@ export function CartViewMobile() {
                                 </div>
 
                                 {/* Price - flex to fill remaining space, right aligned */}
-                                <div className="font-bold flex-1 text-right">
+                                <div className="font-bold flex-shrink-0 text-right whitespace-nowrap">
                                     {Math.round(item.price * item.quantity)} USD
                                 </div>
                             </motion.div>

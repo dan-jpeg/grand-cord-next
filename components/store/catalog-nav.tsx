@@ -351,11 +351,11 @@ export function CatalogNav({
         <>
             {/* ============================== MOBILE ============================== */}
             <div
-                className="lg:hidden bg-transparent w-full min-h-[120px]"
+                className="lg:hidden bg-transparent w-full"
                 data-catalog-nav
                 onClick={handleNavBackgroundClick}
             >
-                <div className="flex flex-col pl-4 pr-10 relative transition-all gap-3 pt-6 pb-6">
+                <div className="flex flex-col pl-4 pr-10 relative transition-all gap-3 pt-6 pb-6 min-h-[72px]">
                     {/* Header Row */}
                     <div className="flex items-center justify-between relative z-10 w-full">
                         {catalogHomeHref ? (
@@ -463,7 +463,7 @@ export function CatalogNav({
                                 animate={{ opacity: layoutOpacity, y: 0 }}
                                 exit={{ opacity: 0, y: -40 }}
                                 transition={{ duration: 0.17 }}
-                                className="absolute left-0 right-0 top-full -mt-2 pt-4 pb-4 grid grid-cols-[auto_1fr_auto] bg-white items-center text-[9pt] pl-12  md:px-8"
+                                className="absolute left-0 right-0 top-full -mt-2 pt-4 pb-4 grid grid-cols-[auto_1fr_auto] bg-white items-center text-[9pt] pl-12  md:pr-8"
                             >
                                 <span>Layout</span>
                                 <div className="flex gap-20 justify-center">

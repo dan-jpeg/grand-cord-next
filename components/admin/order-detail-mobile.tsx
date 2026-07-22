@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { formatPrice } from '@/lib/utils'
@@ -20,9 +20,11 @@ type ShippingAddress = {
 
 const fmtStatus = (s: string) => s.charAt(0) + s.slice(1).toLowerCase()
 
-// Full-screen mobile order detail. Matches Figma node 1720:3251 — 12px bold
-// Alte Haas type, product shots up top, item lines, status, address/email and
-// a bottom-anchored order-number / date / time bar.
+// Full-screen mobile order detail. Matches Figma node 1734:1963. The UI splits
+// into two viewport-anchored groups: the top (header · items · total) hugs the
+// top edge, the bottom (address · email · tracking · product shots · footer)
+// hugs the bottom edge, with empty space between. Item prices sit one line
+// below their qty line, pushed to the right edge.
 export function OrderDetailMobile({
     order,
     shippingAddress,
@@ -33,40 +35,6 @@ export function OrderDetailMobile({
     productImages: Record<string, string>
 }) {
     const [status, setStatus] = useState(order.status)
-
-    // Tap an item line to spotlight it: the tapped line + its photo go to 95%
-    // opacity, everything else dims to 20%. Tapping again (or 10s of inactivity)
-    // returns to normal.
-    const [selectedId, setSelectedId] = useState<string | null>(null)
-    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-    useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
-
-    const clearTimer = () => {
-        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
-    }
-
-    const toggleItem = (id: string) => {
-        clearTimer()
-        if (selectedId === id) {
-            setSelectedId(null)
-            return
-        }
-        setSelectedId(id)
-        timerRef.current = setTimeout(() => setSelectedId(null), 10000)
-    }
-
-    // Tapping anywhere outside an item line/photo clears the spotlight.
-    const resetSelection = () => {
-        clearTimer()
-        setSelectedId(null)
-    }
-
-    // Opacity for an element tied to a specific item (line or photo).
-    const itemOpacity = (id: string, base = '') =>
-        selectedId ? (id === selectedId ? 'opacity-95' : 'opacity-20') : base
-    // Opacity for everything not tied to the selected item.
-    const restOpacity = selectedId ? 'opacity-20' : ''
 
     const orderNumber = order.orderNumber.startsWith('O-')
         ? order.orderNumber
@@ -95,20 +63,89 @@ export function OrderDetailMobile({
     }
 
     return (
-        <div onClick={resetSelection} className="lg:hidden fixed inset-0 z-[100] bg-white flex flex-col text-[12px] font-bold text-black">
-            {/* Header — eye · Orders back link, order number badge. */}
-            <div className="flex items-center justify-between px-[16px] pt-[12px]">
-                <Link href="/admin/orders" className="flex items-center gap-[10px]">
-                    <Image src="/eye.svg" alt="" width={20} height={10} />
-                    <span className="opacity-40">—</span>
-                    <span>Orders</span>
-                </Link>
-                <span className={`bg-[#e8e6e6] px-[8px] py-[1px] transition-opacity duration-150 ${restOpacity}`}>{orderNumber}</span>
+        <div className="lg:hidden fixed inset-0 z-[100] bg-white flex flex-col justify-between text-[12px] font-bold text-black">
+            {/* ── Top-anchored group ─────────────────────────────── */}
+            <div>
+                {/* Header — eye · Orders (left), order badge (center), status (right). */}
+                <div className="relative flex items-start justify-between px-[11px] pt-[14px]">
+                    <Link href="/admin/orders" className="flex items-center gap-[10px]">
+                        <Image src="/eye.svg" alt="" width={20} height={10} />
+                        <span className="opacity-40">—</span>
+                        <span>Orders</span>
+                    </Link>
+
+                    <span className="absolute left-1/2 -translate-x-1/2 top-[15px] bg-[#e8e6e6] px-[8px] py-[1px]">
+                        {orderNumber}
+                    </span>
+
+                    <div className="flex items-center gap-[8px]">
+                        <span>Status:</span>
+                        <div className="relative flex items-center">
+                            <span>{fmtStatus(status)}</span>
+                            <svg className="ml-[6px]" width="8" height="4" viewBox="0 0 8 4" fill="none" aria-hidden>
+                                <path d="M0 0L4 4L8 0H0Z" fill="currentColor" />
+                            </svg>
+                            <select
+                                value={status}
+                                onChange={(e) => handleStatusChange(e.target.value)}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                aria-label="Order status"
+                            >
+                                <option value="PENDING">Pending</option>
+                                <option value="PAID">Paid</option>
+                                <option value="SHIPPED">Shipped</option>
+                                <option value="CANCELLED">Cancelled</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Items — name / size / qty on the left, price one line below qty. */}
+                <div className="px-[10px] pt-[128px] space-y-[28px]">
+                    {order.items.map((item) => (
+                        <div key={item.id} className="grid grid-cols-[1fr_auto] items-start">
+                            <div className="space-y-[1px]">
+                                <div className="truncate">{item.productName}</div>
+                                <div>size: {item.size}</div>
+                                <div>qty: {item.quantity}</div>
+                            </div>
+                            <div className="justify-self-end self-end translate-y-full">
+                                {formatPrice(item.price * item.quantity)}
+                            </div>
+                        </div>
+                    ))}
+
+                    {/* Total — amount on the same line as the label. */}
+                    <div className="grid grid-cols-[1fr_auto] items-start pt-[24px]">
+                        <span>total</span>
+                        <span className="justify-self-end">{formatPrice(order.total)}</span>
+                    </div>
+                </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
-                {/* Product shots. */}
-                <div className="flex justify-center gap-[10px] pt-[40px]">
+            {/* ── Bottom-anchored group ──────────────────────────── */}
+            <div className="px-[10px] pb-[13px]">
+                {/* Shipping address. */}
+                <div className="space-y-[1px]">
+                    <div>{shippingAddress.name}</div>
+                    <div>{shippingAddress.address}</div>
+                    <div>
+                        {shippingAddress.city}, {shippingAddress.state} {shippingAddress.zip}
+                    </div>
+                    <div>{shippingAddress.country}</div>
+                </div>
+
+                {/* Email. */}
+                <div className="pt-[11px]">{order.email}</div>
+
+                {/* Tracking — label left, number right. */}
+                <div className="flex items-start justify-between pt-[27px]">
+                    <span>tracking:</span>
+                    <span>{order.trackingNumber || 'XXXXXNOTRACKINGYET'}</span>
+                </div>
+
+                {/* Product shots — bottom-right. */}
+                <div className="flex justify-end gap-[8px] pt-[17px] pr-[6px]">
                     {order.items.map((item) => {
                         const src = productImages[item.productId]
                         return src ? (
@@ -118,96 +155,21 @@ export function OrderDetailMobile({
                                 src={src}
                                 alt={item.productName}
                                 draggable={false}
-                                onClick={(e) => { e.stopPropagation(); toggleItem(item.id) }}
-                                className={`h-[36px] w-[32px] object-contain cursor-pointer transition-opacity duration-150 ${itemOpacity(item.id, 'opacity-90')}`}
+                                className="h-[34px] w-[31px] object-contain opacity-90"
                             />
                         ) : null
                     })}
                 </div>
 
-                {/* Item lines. */}
-                <div className="px-[16px] pt-[50px] space-y-[10px]">
-                    {order.items.map((item) => (
-                        <div
-                            key={item.id}
-                            onClick={(e) => { e.stopPropagation(); toggleItem(item.id) }}
-                            className={`grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-[12px] cursor-pointer transition-opacity duration-150 ${itemOpacity(item.id)}`}
-                        >
-                            <span className="truncate">{item.productName}</span>
-                            <span>size: {item.size}</span>
-                            <span>qty: {item.quantity}</span>
-                            <span className="flex items-center gap-[8px] justify-end">
-                                <span className="h-px w-[42px] bg-black" />
-                                <span className="w-[36px] text-right">
-                                    {formatPrice(item.price * item.quantity)}
-                                </span>
-                            </span>
-                        </div>
-                    ))}
-
-                    {/* Total. */}
-                    <div className={`grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-[12px] pt-[16px] transition-opacity duration-150 ${restOpacity}`}>
-                        <span />
-                        <span />
-                        <span className="justify-self-end pr-[4px]">total</span>
-                        <span className="flex items-center gap-[8px] justify-end">
-                            <span className="h-px w-[42px] bg-black" />
-                            <span className="w-[36px] text-right">{formatPrice(order.total)}</span>
-                        </span>
-                    </div>
+                {/* Footer — order number (left) · date — time cluster starts at viewport center. */}
+                <div className="grid grid-cols-2 items-center pt-[11px]">
+                    <span>{orderNumber}</span>
+                    <span className="flex items-center gap-[8px]">
+                        <span>{fmtDate}</span>
+                        <span className="h-px w-[42px] bg-black" />
+                        <span>{fmtTime}</span>
+                    </span>
                 </div>
-
-                {/* Status. */}
-                <div className={`flex items-center justify-between px-[21px] pt-[150px] transition-opacity duration-150 ${restOpacity}`}>
-                    <span>Status:</span>
-                    <div className="relative flex items-center">
-                        <span>{fmtStatus(status)}</span>
-                        <svg
-                            className="ml-[6px]"
-                            width="8"
-                            height="4"
-                            viewBox="0 0 8 4"
-                            fill="none"
-                            aria-hidden
-                        >
-                            <path d="M0 0L4 4L8 0H0Z" fill="currentColor" />
-                        </svg>
-                        <select
-                            value={status}
-                            onChange={(e) => handleStatusChange(e.target.value)}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                            aria-label="Order status"
-                        >
-                            <option value="PENDING">Pending</option>
-                            <option value="PAID">Paid</option>
-                            <option value="SHIPPED">Shipped</option>
-                            <option value="CANCELLED">Cancelled</option>
-                        </select>
-                    </div>
-                </div>
-
-                {/* Address + email. */}
-                <div className={`flex justify-between px-[21px] pt-[120px] transition-opacity duration-150 ${restOpacity}`}>
-                    <div className="space-y-[7px]">
-                        <div>{shippingAddress.name}</div>
-                        <div>{shippingAddress.address}</div>
-                        <div>
-                            {shippingAddress.city}, {shippingAddress.state} {shippingAddress.zip}
-                        </div>
-                        <div>{shippingAddress.country}</div>
-                    </div>
-                    <div>{order.email}</div>
-                </div>
-            </div>
-
-            {/* Bottom bar — order number · date · time. */}
-            <div className={`shrink-0 grid grid-cols-3 items-center px-[23px] pb-[18px] pt-[10px] transition-opacity duration-150 ${restOpacity}`}>
-                <span>{orderNumber}</span>
-                <span className="text-center">{fmtDate}</span>
-                <span className="flex items-center justify-end gap-[8px]">
-                    <span className="h-px w-[42px] bg-black" />
-                    {fmtTime}
-                </span>
             </div>
         </div>
     )
