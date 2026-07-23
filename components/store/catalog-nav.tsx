@@ -137,14 +137,38 @@ export function CatalogNav({
     // Collapse the mobile layout switcher once the user scrolls ~20px from
     // wherever it opened. Flipping showLayout off lets AnimatePresence play the
     // smooth exit (see the Layout Switcher block below).
+    //
+    // Only *user-driven* scrolls (touch/wheel) collapse it. Tapping "Catalog"
+    // fires a programmatic scrollToCatalogTop, and counting that would slam the
+    // menu shut the instant it opens — so scrolls with no recent gesture just
+    // resync the baseline instead. A short idle timer keeps the gesture "live"
+    // through iOS momentum scrolling after the finger lifts.
     useEffect(() => {
         if (!showLayout || isDesktop) return
-        const startY = window.scrollY
+        let startY = window.scrollY
+        let userScrolling = false
+        let idleTimer: ReturnType<typeof setTimeout>
+
+        const markUser = () => { userScrolling = true; clearTimeout(idleTimer) }
         const onScroll = () => {
+            if (!userScrolling) {
+                startY = window.scrollY // programmatic scroll — don't count it
+                return
+            }
+            clearTimeout(idleTimer)
+            idleTimer = setTimeout(() => { userScrolling = false }, 200)
             if (Math.abs(window.scrollY - startY) > 20) setShowLayout(false)
         }
+
+        window.addEventListener('touchmove', markUser, { passive: true })
+        window.addEventListener('wheel', markUser, { passive: true })
         window.addEventListener('scroll', onScroll, { passive: true })
-        return () => window.removeEventListener('scroll', onScroll)
+        return () => {
+            clearTimeout(idleTimer)
+            window.removeEventListener('touchmove', markUser)
+            window.removeEventListener('wheel', markUser)
+            window.removeEventListener('scroll', onScroll)
+        }
     }, [showLayout, isDesktop])
 
     // Typewriter Cart Animation
