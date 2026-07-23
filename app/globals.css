@@ -117,7 +117,7 @@ html {
 }
 
 html, body {
-  overscroll-behavior: none;
+  overscroll-behavior: auto; /* native scroll bounce / rubber-banding */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
