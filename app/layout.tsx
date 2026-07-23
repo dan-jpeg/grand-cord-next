@@ -5,6 +5,9 @@ import { CartProvider } from '@/contexts/cart-context'
 export const metadata: Metadata = {
     title: 'grand-cord',
     description: 'grand-cord studio ',
+    // Stop iOS Safari's Data Detectors from auto-linking the address/phone/etc.
+    // in body text (the stray dotted-underline "links" on Apple devices).
+    formatDetection: { telephone: false, date: false, address: false, email: false },
 }
 
 export const viewport: Viewport = {

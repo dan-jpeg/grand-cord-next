@@ -134,6 +134,19 @@ export function CatalogNav({
         return () => window.removeEventListener('scroll', checkLayoutPos)
     }, [showLayout, isDesktop])
 
+    // Collapse the mobile layout switcher once the user scrolls ~20px from
+    // wherever it opened. Flipping showLayout off lets AnimatePresence play the
+    // smooth exit (see the Layout Switcher block below).
+    useEffect(() => {
+        if (!showLayout || isDesktop) return
+        const startY = window.scrollY
+        const onScroll = () => {
+            if (Math.abs(window.scrollY - startY) > 20) setShowLayout(false)
+        }
+        window.addEventListener('scroll', onScroll, { passive: true })
+        return () => window.removeEventListener('scroll', onScroll)
+    }, [showLayout, isDesktop])
+
     // Typewriter Cart Animation
     useEffect(() => {
         clearAnimation()
@@ -462,7 +475,7 @@ export function CatalogNav({
                                 initial={{ opacity: 0, y: -40 }}
                                 animate={{ opacity: layoutOpacity, y: 0 }}
                                 exit={{ opacity: 0, y: -40 }}
-                                transition={{ duration: 0.17 }}
+                                transition={{ duration: 0.3, ease: 'easeInOut' }}
                                 className="absolute left-0 right-0 top-full -mt-2 pt-4 pb-4 grid grid-cols-[auto_1fr_auto] bg-white items-center text-[9pt] pl-12  md:pr-8"
                             >
                                 <span>Layout</span>
