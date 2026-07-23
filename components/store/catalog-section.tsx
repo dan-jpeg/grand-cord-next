@@ -56,7 +56,7 @@ export function CatalogSection({
     }, [mobileLayout])
 
     return (
-        <section id="catalog" className={`pb-24 lg:pt-24 max-lg:min-h-[calc(100dvh-72px)] ${mobileLayout === '3x3' ? 'pt-8' : mobileLayout === '2x2' ? 'pt-14' : 'pt-24'}`}>
+        <section id="catalog" className={` lg:pt-24 max-lg:min-h-[calc(100dvh-72px)] ${mobileLayout === '3x3' ? 'pt-8' : mobileLayout === '2x2' ? 'pt-14' : 'pt-24'}`}>
             {/* Non-sticky marker for scroll-to-top targeting. The nav below is
                 position: sticky, so once it's pinned its own rect always
                 reads top:0 and scrollIntoView on it becomes a no-op. */}
