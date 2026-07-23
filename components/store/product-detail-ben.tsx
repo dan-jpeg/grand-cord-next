@@ -258,8 +258,9 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                 <div className="col-span-1"/>
             </div>
 
-            {/* Mobile Layout */}
-            <div className="lg:hidden scale-90 font-inter">
+            {/* Mobile Layout — pb here (not a margin on the images) so the gap below
+                the image column can't margin-collapse out of the bg-white container. */}
+            <div className="lg:hidden scale-90 font-inter pb-[140px]">
                 {/* Product Info */}
                 <div className="px-6 pt-12 ">
                     {/* Header */}
@@ -382,7 +383,7 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                 </div>
 
                 {/* Mobile Images */}
-                <div className=" -mx-6  mb-4 scale-105ç h-[59vh] snap-y snap-mandatory scroll-smooth">
+                <div className=" -mx-6  scale-100 h-[59vh] snap-y snap-mandatory scroll-smooth">
                     {imageArray.map((img, index) => (
                         <div key={index} className="w-full snap-start snap-always">
                        {img ? (

@@ -54,10 +54,9 @@ export function CartViewBen() {
                                         <div />
                                         <div />
                                         <div className="py-4 mt-4 flex justify-end gap-8 pr-12 text-[8.5pt] font-medium">
-                                            <span>You have nothing in your cart.</span>
                                             <Link href="/" className="flex items-center gap-2">
                                                 <span className="text-[6px]">▶</span>
-                                                <span className="underline underline-offset-4 hover:no-underline">Return to catalog</span>
+                                                <span className=" underline-offset-4 hover:underline">Return to catalog</span>
                                             </Link>
                                         </div>
                                     </div>
