@@ -1,9 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect, notFound } from 'next/navigation'
-import { AdminNav } from '@/components/admin/admin-nav'
 import { ProductSizingView } from '@/components/admin/product-sizing-view'
-import { getPickUrgency } from '@/lib/pick'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +17,7 @@ export default async function ProductSizingPage({
 
     const { id } = await params
 
-    const [product, allAttributes, pickUrgency] = await Promise.all([
+    const [product, allAttributes] = await Promise.all([
         prisma.product.findUnique({
             where: { id },
             include: {
@@ -38,7 +36,6 @@ export default async function ProductSizingPage({
             where: { enabled: true },
             orderBy: [{ category: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
         }),
-        getPickUrgency(),
     ])
 
     if (!product) notFound()
@@ -48,33 +45,28 @@ export default async function ProductSizingPage({
     )
 
     return (
-        <div className="absolute inset-0 bg-white overflow-auto">
-            <AdminNav active="inventory" variant="centered" pickUrgency={pickUrgency} />
-            <div className="w-full px-8 md:px-16 pt-16 pb-12">
-                <ProductSizingView
-                    product={{ id: product.id, name: product.name, slug: product.slug }}
-                    sizes={sortedSizes.map((s) => ({
-                        id: s.id,
-                        size: s.size,
-                        measurements: Object.fromEntries(
-                            s.measurements.map((m) => [m.sizingAttributeId, m.value]),
-                        ),
-                    }))}
-                    productAttributes={product.sizingAttributes.map((pa) => ({
-                        id: pa.sizingAttribute.id,
-                        title: pa.sizingAttribute.title,
-                        description: pa.sizingAttribute.description,
-                        category: pa.sizingAttribute.category,
-                        sortOrder: pa.sortOrder,
-                    }))}
-                    allAttributes={allAttributes.map((a) => ({
-                        id: a.id,
-                        title: a.title,
-                        description: a.description,
-                        category: a.category,
-                    }))}
-                />
-            </div>
-        </div>
+        <ProductSizingView
+            product={{ id: product.id, name: product.name }}
+            sizes={sortedSizes.map((s) => ({
+                id: s.id,
+                size: s.size,
+                measurements: Object.fromEntries(
+                    s.measurements.map((m) => [m.sizingAttributeId, m.value]),
+                ),
+            }))}
+            productAttributes={product.sizingAttributes.map((pa) => ({
+                id: pa.sizingAttribute.id,
+                title: pa.sizingAttribute.title,
+                description: pa.sizingAttribute.description,
+                category: pa.sizingAttribute.category,
+                sortOrder: pa.sortOrder,
+            }))}
+            allAttributes={allAttributes.map((a) => ({
+                id: a.id,
+                title: a.title,
+                description: a.description,
+                category: a.category,
+            }))}
+        />
     )
 }

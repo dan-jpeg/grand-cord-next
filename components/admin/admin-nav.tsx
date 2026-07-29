@@ -5,6 +5,17 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { signOut } from 'next-auth/react'
+import navFrame1 from '@/app/admin/nav-icon/frame00001.png'
+import navFrame2 from '@/app/admin/nav-icon/frame00002.png'
+import navFrame3 from '@/app/admin/nav-icon/frame00003.png'
+import navFrame4 from '@/app/admin/nav-icon/frame00004.png'
+import navFrame5 from '@/app/admin/nav-icon/frame00005.png'
+import navFrame6 from '@/app/admin/nav-icon/frame00006.png'
+
+// Eye/hub icon — a 6-frame sprite sequence. Opening plays frame 1 → 6,
+// closing plays it backwards (6 → 1), both over ~0.4s.
+const NAV_ICON_FRAMES = [navFrame1, navFrame2, navFrame3, navFrame4, navFrame5, navFrame6]
+const NAV_ICON_DURATION_MS = 400
 
 function handleLogout() {
     signOut({ callbackUrl: '/admin/login' })
@@ -21,12 +32,24 @@ type AdminNavProps = {
     mobileVariant?: 'eye' | 'hub'
     /**
      * Optional short label rendered next to the mobile eye icon (e.g. "Inventory",
-     * "Orders"). Tapping the label opens the hub, same as the eye.
+     * "Orders"). Tapping the label opens the hub, same as the eye — unless
+     * `mobileBackHref` is set (see below).
      */
     mobileLabel?: string
+    /**
+     * When set, tapping the mobile label navigates here instead of opening the
+     * hub. Use this on sub-pages of a section (e.g. a product edit page under
+     * Inventory) so the first tap returns to the section's base page (e.g.
+     * /admin/products-new); the base page itself omits this prop, so tapping
+     * the label there opens the hub like normal. The eye icon always opens
+     * the hub regardless of this prop.
+     */
+    mobileBackHref?: string
     pickUrgency?: string | null
     topClass?: string
     leftClass?: string
+    /** Notifies when the mobile eye-hub overlay opens/closes. */
+    onMobileHubOpenChange?: (open: boolean) => void
 }
 
 const PRIMARY_NAV_ITEMS = [
@@ -118,7 +141,7 @@ function MobileHubNav({ active, pickUrgency, onClose }: { active: AdminNavProps[
                     />
                 </svg>
             )}
-            <div className="fixed inset-0 flex z-[200] bg-white">
+            <div className="fixed inset-0 flex z-[200] bg-white overscroll-none">
                 {PRIMARY_NAV_ITEMS.map((item, i) => (
                     <div
                         key={item.key}
@@ -261,13 +284,36 @@ function DesktopMoreMenu({
     )
 }
 
-function MobileEyeHub({ active, pickUrgency, label }: { active: AdminNavProps['active']; pickUrgency?: string | null; label?: string }) {
+function MobileEyeHub({ active, pickUrgency, label, backHref, onOpenChange }: { active: AdminNavProps['active']; pickUrgency?: string | null; label?: string; backHref?: string; onOpenChange?: (open: boolean) => void }) {
     // Two-phase open/close so the hub can fade in/out cleanly:
     // `mounted` decides whether it lives in the tree at all; `visible` drives
     // the opacity class. On close we flip visible first, then unmount after
     // the transition completes.
     const [mounted, setMounted] = useState(false)
     const [visible, setVisible] = useState(false)
+    const [iconFrame, setIconFrame] = useState(0)
+
+    useEffect(() => {
+        onOpenChange?.(visible)
+    }, [visible, onOpenChange])
+
+    // Step through the sprite sequence forwards (opening) or backwards
+    // (closing), evenly spaced across NAV_ICON_DURATION_MS.
+    useEffect(() => {
+        const steps = NAV_ICON_FRAMES.length - 1
+        const stepMs = NAV_ICON_DURATION_MS / steps
+        let i = 0
+        const raf = requestAnimationFrame(() => setIconFrame(visible ? 0 : steps))
+        const id = setInterval(() => {
+            i += 1
+            setIconFrame(visible ? i : steps - i)
+            if (i >= steps) clearInterval(id)
+        }, stepMs)
+        return () => {
+            cancelAnimationFrame(raf)
+            clearInterval(id)
+        }
+    }, [visible])
 
     const toggle = useCallback(() => {
         if (mounted && visible) {
@@ -286,23 +332,33 @@ function MobileEyeHub({ active, pickUrgency, label }: { active: AdminNavProps['a
 
     return (
         <>
-            <button
-                type="button"
-                aria-label={visible ? 'Close menu' : 'Open menu'}
-                onClick={toggle}
-                className="fixed top-[7px] left-[11px] z-[400] p-2 flex items-center gap-2"
-            >
-                <Image src="/eye.svg" alt="" width={20} height={10} priority />
+            <div className="fixed top-[7px] left-[11px] z-[400] p-2 flex items-center gap-2">
+                <button
+                    type="button"
+                    aria-label={visible ? 'Close menu' : 'Open menu'}
+                    onClick={toggle}
+                    className="flex items-center"
+                >
+                    <Image src={NAV_ICON_FRAMES[iconFrame]} alt="" width={20} height={10} priority />
+                </button>
                 {label && (
                     <>
                         <span className="text-[12px] font-bold leading-none opacity-40">—</span>
-                        <span className="text-[12px] font-bold leading-none">{label}</span>
+                        {backHref ? (
+                            <Link href={backHref} className="text-[12px] font-bold leading-none">
+                                {label}
+                            </Link>
+                        ) : (
+                            <button type="button" onClick={toggle} className="text-[12px] font-bold leading-none">
+                                {label}
+                            </button>
+                        )}
                     </>
                 )}
-            </button>
+            </div>
             {mounted && (
                 <div
-                    className={`fixed inset-0 z-[200] transition-opacity duration-200 ease-out ${
+                    className={`fixed inset-0 z-[200] overscroll-none transition-opacity duration-200 ease-out ${
                         visible ? 'opacity-100' : 'opacity-0'
                     }`}
                 >
@@ -313,10 +369,10 @@ function MobileEyeHub({ active, pickUrgency, label }: { active: AdminNavProps['a
     )
 }
 
-export function AdminNav({ active, variant = 'top-left', mobileVariant = 'eye', mobileLabel, pickUrgency, topClass = 'top-3', leftClass = 'left-3' }: AdminNavProps) {
+export function AdminNav({ active, variant = 'top-left', mobileVariant = 'eye', mobileLabel, mobileBackHref, pickUrgency, topClass = 'top-3', leftClass = 'left-3', onMobileHubOpenChange }: AdminNavProps) {
     const mobile = mobileVariant === 'hub'
         ? <MobileHubNav active={active} pickUrgency={pickUrgency} />
-        : <MobileEyeHub active={active} pickUrgency={pickUrgency} label={mobileLabel} />
+        : <MobileEyeHub active={active} pickUrgency={pickUrgency} label={mobileLabel} backHref={mobileBackHref} onOpenChange={onMobileHubOpenChange} />
 
     if (variant === 'top-left') {
         return (

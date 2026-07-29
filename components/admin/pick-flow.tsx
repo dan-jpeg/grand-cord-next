@@ -222,6 +222,7 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
     const [shipIndex, setShipIndex] = useState(0)
     const [showOverview, setShowOverview] = useState(false)
     const [runOrders, setRunOrders] = useState<FlowOrder[]>([])
+    const [navOpen, setNavOpen] = useState(false)
 
     const allSelected = selectedIds.size === orders.length
     const noneSelected = selectedIds.size === 0
@@ -345,16 +346,26 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
             {phase === 'queue' && (
                     <motion.div
                         key="queue"
-                        className="fixed inset-0 flex flex-col bg-[#e8e8e8] md:items-center"
+                        className="fixed inset-0 flex flex-col bg-[#f3f3f3] md:items-center"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.18 }}
                     >
-                        <div className="hidden md:block">
-                            <AdminNav active="pick" variant="top-left" />
-                        </div>
-                        <div className="flex flex-col bg-[#e8e8e8] w-full h-full md:max-w-screen-sm md:border md:border-black">
+                        <div className="lg:hidden fixed top-0 left-0 right-0 h-[39px] bg-white z-[290]" />
+                        <AdminNav active="pick" variant="top-left" mobileLabel="Pick" pickUrgency={batchDotColor} onMobileHubOpenChange={setNavOpen} />
+                        {orders.length > 0 && navOpen && (
+                            <div className="lg:hidden fixed top-[13px] right-4 z-[300] flex items-center gap-[7px]">
+                                <span
+                                    className="rounded-full flex-shrink-0"
+                                    style={{ display: 'inline-block', width: 8, height: 8, backgroundColor: batchDotColor }}
+                                />
+                                <span className="text-[11px] font-bold tracking-[0.09em] opacity-70">
+                                    {orders.length} Orders to Ship
+                                </span>
+                            </div>
+                        )}
+                        <div className="flex flex-col bg-[#f3f3f3] w-full h-full md:max-w-screen-sm md:border md:border-black">
                             {orders.length === 0 ? (
                                 <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
                                     <span className="font-alte text-[36px] tracking-[-0.03em] leading-none opacity-20">Pick Session</span>
@@ -365,17 +376,7 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                             ) : (
                             <>
                             <div className="flex-1 overflow-y-auto">
-                                <div className="flex items-start justify-center pt-12 pb-10 gap-[4px]">
-                                    <span className="font-alte text-[36px] tracking-[-0.03em] leading-none">Pick Session</span>
-                                    <span
-                                        className="flex-shrink-0 rounded-full bg-black flex items-center justify-center text-white font-bold leading-none select-none"
-                                        style={{ width: 10, height: 10, fontSize: 7, marginTop: 3 }}
-                                    >
-                                        i
-                                    </span>
-                                </div>
-
-                                <div className="flex items-center justify-center gap-[7px] pb-8">
+                                <div className="flex items-center justify-center gap-[7px] pt-24 pb-8">
                                     <span
                                         className="rounded-full flex-shrink-0"
                                         style={{ display: 'inline-block', width: 8, height: 8, backgroundColor: batchDotColor }}
@@ -436,7 +437,7 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                                 </div>
 
                                 <div className="flex justify-end px-5 pt-6">
-                                    <span className="font-reformat text-[10px] tracking-[0.12em] bg-white px-[10px] py-[7px]">
+                                    <span className="text-[10px] tracking-[0.12em] bg-white px-[10px] py-[7px]">
                                         {selectedIds.size} / {orders.length} selected
                                     </span>
                                 </div>
@@ -445,14 +446,14 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                                     <button
                                         onClick={() => setSelectedIds(new Set())}
                                         disabled={noneSelected}
-                                        className="text-left font-reformat text-[10px] tracking-[0.12em] uppercase disabled:opacity-30 transition-opacity w-fit"
+                                        className="text-left text-[10px] tracking-[0.12em] uppercase disabled:opacity-30 transition-opacity w-fit"
                                     >
                                         Unselect All
                                     </button>
                                     <button
                                         onClick={() => setSelectedIds(new Set(orders.map(o => o.id)))}
                                         disabled={allSelected}
-                                        className="text-left font-reformat text-[10px] tracking-[0.12em] uppercase disabled:opacity-30 transition-opacity w-fit"
+                                        className="text-left text-[10px] tracking-[0.12em] uppercase disabled:opacity-30 transition-opacity w-fit"
                                     >
                                         Select All
                                     </button>
@@ -598,15 +599,15 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                                                 {item.productName}
                                             </span>
                                             {item.color && (
-                                                <span className="font-reformat text-[9px] text-neutral-500 tracking-[0.1em] uppercase flex-shrink-0">
+                                                <span className="text-[9px] text-neutral-500 tracking-[0.1em] uppercase flex-shrink-0">
                                                     {item.color}
                                                 </span>
                                             )}
-                                            <span className="font-reformat text-[9px] text-neutral-500 tracking-[0.1em] uppercase flex-shrink-0">
+                                            <span className="text-[9px] text-neutral-500 tracking-[0.1em] uppercase flex-shrink-0">
                                                 S:{item.size}
                                             </span>
                                             {item.quantity > 1 && (
-                                                <span className="font-reformat text-[10px] font-bold tracking-[-0.01em] tabular-nums flex-shrink-0">
+                                                <span className="text-[10px] font-bold tracking-[-0.01em] tabular-nums flex-shrink-0">
                                                     ×{item.quantity}
                                                 </span>
                                             )}
@@ -647,25 +648,6 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
             })()}
 
             </AnimatePresence>
-
-            {/* ── Room Overview trigger (visible on queue + shipping; picking screen has tab in header) ── */}
-            {phase !== 'calculating' && phase !== 'picking' && (
-                <motion.button
-                    key="overview-trigger"
-                    onClick={() => setShowOverview(v => !v)}
-                    className={`fixed z-[65] flex items-center justify-center rounded-full border-2 transition-colors ${showOverview ? 'bg-black border-white text-white' : 'bg-white border-black text-black'}`}
-                    style={{ top: 32, left: 20, width: 44, height: 44 }}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.18 }}
-                    aria-label="Open room overview"
-                >
-                    <span className="font-reformat text-[12px] tracking-[0.05em] font-bold uppercase leading-none">
-                        OV
-                    </span>
-                </motion.button>
-            )}
 
             {/* ── Room Overview Sheet ── */}
             <RoomOverviewSheet
@@ -996,10 +978,10 @@ export function MultiOrderUnavailableSheet({
                             return (
                                 <div key={`${d.orderId}-${i}`} className="rounded-2xl bg-neutral-50 px-4 py-3">
                                     <div className="flex items-center gap-2 mb-2">
-                                        <span className="font-reformat text-[10px] font-bold tracking-[0.08em] uppercase">
+                                        <span className="text-[10px] font-bold tracking-[0.08em] uppercase">
                                             O-{d.orderLabel}
                                         </span>
-                                        <span className="font-reformat text-[9px] text-neutral-400 tracking-[0.06em] uppercase">
+                                        <span className="text-[9px] text-neutral-400 tracking-[0.06em] uppercase">
                                             Box #{d.boxNumber} · S:{d.size} ×{d.quantity}
                                         </span>
                                     </div>

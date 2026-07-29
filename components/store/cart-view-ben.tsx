@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useCart } from '@/contexts/cart-context'
 import { formatPrice } from '@/lib/utils'
 import Link from 'next/link'
@@ -10,6 +11,16 @@ import {CartCardBenDesktop} from "@/components/store/cart-card-ben-desktop";
 export function CartViewBen() {
     const { items, totalPrice } = useCart()
     const isEmpty = items.length === 0
+
+    // Disable the page's scroll bounce while the cart is open. This page
+    // scrolls the document, so overscroll-behavior has to live on <html>, not
+    // on a component div. The CSS rule is gated to mobile widths (see globals),
+    // so desktop keeps the native bounce.
+    useEffect(() => {
+        const el = document.documentElement
+        el.classList.add('cart-no-bounce')
+        return () => el.classList.remove('cart-no-bounce')
+    }, [])
 
     return (
         <div className="min-h-[100dvh] bg-white font-inter pb-16 max-lg:pb-40 overflow-x-hidden">

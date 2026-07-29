@@ -82,7 +82,6 @@ export function ProductForm({
     const [warnings, setWarnings] = useState<Array<{ tab: Tab; severity: 'error' | 'warning'; message: string }>>([])
 
     const [name, setName] = useState(product?.name || '')
-    const [slug, setSlug] = useState(product?.slug || '')
     const [description, setDescription] = useState(product?.description || '')
     const [keywordsInput, setKeywordsInput] = useState((product?.keywords || []).join(', '))
     const [designerNames, setDesignerNames] = useState<string[]>(
@@ -170,7 +169,6 @@ export function ProductForm({
     const currentSignature = useMemo(() => {
         return JSON.stringify({
             name: name.trim(),
-            slug: slug.trim(),
             description,
             keywords: keywordsInput.split(/[,\n]/).map((k) => k.trim()).filter(Boolean),
             designerNames: designerNames.map((n) => n.trim()).filter(Boolean),
@@ -198,7 +196,6 @@ export function ProductForm({
         })
     }, [
         name,
-        slug,
         description,
         keywordsInput,
         designerNames,
@@ -553,7 +550,6 @@ export function ProductForm({
         setIsSubmitting(true)
         const data = {
             name,
-            slug: slug || undefined,
             description: description || undefined,
             keywords: keywordsInput.split(/[,\n]/).map((k: string) => k.trim()).filter(Boolean),
             designerNames: designerNames.map((n) => n.trim()).filter(Boolean).slice(0, MAX_DESIGNERS),
@@ -957,19 +953,6 @@ export function ProductForm({
             {activeTab === 'listing' && (
                 <div className="grid grid-cols-2 gap-x-5 gap-y-5">
                     <div>
-                        <label htmlFor="slug" className={labelClass}>Slug:</label>
-                        <input
-                            id="slug"
-                            type="text"
-                            value={slug}
-                            onChange={(e) => setSlug(e.target.value)}
-                            placeholder="auto-generated-from-item-code"
-                            className={inputClass}
-                        />
-                        <p className="text-xs text-neutral-500 mt-1.5">Leave blank to auto-generate from item code</p>
-                    </div>
-
-                    <div>
                         <label htmlFor="price" className={labelClass}>Price (USD):</label>
                         <input
                             id="price"
@@ -1005,6 +988,14 @@ export function ProductForm({
                             className={`${inputClass} resize-none`}
                         />
                         <p className="text-xs text-neutral-500 mt-1.5">Comma-separated — used in store and admin search</p>
+                        {product && (
+                            <Link
+                                href={`/admin/products/${product.id}/sizing`}
+                                className="inline-block mt-2 text-xs underline underline-offset-[3px] hover:no-underline"
+                            >
+                                Manage Sizing
+                            </Link>
+                        )}
                     </div>
 
                     <div className="col-span-2 pt-3 border-t border-neutral-100">

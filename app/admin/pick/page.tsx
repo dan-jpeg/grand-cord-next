@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic'
 
 type ImageData = {
     url: string
+    isInventoryPrimary?: boolean
     isCartPrimary?: boolean
     isMobilePrimary?: boolean
     isDesktopPrimary?: boolean
@@ -31,7 +32,8 @@ export default async function AdminPickPage() {
     const productInfoMap = new Map(
         products.map(p => {
             const images = (p.images as ImageData[] | null) ?? []
-            const url = images.find(img => img.isCartPrimary)?.url
+            const url = images.find(img => img.isInventoryPrimary)?.url
+                ?? images.find(img => img.isCartPrimary)?.url
                 ?? images.find(img => img.isMobilePrimary)?.url
                 ?? images[0]?.url
                 ?? null

@@ -16,6 +16,7 @@ export type ImageRecord = {
     // (falls back to the desktop/cart primary when absent).
     isInventoryPrimary?: boolean
     showOnPdp: boolean
+    notes?: string
 }
 
 function revalidate(productId: string, slug: string) {

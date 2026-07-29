@@ -121,3 +121,12 @@ html, body {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
+
+/* Cart (mobile only) opts out of the page scroll bounce. Toggled by a class on
+   <html> while CartViewBen is mounted; desktop keeps the native bounce. */
+@media (max-width: 1023px) {
+  html.cart-no-bounce,
+  html.cart-no-bounce body {
+    overscroll-behavior: none;
+  }
+}

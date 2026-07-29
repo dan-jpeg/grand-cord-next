@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import type { FlowOrder, PickTask } from './pick-flow'
 import { ItemUnavailableSheet, MultiOrderUnavailableSheet } from './pick-flow'
+import { AdminNav } from './admin-nav'
 
 type TaskStatus = 'picked' | 'missing'
 
@@ -17,20 +18,17 @@ function urgencyColor(createdAt: Date): string {
     return '#3b82f6'
 }
 
+function mostUrgentColor(orders: FlowOrder[]): string {
+    const colors = orders.map(o => urgencyColor(o.createdAt))
+    if (colors.includes('#ef4444')) return '#ef4444'
+    if (colors.includes('#eab308')) return '#eab308'
+    return '#3b82f6'
+}
+
 const UNASSIGNED_LABEL = 'General'
 
 function roomLabel(loc: string | null): string {
     return loc?.trim() || UNASSIGNED_LABEL
-}
-
-function BoxIcon({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) {
-    return (
-        <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
-            <path d="M2 5L8 2L14 5L8 8L2 5Z" stroke={color} strokeWidth="1.2" strokeLinejoin="round" />
-            <path d="M2 5V11L8 14V8" stroke={color} strokeWidth="1.2" strokeLinejoin="round" />
-            <path d="M14 5V11L8 14" stroke={color} strokeWidth="1.2" strokeLinejoin="round" />
-        </svg>
-    )
 }
 
 // =============================================================================
@@ -140,18 +138,12 @@ type PickingRow = {
     createdAt: Date
 }
 
-type LocationGroup = {
-    room: string
-    boxes: Array<{ boxNumber: number; rows: PickingRow[] }>
-    roomTotalQty: number
-}
-
 type OrderGroup = {
     orderId: string
     orderLabel: string
     boxNumber: number
     createdAt: Date
-    rooms: Array<{ room: string; rows: PickingRow[] }>
+    rows: PickingRow[]
     totalQty: number
 }
 
@@ -186,26 +178,8 @@ function buildPickingRows(tasks: PickTask[], orders: FlowOrder[]): PickingRow[] 
 
 const detailKey = (taskIndex: number, detailIndex: number) => `${taskIndex}__${detailIndex}`
 
-function buildLocationGroups(rows: PickingRow[]): LocationGroup[] {
-    const map = new Map<string, LocationGroup>()
-    for (const row of rows) {
-        const room = roomLabel(row.warehouseLocation)
-        if (!map.has(room)) map.set(room, { room, boxes: [], roomTotalQty: 0 })
-        const g = map.get(room)!
-        g.roomTotalQty += row.quantity
-        let box = g.boxes.find(b => b.boxNumber === row.boxNumber)
-        if (!box) {
-            box = { boxNumber: row.boxNumber, rows: [] }
-            g.boxes.push(box)
-        }
-        box.rows.push(row)
-    }
-    for (const g of map.values()) {
-        g.boxes.sort((a, b) => a.boxNumber - b.boxNumber)
-    }
-    return [...map.values()].sort((a, b) => a.room.localeCompare(b.room))
-}
-
+// Order-only grouping for the picking overview (matches the Figma design):
+// one section per order, its item cards flattened out of the room buckets.
 function buildOrderGroups(rows: PickingRow[]): OrderGroup[] {
     const map = new Map<string, OrderGroup>()
     for (const row of rows) {
@@ -215,22 +189,13 @@ function buildOrderGroups(rows: PickingRow[]): OrderGroup[] {
                 orderLabel: row.orderLabel,
                 boxNumber: row.boxNumber,
                 createdAt: row.createdAt,
-                rooms: [],
+                rows: [],
                 totalQty: 0,
             })
         }
         const g = map.get(row.orderId)!
         g.totalQty += row.quantity
-        const room = roomLabel(row.warehouseLocation)
-        let r = g.rooms.find(x => x.room === room)
-        if (!r) {
-            r = { room, rows: [] }
-            g.rooms.push(r)
-        }
-        r.rows.push(row)
-    }
-    for (const g of map.values()) {
-        g.rooms.sort((a, b) => a.room.localeCompare(b.room))
+        g.rows.push(row)
     }
     return [...map.values()].sort((a, b) => a.boxNumber - b.boxNumber)
 }
@@ -296,113 +261,92 @@ function GreenCheckBadge() {
     )
 }
 
-function OrderChip({
-    orderLabel,
-    boxNumber,
-    color,
-    itemCount,
-}: {
-    orderLabel: string
-    boxNumber: number
-    color: string
-    itemCount: number
-}) {
-    return (
-        <div className="bg-white px-[10px] py-[10px] flex flex-col items-center gap-[6px] flex-shrink-0" style={{ minWidth: 92 }}>
-            <span
-                className="px-[8px] py-[3px] flex items-center gap-[5px] rounded-sm"
-                style={{ backgroundColor: '#f4f4f2' }}
-            >
-                <span
-                    className="rounded-full"
-                    style={{ display: 'inline-block', width: 6, height: 6, backgroundColor: color }}
-                />
-                <span className="font-reformat text-[9px] font-bold tracking-[0.08em]">
-                    O-{orderLabel}
-                </span>
-            </span>
-            <span className="flex items-center gap-[5px] mt-[2px]">
-                <BoxIcon size={13} color="#1a1a1a" />
-                <span className="font-alte text-[15px] tracking-[-0.02em] leading-none">
-                    #{boxNumber}
-                </span>
-            </span>
-            <span className="font-reformat text-[8px] tracking-[0.14em] text-neutral-400 uppercase">
-                {itemCount} item{itemCount !== 1 ? 's' : ''}
-            </span>
-        </div>
-    )
-}
+// ── Picking item card ──────────────────────────────────────────────────────────
+// Tap = confirm pick. Long-press = report the item missing (opens the
+// unavailable flow). A firing long-press suppresses the tap so a report
+// never doubles as a pick.
 
-function ItemRow({
+function PickCard({
     row,
     picked,
-    onToggle,
-    onMissing,
     isMissing,
+    onPick,
+    onMissing,
 }: {
     row: PickingRow
     picked: boolean
-    onToggle?: () => void
+    isMissing: boolean
+    onPick?: () => void
     onMissing?: () => void
-    isMissing?: boolean
 }) {
+    const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const longFired = useRef(false)
+
+    function clearTimer() {
+        if (pressTimer.current) {
+            clearTimeout(pressTimer.current)
+            pressTimer.current = null
+        }
+    }
+
+    function handleDown() {
+        if (isMissing || !onMissing) return
+        longFired.current = false
+        pressTimer.current = setTimeout(() => {
+            longFired.current = true
+            if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(25)
+            onMissing()
+        }, 450)
+    }
+
+    function handleUp() {
+        clearTimer()
+        if (!longFired.current && !isMissing) onPick?.()
+    }
+
     return (
-        <div
-            className="flex items-center w-full text-left px-5 py-[10px] gap-[12px] relative"
+        <button
+            type="button"
+            onPointerDown={handleDown}
+            onPointerUp={handleUp}
+            onPointerLeave={clearTimer}
+            onPointerCancel={clearTimer}
+            onContextMenu={e => e.preventDefault()}
+            disabled={isMissing || (!onPick && !onMissing)}
+            className="relative w-full h-[86px] rounded-[10px] overflow-hidden text-left select-none transition-opacity active:opacity-80"
+            style={{
+                backgroundColor: 'rgba(217,217,217,0.28)',
+                opacity: picked ? 0.45 : 1,
+                touchAction: 'pan-y',
+                WebkitTouchCallout: 'none',
+            }}
         >
-            {isMissing && (
-                <div className="absolute inset-0 bg-red-500/20 pointer-events-none" />
-            )}
-            <button
-                type="button"
-                onClick={onToggle}
-                disabled={!onToggle}
-                className={`flex items-center flex-1 min-w-0 gap-[12px] text-left transition-opacity ${onToggle ? 'active:opacity-70' : ''}`}
-                style={{ opacity: picked ? 0.4 : 1 }}
-            >
-                <div className="relative flex-shrink-0" style={{ width: 36, height: 40 }}>
-                    {row.cartPhoto ? (
-                        <Image
-                            src={row.cartPhoto}
-                            alt=""
-                            fill
-                            className="object-contain"
-                            sizes="36px"
-                        />
-                    ) : (
-                        <div className="w-full h-full" />
-                    )}
-                    {picked && <GreenCheckBadge />}
-                </div>
-                <span className="font-alte text-[12px] leading-none truncate flex-1 min-w-0">
+            {isMissing && <div className="absolute inset-0 bg-red-500/15 pointer-events-none" />}
+
+            {/* Top row: code · QTY · Size — pinned to the top of the card
+                (Figma 1862:1165), independent of the photo below. */}
+            <div className="absolute inset-x-4 top-[12px] grid grid-cols-3 items-center gap-2 font-alte font-bold text-[12px] text-black">
+                <span className={`min-w-0 truncate ${isMissing ? 'line-through decoration-red-400/70' : ''}`}>
                     {row.productName}
                 </span>
-                {row.color && (
-                    <span className="font-reformat text-[9px] text-neutral-500 tracking-[0.1em] uppercase flex-shrink-0">
-                        {row.color}
-                    </span>
+                <span className="text-center tabular-nums">QTY: {row.quantity}</span>
+                <span className="text-right uppercase">Size: {row.size}</span>
+            </div>
+
+            {/* Centered product photo — pinned to the bottom of the card. */}
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-[8px] w-[40px] h-[44px]">
+                {row.cartPhoto && (
+                    <Image
+                        src={row.cartPhoto}
+                        alt=""
+                        fill
+                        className="object-contain"
+                        sizes="40px"
+                    />
                 )}
-                <span className="font-reformat text-[9px] text-neutral-500 tracking-[0.1em] uppercase flex-shrink-0">
-                    S:{row.size}
-                </span>
-                {row.quantity > 1 && (
-                    <span className="font-reformat text-[10px] font-bold tracking-[-0.01em] tabular-nums flex-shrink-0">
-                        ×{row.quantity}
-                    </span>
-                )}
-            </button>
-            {onMissing && (
-                <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onMissing() }}
-                    className="flex-shrink-0 text-[9px] text-neutral-400 font-medium tracking-[0.06em] uppercase active:text-neutral-700 transition-colors px-1"
-                    aria-label="Mark item as missing"
-                >
-                    missing?
-                </button>
-            )}
-        </div>
+                {picked && <GreenCheckBadge />}
+            </div>
+        </button>
     )
 }
 
@@ -438,7 +382,6 @@ export function RoomOverviewSheet({
     const pickingMode = !!tasks && !!pickedDetails
 
     const [queueModeTab, setQueueModeTab] = useState<GroupMode>('order')
-    const [pickingTab, setPickingTab] = useState<GroupMode>('location')
     const [missingTaskIndex, setMissingTaskIndex] = useState<number | null>(null)
 
     // Queue-mode data
@@ -450,7 +393,6 @@ export function RoomOverviewSheet({
         () => (pickingMode ? buildPickingRows(tasks!, orders) : []),
         [pickingMode, tasks, orders]
     )
-    const locationGroups = useMemo(() => buildLocationGroups(pickingRows), [pickingRows])
     const orderGroups = useMemo(() => buildOrderGroups(pickingRows), [pickingRows])
 
     // When there's no real warehouse-location data, every item ends up in
@@ -458,8 +400,7 @@ export function RoomOverviewSheet({
     // so the overview reads as a flat list instead of pretend grouping.
     const hideRoomHeaders =
         (orderRooms.length <= 1) &&
-        (locationRooms.length <= 1) &&
-        (locationGroups.length <= 1)
+        (locationRooms.length <= 1)
 
     // ── Footer/header counts ──
     const selectableSelection = !!onToggleOrder && !!selectedIds
@@ -505,220 +446,124 @@ export function RoomOverviewSheet({
 
     const isOrderSelected = (id: string) => !selectableSelection || selectedIds!.has(id)
 
+    const pickBatchDot = useMemo(() => mostUrgentColor(orders), [orders])
+
     return (
         <AnimatePresence>
             {open && (
                 <motion.div
                     key="overview-fullscreen"
-                    className="fixed inset-0 z-[71] bg-[#f4f4f2] flex flex-col"
+                    className={`fixed inset-0 z-[71] flex flex-col ${pickingMode ? 'bg-white' : 'bg-[#f4f4f2]'}`}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.18 }}
                 >
                     {/* ── Header ── */}
-                    <div className="flex-shrink-0 bg-white px-5 pt-8 pb-5">
-                        <div className="flex items-baseline gap-[14px] mb-5">
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                className="font-alte text-[53px] leading-none tracking-[-0.03em] text-black opacity-[0.18] active:opacity-40 transition-opacity"
-                            >
-                                Queue
-                            </button>
-                            <span className="font-alte text-[53px] leading-none tracking-[-0.03em] text-black">
-                                Overview
-                            </span>
-                        </div>
-
-                        {pickingMode && orderGroups.length > 0 && (
-                            <div className="flex gap-[6px] overflow-x-auto scrollbar-hide -mx-5 px-5 pb-1">
-                                {orderGroups.map(g => (
-                                    <OrderChip
-                                        key={g.orderId}
-                                        orderLabel={g.orderLabel}
-                                        boxNumber={g.boxNumber}
-                                        color={urgencyColor(g.createdAt)}
-                                        itemCount={g.totalQty}
-                                    />
-                                ))}
+                    {pickingMode ? (
+                        <div className="flex-shrink-0 bg-white relative pt-[54px] pb-4 px-5">
+                            <AdminNav active="pick" variant="top-left" mobileLabel="Pick" pickUrgency={pickBatchDot} />
+                            <div className="lg:hidden fixed top-[13px] right-4 z-[300] flex items-center gap-[7px]">
+                                <span
+                                    className="rounded-full flex-shrink-0"
+                                    style={{ display: 'inline-block', width: 8, height: 8, backgroundColor: pickBatchDot }}
+                                />
+                                <span className="text-[11px] font-bold tracking-[0.09em] opacity-70">
+                                    {orderGroups.length} Order{orderGroups.length !== 1 ? 's' : ''} to Ship
+                                </span>
                             </div>
-                        )}
-
-                        <div className={`flex gap-[8px] ${pickingMode ? 'mt-4' : ''}`}>
-                            {pickingMode ? (
-                                <>
-                                    <button
-                                        onClick={() => setPickingTab('location')}
-                                        className="px-[12px] py-[7px] text-[9px] font-bold tracking-[0.12em] uppercase transition-colors rounded-full"
-                                        style={{
-                                            backgroundColor: pickingTab === 'location' ? '#1a1a1a' : 'transparent',
-                                            color: pickingTab === 'location' ? '#ffffff' : '#999999',
-                                            border: pickingTab === 'location' ? 'none' : '1px solid #e0e0e0',
-                                        }}
-                                    >
-                                        By Location
-                                    </button>
-                                    <button
-                                        onClick={() => setPickingTab('order')}
-                                        className="px-[12px] py-[7px] text-[9px] font-bold tracking-[0.12em] uppercase transition-colors rounded-full"
-                                        style={{
-                                            backgroundColor: pickingTab === 'order' ? '#1a1a1a' : 'transparent',
-                                            color: pickingTab === 'order' ? '#ffffff' : '#999999',
-                                            border: pickingTab === 'order' ? 'none' : '1px solid #e0e0e0',
-                                        }}
-                                    >
-                                        By Order
-                                    </button>
-                                </>
-                            ) : (
-                                <>
-                                    <button
-                                        onClick={() => setQueueModeTab('order')}
-                                        className="px-[12px] py-[7px] text-[9px] font-bold tracking-[0.12em] uppercase transition-colors rounded-full"
-                                        style={{
-                                            backgroundColor: queueModeTab === 'order' ? '#1a1a1a' : 'transparent',
-                                            color: queueModeTab === 'order' ? '#ffffff' : '#999999',
-                                            border: queueModeTab === 'order' ? 'none' : '1px solid #e0e0e0',
-                                        }}
-                                    >
-                                        By Order
-                                    </button>
-                                    <button
-                                        onClick={() => setQueueModeTab('location')}
-                                        className="px-[12px] py-[7px] text-[9px] font-bold tracking-[0.12em] uppercase transition-colors rounded-full"
-                                        style={{
-                                            backgroundColor: queueModeTab === 'location' ? '#1a1a1a' : 'transparent',
-                                            color: queueModeTab === 'location' ? '#ffffff' : '#999999',
-                                            border: queueModeTab === 'location' ? 'none' : '1px solid #e0e0e0',
-                                        }}
-                                    >
-                                        By Location
-                                    </button>
-                                </>
-                            )}
+                            <p className="text-left text-[12px] font-bold text-black tracking-[-0.01em] pt-[80px] leading-[1.5]">
+                                Tap to confirm pick.
+                                <br />
+                                Long press on item if missing.
+                            </p>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="flex-shrink-0 bg-white px-5 pt-8 pb-5">
+                            <div className="flex items-baseline gap-[14px] mb-5">
+                                <button
+                                    type="button"
+                                    onClick={onClose}
+                                    className="font-alte text-[53px] leading-none tracking-[-0.03em] text-black opacity-[0.18] active:opacity-40 transition-opacity"
+                                >
+                                    Queue
+                                </button>
+                                <span className="font-alte text-[53px] leading-none tracking-[-0.03em] text-black">
+                                    Overview
+                                </span>
+                            </div>
+
+                            <div className="flex gap-[8px]">
+                                <button
+                                    onClick={() => setQueueModeTab('order')}
+                                    className="px-[12px] py-[7px] text-[9px] font-bold tracking-[0.12em] uppercase transition-colors rounded-full"
+                                    style={{
+                                        backgroundColor: queueModeTab === 'order' ? '#1a1a1a' : 'transparent',
+                                        color: queueModeTab === 'order' ? '#ffffff' : '#999999',
+                                        border: queueModeTab === 'order' ? 'none' : '1px solid #e0e0e0',
+                                    }}
+                                >
+                                    By Order
+                                </button>
+                                <button
+                                    onClick={() => setQueueModeTab('location')}
+                                    className="px-[12px] py-[7px] text-[9px] font-bold tracking-[0.12em] uppercase transition-colors rounded-full"
+                                    style={{
+                                        backgroundColor: queueModeTab === 'location' ? '#1a1a1a' : 'transparent',
+                                        color: queueModeTab === 'location' ? '#ffffff' : '#999999',
+                                        border: queueModeTab === 'location' ? 'none' : '1px solid #e0e0e0',
+                                    }}
+                                >
+                                    By Location
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* ── Content ── */}
                     <div className="flex-1 overflow-y-auto scrollbar-hide pb-4">
                         {pickingMode ? (
-                            <AnimatePresence mode="wait">
-                                {pickingTab === 'location' ? (
-                                    <motion.div
-                                        key="picking-location"
-                                        initial={{ opacity: 0, x: 8 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: -8 }}
-                                        transition={{ duration: 0.18 }}
-                                    >
-                                        {locationGroups.length === 0 ? (
-                                            <p className="px-6 py-8 text-[11px] text-neutral-400 font-reformat tracking-[0.08em]">
-                                                No items
-                                            </p>
-                                        ) : locationGroups.map(g => (
-                                            <div key={g.room}>
-                                                {!hideRoomHeaders && <RoomHeader name={g.room} total={g.roomTotalQty} />}
-                                                <div className={`flex flex-col gap-[6px] px-4 ${hideRoomHeaders ? 'pt-5' : ''}`}>
-                                                    {g.boxes.map(box => (
-                                                        <div key={box.boxNumber} className="bg-white">
-                                                            <div className="flex items-center gap-[8px] px-5 py-[10px] border-b border-[#f5f5f5]">
-                                                                <BoxIcon size={13} color="#1a1a1a" />
-                                                                <span className="font-alte text-[13px] tracking-[-0.01em] leading-none">
-                                                                    #{box.boxNumber}
-                                                                </span>
-                                                                <span className="font-reformat text-[9px] tracking-[0.1em] text-neutral-400 ml-auto uppercase">
-                                                                    {box.rows.reduce((s, r) => s + r.quantity, 0)} item{box.rows.reduce((s, r) => s + r.quantity, 0) !== 1 ? 's' : ''}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex flex-col divide-y divide-[#f8f8f8]">
-                                                                {box.rows.map((row, ri) => {
-                                                                    const picked = pickedDetails!.has(detailKey(row.taskIndex, row.detailIndex))
-                                                                    const isMissing = !!missingDetails?.has(detailKey(row.taskIndex, row.detailIndex))
-                                                                    return (
-                                                                        <ItemRow
-                                                                            key={`${row.taskIndex}-${row.detailIndex}-${ri}`}
-                                                                            row={row}
-                                                                            picked={picked}
-                                                                            isMissing={isMissing}
-                                                                            onToggle={onTogglePickedDetail && !isMissing ? () => onTogglePickedDetail(row.taskIndex, row.detailIndex) : undefined}
-                                                                            onMissing={onApplyUnavailable && !isMissing ? () => setMissingTaskIndex(row.taskIndex) : undefined}
-                                                                        />
-                                                                    )
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </motion.div>
-                                ) : (
-                                    <motion.div
-                                        key="picking-order"
-                                        initial={{ opacity: 0, x: 8 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: -8 }}
-                                        transition={{ duration: 0.18 }}
-                                    >
-                                        {orderGroups.length === 0 ? (
-                                            <p className="px-6 py-8 text-[11px] text-neutral-400 font-reformat tracking-[0.08em]">
-                                                No orders
-                                            </p>
-                                        ) : orderGroups.map(g => (
-                                            <div key={g.orderId}>
-                                                <div className="flex items-center justify-between px-6 pt-7 pb-3 gap-2">
-                                                    <span className="flex items-center gap-[8px]">
-                                                        <span
-                                                            className="rounded-full"
-                                                            style={{ display: 'inline-block', width: 7, height: 7, backgroundColor: urgencyColor(g.createdAt) }}
-                                                        />
-                                                        <span className="font-alte text-[15px] tracking-[-0.01em] text-neutral-900">
-                                                            O-{g.orderLabel}
-                                                        </span>
-                                                        <span className="flex items-center gap-[4px] ml-1 text-neutral-500">
-                                                            <BoxIcon size={11} color="#737373" />
-                                                            <span className="font-reformat text-[10px] tracking-[0.06em]">#{g.boxNumber}</span>
-                                                        </span>
-                                                    </span>
-                                                    <span className="font-reformat text-[9px] tracking-[0.14em] text-neutral-400 uppercase">
-                                                        {g.totalQty} item{g.totalQty !== 1 ? 's' : ''}
-                                                    </span>
-                                                </div>
-                                                <div className="flex flex-col gap-[6px] px-4">
-                                                    {g.rooms.map(r => (
-                                                        <div key={r.room} className="bg-white">
-                                                            {!hideRoomHeaders && (
-                                                                <div className="px-5 py-[10px] border-b border-[#f5f5f5]">
-                                                                    <span className="font-alte text-[12px] tracking-[-0.01em] text-neutral-700">
-                                                                        {r.room}
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                            <div className="flex flex-col divide-y divide-[#f8f8f8]">
-                                                                {r.rows.map((row, ri) => {
-                                                                    const picked = pickedDetails!.has(detailKey(row.taskIndex, row.detailIndex))
-                                                                    const isMissing = !!missingDetails?.has(detailKey(row.taskIndex, row.detailIndex))
-                                                                    return (
-                                                                        <ItemRow
-                                                                            key={`${row.taskIndex}-${row.detailIndex}-${ri}`}
-                                                                            row={row}
-                                                                            picked={picked}
-                                                                            isMissing={isMissing}
-                                                                            onToggle={onTogglePickedDetail && !isMissing ? () => onTogglePickedDetail(row.taskIndex, row.detailIndex) : undefined}
-                                                                            onMissing={onApplyUnavailable && !isMissing ? () => setMissingTaskIndex(row.taskIndex) : undefined}
-                                                                        />
-                                                                    )
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
+                            <motion.div
+                                key="picking-order"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ duration: 0.18 }}
+                                className="px-4"
+                            >
+                                {orderGroups.length === 0 ? (
+                                    <p className="px-2 py-8 text-[11px] text-neutral-400 font-reformat tracking-[0.08em]">
+                                        No orders
+                                    </p>
+                                ) : orderGroups.map(g => (
+                                    <div key={g.orderId}>
+                                        <div className="flex items-center gap-[7px] px-1 pt-6 pb-3">
+                                            <span
+                                                className="rounded-full flex-shrink-0"
+                                                style={{ display: 'inline-block', width: 8, height: 8, backgroundColor: urgencyColor(g.createdAt) }}
+                                            />
+                                            <span className="font-reformat text-[9px] font-bold tracking-[0.12em] uppercase text-black">
+                                                O-{g.orderLabel}
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-col gap-[8px]">
+                                            {g.rows.map((row, ri) => {
+                                                const picked = pickedDetails!.has(detailKey(row.taskIndex, row.detailIndex))
+                                                const isMissing = !!missingDetails?.has(detailKey(row.taskIndex, row.detailIndex))
+                                                return (
+                                                    <PickCard
+                                                        key={`${row.taskIndex}-${row.detailIndex}-${ri}`}
+                                                        row={row}
+                                                        picked={picked}
+                                                        isMissing={isMissing}
+                                                        onPick={onTogglePickedDetail && !isMissing ? () => onTogglePickedDetail(row.taskIndex, row.detailIndex) : undefined}
+                                                        onMissing={onApplyUnavailable && !isMissing ? () => setMissingTaskIndex(row.taskIndex) : undefined}
+                                                    />
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
+                            </motion.div>
                         ) : (
                             <AnimatePresence mode="wait">
                                 {queueModeTab === 'order' ? (
@@ -920,7 +765,7 @@ export function RoomOverviewSheet({
                         )}
                     </div>
 
-                    {/* ── Missing-item modal triggered from item row ── */}
+                    {/* ── Missing-item modal triggered from item card ── */}
                     {missingTaskIndex !== null && tasks?.[missingTaskIndex] && (() => {
                         const t = tasks[missingTaskIndex]
                         const ti = missingTaskIndex

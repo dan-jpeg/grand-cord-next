@@ -133,28 +133,32 @@ function MobileOrdersView({
                             <span className="text-center">{fmtStatus(order.status)}</span>
                             <span className="text-right">{fmtDate(order.createdAt)}</span>
                         </div>
-                        {showImages && (
-                            <div className="grid grid-cols-3 px-[7px] items-end gap-y-3 pb-4">
-                                {order.items.map((item, i) => {
-                                    const src = productImages[item.productId]
-                                    return (
-                                        <span key={item.id} className={`flex h-[56px] items-end ${i % 3 === 1 ? 'justify-center' : i % 3 === 2 ? 'justify-end' : 'justify-start'}`}>
-                                            {src ? (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img
-                                                    src={src}
-                                                    alt={item.productName}
-                                                    draggable={false}
-                                                    className="max-h-full max-w-[48px] object-contain"
-                                                />
-                                            ) : (
-                                                <span className="text-neutral-300">—</span>
-                                            )}
-                                        </span>
-                                    )
-                                })}
+                        <div
+                            className={`grid transition-[grid-template-rows,opacity] duration-300 ease-in-out ${showImages ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
+                        >
+                            <div className="overflow-hidden">
+                                <div className="grid grid-cols-3 px-[7px] items-end gap-y-3 pb-4">
+                                    {order.items.map((item, i) => {
+                                        const src = productImages[item.productId]
+                                        return (
+                                            <span key={item.id} className={`flex h-[56px] items-end ${i % 3 === 1 ? 'justify-center' : i % 3 === 2 ? 'justify-end' : 'justify-start'}`}>
+                                                {src ? (
+                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                    <img
+                                                        src={src}
+                                                        alt={item.productName}
+                                                        draggable={false}
+                                                        className="max-h-full max-w-[48px] object-contain"
+                                                    />
+                                                ) : (
+                                                    <span className="text-neutral-300">—</span>
+                                                )}
+                                            </span>
+                                        )
+                                    })}
+                                </div>
                             </div>
-                        )}
+                        </div>
                     </Link>
                 ))}
             </div>

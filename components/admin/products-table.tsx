@@ -635,18 +635,19 @@ function PhotoStripItem({
 }) {
     const raw = product.images as unknown
     const imgs = Array.isArray(raw) ? raw : []
+    const isObj = (img: unknown): img is Record<string, unknown> =>
+        typeof img === 'object' && img !== null
+    // Admin/inventory views prefer the background-less "inventory" shot when set;
+    // fall back to the cart primary and then any image.
+    const inventoryImg = imgs.find(
+        (img): img is { url: string } => isObj(img) && !!img.isInventoryPrimary,
+    )
     const cartImg = imgs.find(
-        (img): img is { url: string; isCartPrimary: boolean } =>
-            typeof img === 'object' &&
-            img !== null &&
-            'isCartPrimary' in img &&
-            !!(img as { isCartPrimary?: boolean }).isCartPrimary,
+        (img): img is { url: string } => isObj(img) && !!img.isCartPrimary,
     )
     const fallback =
-        (imgs[0] as { url?: string } | undefined) && typeof imgs[0] === 'object'
-            ? (imgs[0] as { url?: string }).url
-            : undefined
-    const src = cartImg?.url ?? fallback
+        isObj(imgs[0]) ? (imgs[0] as { url?: string }).url : undefined
+    const src = inventoryImg?.url ?? cartImg?.url ?? fallback
 
     const hoverHandlers = {
         onPointerEnter: () => onHoverChange(true),

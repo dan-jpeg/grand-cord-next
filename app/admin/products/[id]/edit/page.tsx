@@ -2,8 +2,7 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
-import { ProductDetailView } from '@/components/admin/product-detail-view'
+import { ProductDetailMobile } from '@/components/admin/product-detail-mobile'
 import type { Tab } from '@/components/admin/product-form'
 
 const VALID_TABS: Tab[] = ['identity', 'look', 'sizing', 'listing', 'sales', 'history']
@@ -35,55 +34,11 @@ export default async function ProductDetailPage({
         notFound()
     }
 
-    // Get orders that include this product
-    const orders = await prisma.order.findMany({
-        where: {
-            items: {
-                some: {
-                    productId: id,
-                },
-            },
-        },
-        include: {
-            items: {
-                where: {
-                    productId: id,
-                },
-            },
-        },
-        orderBy: {
-            createdAt: 'desc',
-        },
-        take: 20,
-    })
-
-    const inventoryLogs = await prisma.inventoryChangeLog.findMany({
-        where: { productId: id },
-        orderBy: { createdAt: 'desc' },
-        take: 100,
-    })
-
     return (
         <div className="absolute inset-0 bg-white overflow-auto">
-            <div className="min-h-full flex items-start justify-center py-10 px-6">
-                <div className="w-full max-w-2xl bg-white border border-neutral-200 text-[0.8em]" style={{borderRadius: '2px'}}>
-                    <div className="flex items-center justify-end gap-4 px-4 pt-3">
-                        <Link
-                            href={`/admin/products/${product.id}/images`}
-                            className="text-[10pt] font-bold underline underline-offset-2"
-                        >
-                            Manage images →
-                        </Link>
-                        <Link
-                            href={`/admin/products/${product.id}/sizing`}
-                            className="text-[10pt] font-bold underline underline-offset-2"
-                        >
-                            Manage sizing →
-                        </Link>
-                    </div>
-                    <ProductDetailView product={product} orders={orders} inventoryLogs={inventoryLogs} initialTab={initialTab} />
-                </div>
-            </div>
+            {/* Mobile two-state listing interface (Figma), rendered at all
+                sizes for now — desktop editor removed. */}
+            <ProductDetailMobile product={product} initialTab={initialTab} />
         </div>
     )
 }
