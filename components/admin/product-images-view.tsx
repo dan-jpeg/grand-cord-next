@@ -1,7 +1,7 @@
 'use client'
 
 import { useLayoutEffect, useRef, useState, useTransition } from 'react'
-import { motion, LayoutGroup, type PanInfo } from 'framer-motion'
+import { motion, Reorder, LayoutGroup, type PanInfo } from 'framer-motion'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useUploadThing } from '@/lib/uploadthing'
@@ -99,6 +99,8 @@ export function ProductImagesView({
     }, [mobileMenuOpen])
     const [isUploading, setIsUploading] = useState(false)
     const [isReplacing, setIsReplacing] = useState(false)
+    const [reorderOpen, setReorderOpen] = useState(false)
+    const [reorderList, setReorderList] = useState<ImageRecord[]>([])
     const [pending, startTransition] = useTransition()
     const { startUpload } = useUploadThing('productImage')
 
@@ -179,6 +181,16 @@ export function ProductImagesView({
         persist(images.map((img, i) => (i === selectedIndex ? { ...img, showOnPdp: visible } : img)))
     }
 
+    function openReorder() {
+        setReorderList(images)
+        setReorderOpen(true)
+    }
+
+    function confirmReorder() {
+        persist(reorderList)
+        setReorderOpen(false)
+    }
+
     function removeSelected() {
         if (!confirm('Are you sure you want to delete this image? This can\'t be undone.')) return
         const next = withFallbackRoles(images.filter((_, i) => i !== selectedIndex))
@@ -219,17 +231,19 @@ export function ProductImagesView({
                     <nav className="flex gap-4 justify-end text-[12px] font-bold w-full">
                         <Link
                             href={`/admin/products/${product.id}/edit?tab=identity`}
-                            className="opacity-40 hover:opacity-70"
+                            className="opacity-40 transition-opacity duration-150 hover:opacity-100"
                         >
                             Listing
                         </Link>
                         <Link
                             href={`/admin/products/${product.id}/edit?tab=sizing`}
-                            className="opacity-40 hover:opacity-70"
+                            className="opacity-40 transition-opacity duration-150 hover:opacity-100"
                         >
                             Inventory
                         </Link>
-                        <span className="underline underline-offset-2">Images</span>
+                        <span className="underline underline-offset-2 transition-opacity duration-150 hover:opacity-70">
+                            Images
+                        </span>
                     </nav>
                 </div>
             </div>
@@ -240,7 +254,16 @@ export function ProductImagesView({
             <LayoutGroup>
             {!mobileMenuOpen ? (
                 <div ref={mobileListRef} className="md:hidden flex-1 overflow-y-auto px-4 pt-[120px] pb-8">
-                    <div className="flex justify-end mb-4">
+                    <div className="flex justify-end items-center gap-4 mb-4">
+                        {images.length > 1 && (
+                            <button
+                                type="button"
+                                onClick={openReorder}
+                                className="text-[12px] font-bold opacity-40 active:opacity-70"
+                            >
+                                Reorder
+                            </button>
+                        )}
                         <input
                             type="file"
                             multiple
@@ -282,7 +305,7 @@ export function ProductImagesView({
                                         }}
                                         className="relative aspect-[251/317] w-full"
                                     >
-                                        <Image src={img.url} alt="" fill className="object-cover" />
+                                        <Image src={img.url} alt="" fill sizes="100vw" className="object-cover" />
                                         {assigned.length > 0 && (
                                             <span className="absolute top-2 left-2 flex flex-wrap gap-x-2 text-[12px] font-bold text-black text-left">
                                                 {assigned.map(({ key, overlay }) => (
@@ -307,7 +330,7 @@ export function ProductImagesView({
                         aria-label="Close"
                         className="absolute inset-x-0 top-0 w-full aspect-[251/317]"
                     >
-                        <Image src={selected.url} alt="" fill className="object-cover" priority />
+                        <Image src={selected.url} alt="" fill sizes="100vw" className="object-cover" priority />
                     </motion.button>
 
                     {/* Info sheet — sits on top of the image (not pushed below it) and never
@@ -425,7 +448,7 @@ export function ProductImagesView({
                                     onClick={() => setSelectedIndex(i)}
                                     className="relative aspect-[157/224]"
                                 >
-                                    <Image src={img.url} alt="" fill className="object-contain p-3" />
+                                    <Image src={img.url} alt="" fill sizes="(min-width: 768px) 15vw, 33vw" className="object-contain p-3" />
                                     <span className="absolute top-1.5 right-1.5">
                                         <RadioDot filled={i === selectedIndex} />
                                     </span>
@@ -439,7 +462,7 @@ export function ProductImagesView({
                 <div className="h-full flex-[1.4] pt-4 pb-4 px-4">
                     <div className="relative w-full h-full">
                         {selected?.url ? (
-                            <Image src={selected.url} alt="" fill className="object-contain" priority />
+                            <Image src={selected.url} alt="" fill sizes="(min-width: 768px) 47vw, 100vw" className="object-contain" priority />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-[12px] text-neutral-400">
                                 No images yet
@@ -450,7 +473,16 @@ export function ProductImagesView({
 
                 {/* Controls */}
                 <div className="w-[260px] shrink-0 flex flex-col overflow-y-auto pl-8 md:pl-4 pr-8 md:pr-4 py-8">
-                    <div className="flex justify-end">
+                    <div className="flex justify-end items-center gap-4">
+                        {images.length > 1 && (
+                            <button
+                                type="button"
+                                onClick={openReorder}
+                                className="text-[12px] font-bold opacity-40 hover:opacity-70"
+                            >
+                                Reorder
+                            </button>
+                        )}
                         <input
                             type="file"
                             multiple
@@ -530,6 +562,52 @@ export function ProductImagesView({
                     )}
                 </div>
             </div>
+
+            {/* Reorder drawer — drag the stacked thumbnails to set the order images
+                appear on the product display page (Figma 1952:193). */}
+            {reorderOpen && (
+                <div className="fixed inset-0 z-[60] bg-white flex flex-col">
+                    <div className="flex items-center justify-center h-11 shrink-0 relative border-b border-black/10">
+                        <span className="text-[12px] font-bold">Reorder Images</span>
+                        <button
+                            type="button"
+                            onClick={() => setReorderOpen(false)}
+                            aria-label="Close"
+                            className="absolute right-4 text-[14px]"
+                        >
+                            ×
+                        </button>
+                    </div>
+
+                    <Reorder.Group
+                        axis="y"
+                        values={reorderList}
+                        onReorder={setReorderList}
+                        className="flex-1 overflow-y-auto px-4 py-6 flex flex-col items-center gap-3"
+                    >
+                        {reorderList.map((img) => (
+                            <Reorder.Item
+                                key={img.url}
+                                value={img}
+                                className="relative aspect-[119/149] w-[119px] shrink-0 cursor-grab active:cursor-grabbing"
+                                whileDrag={{ scale: 1.03, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}
+                            >
+                                <Image src={img.url} alt="" fill sizes="119px" className="object-cover pointer-events-none" />
+                            </Reorder.Item>
+                        ))}
+                    </Reorder.Group>
+
+                    <div className="flex justify-end px-4 pb-6 pt-2 shrink-0">
+                        <button
+                            type="button"
+                            onClick={confirmReorder}
+                            className="text-[12px] font-bold px-2 py-1 bg-[#fdee9e]"
+                        >
+                            Confirm
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

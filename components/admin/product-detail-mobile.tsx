@@ -92,7 +92,7 @@ function TextArea({
     }, [value])
     return (
         <textarea
-            ref={ref}
+                ref={ref}
             rows={1}
             value={value}
             onChange={(e) => onChange(e.target.value)}

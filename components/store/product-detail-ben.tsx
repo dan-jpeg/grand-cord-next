@@ -64,12 +64,8 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
     const designerLabel = formatDesignerNames(product.designerNames)
     const displayImage = images.find(img => img.isDesktopPrimary)?.url || images[0]?.url
 
-    // Gallery images, hero image first, filtered to those marked visible on the PDP.
-    const galleryImages = images.filter(img => img.showOnPdp !== false)
-    const imageArray = [
-        ...galleryImages.filter(img => img.url === displayImage),
-        ...galleryImages.filter(img => img.url !== displayImage),
-    ].map(img => img.url)
+    // Gallery images, in the order set on the Images admin tab, filtered to those marked visible on the PDP.
+    const imageArray = images.filter(img => img.showOnPdp !== false).map(img => img.url)
 
     function handleAdd() {
         if (!selectedSize) {
