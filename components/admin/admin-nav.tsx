@@ -91,6 +91,7 @@ function MobileHubNav({ active, pickUrgency, onClose }: { active: AdminNavProps[
 
     const handlePress = useCallback((e: React.PointerEvent, index: number) => {
         const item = PRIMARY_NAV_ITEMS[index]
+        const isActive = active === item.key
         const labelEl = labelRefs.current[index]
         if (!labelEl) return
 
@@ -118,7 +119,11 @@ function MobileHubNav({ active, pickUrgency, onClose }: { active: AdminNavProps[
         timerRef.current = setTimeout(() => {
             setAnim(prev => prev ? { ...prev, fading: true } : null)
             setTimeout(() => {
-                router.push(item.href)
+                if (isActive) {
+                    onClose?.()
+                } else {
+                    router.push(item.href)
+                }
                 setAnim(null)
             }, 150)
         }, 400)
@@ -177,6 +182,10 @@ function MobileHubNav({ active, pickUrgency, onClose }: { active: AdminNavProps[
                                     key={item.key}
                                     onPointerDown={(e) => {
                                         e.stopPropagation()
+                                        if (active === item.key) {
+                                            onClose?.()
+                                            return
+                                        }
                                         router.push(item.href)
                                     }}
                                     className={`text-[8pt] font-bold ${

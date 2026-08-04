@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { notFound } from 'next/navigation'
 import { ProductDetailMobile } from '@/components/admin/product-detail-mobile'
 import type { Tab } from '@/components/admin/product-form'
+import { getProductDetail } from '@/app/admin/products-split/actions'
 
 const VALID_TABS: Tab[] = ['identity', 'look', 'sizing', 'listing', 'sales', 'history']
 
@@ -23,12 +24,15 @@ export default async function ProductDetailPage({
     const { tab } = await searchParams
     const initialTab = VALID_TABS.find((t) => t === tab)
 
-    const product = await prisma.product.findUnique({
-        where: { id },
-        include: {
-            sizes: true,
-        },
-    })
+    const [product, { orders, inventoryLogs }] = await Promise.all([
+        prisma.product.findUnique({
+            where: { id },
+            include: {
+                sizes: true,
+            },
+        }),
+        getProductDetail(id),
+    ])
 
     if (!product) {
         notFound()
@@ -38,7 +42,12 @@ export default async function ProductDetailPage({
         <div className="absolute inset-0 bg-white overflow-auto">
             {/* Mobile two-state listing interface (Figma), rendered at all
                 sizes for now — desktop editor removed. */}
-            <ProductDetailMobile product={product} initialTab={initialTab} />
+            <ProductDetailMobile
+                product={product}
+                initialTab={initialTab}
+                orders={orders}
+                inventoryLogs={inventoryLogs}
+            />
         </div>
     )
 }

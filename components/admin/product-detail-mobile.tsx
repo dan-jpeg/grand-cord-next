@@ -4,11 +4,14 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ProductMobileHeader } from '@/components/admin/product-mobile-header'
-import type { Product, ProductSize } from '@prisma/client'
+import type { Product, ProductSize, Order, OrderItem, InventoryChangeLog } from '@prisma/client'
 import { AdminNav } from '@/components/admin/admin-nav'
 import { updateProduct } from '@/app/admin/products/actions'
 import { StockCorrectionPanel } from '@/components/admin/stock-correction-panel'
 import type { Tab } from '@/components/admin/product-form'
+import { formatPrice } from '@/lib/utils'
+
+type OrderWithItems = Order & { items: OrderItem[] }
 
 // Spring shared by every transition between the two states so the whole screen
 // moves as one system.
@@ -148,9 +151,13 @@ function SplitRow({
 export function ProductDetailMobile({
     product,
     initialTab,
+    orders = [],
+    inventoryLogs = [],
 }: {
     product: Product & { sizes: ProductSize[] }
     initialTab?: Tab
+    orders?: OrderWithItems[]
+    inventoryLogs?: InventoryChangeLog[]
 }) {
     const isInventory = initialTab === 'sizing'
     // false → image visible / labels hidden (Figma 1826:537)
@@ -158,6 +165,8 @@ export function ProductDetailMobile({
     const [showLabels, setShowLabels] = useState(false)
     // Page 1 = core listing fields; Page 2 = the rest (slug, description, …).
     const [page, setPage] = useState<1 | 2>(1)
+    // "More" panel — stock history (sales + corrections) and sell-through stats.
+    const [moreOpen, setMoreOpen] = useState(false)
 
     // Editable form state, seeded from the product.
     const [name, setName] = useState(product.name)
@@ -179,6 +188,34 @@ export function ProductDetailMobile({
     // state / 1935:248 isCorrecting state) lives in StockCorrectionPanel, shared
     // with the products-new mobile stock list's single-item view.
     const [sizes, setSizes] = useState(product.sizes)
+
+    // Statistics — total units sold and revenue across this product's orders.
+    const totalSold = orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0)
+    const totalRevenue = orders
+        .filter((o) => o.status !== 'CANCELLED')
+        .reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.price * i.quantity, 0), 0)
+
+    // Stock history — sales and manual stock edits merged into one feed, newest first.
+    type HistoryEntry = { id: string; date: Date; label: string; detail: string; delta: number }
+    const saleEntries: HistoryEntry[] = orders
+        .filter((o) => o.status !== 'CANCELLED')
+        .map((o) => ({
+            id: `order-${o.id}`,
+            date: new Date(o.createdAt),
+            label: `Order O-${o.orderNumber.slice(-3)}`,
+            detail: 'Sale',
+            delta: -o.items.reduce((s, i) => s + i.quantity, 0),
+        }))
+    const editEntries: HistoryEntry[] = inventoryLogs.map((l) => ({
+        id: `log-${l.id}`,
+        date: new Date(l.createdAt),
+        label: l.sizeLabel,
+        detail: l.adminName || l.adminEmail || 'Correction',
+        delta: l.delta,
+    }))
+    const historyEntries = [...saleEntries, ...editEntries].sort(
+        (a, b) => b.date.getTime() - a.date.getTime(),
+    )
 
     const images = (Array.isArray(product.images) ? product.images : []) as unknown as ImageData[]
     const displayImage =
@@ -327,6 +364,14 @@ export function ProductDetailMobile({
                 </Link>
             ),
         },
+        {
+            label: 'History:',
+            content: (
+                <button type="button" onClick={() => setMoreOpen(true)} className="underline underline-offset-[3px]">
+                    More
+                </button>
+            ),
+        },
     ]
 
     const rows = page === 1 ? page1Rows : page2Rows
@@ -434,6 +479,67 @@ export function ProductDetailMobile({
                 Page {page}/2
             </motion.button>
             </>
+            )}
+
+            {/* More panel — statistics + stock history, styled to match the
+                Inventory tab's StockCorrectionPanel rows (font-alte labels,
+                font-inter values, bg-[#f0f0f0] slabs). */}
+            {moreOpen && (
+                <div className="fixed inset-0 z-40 bg-white overflow-y-auto px-4 pt-[120px] pb-16">
+                    <button
+                        type="button"
+                        onClick={() => setMoreOpen(false)}
+                        aria-label="Close"
+                        className="fixed top-[100px] right-4 z-50 text-[12px] font-bold hover:opacity-60"
+                    >
+                        Close
+                    </button>
+
+                    {/* Statistics — two columns, mirrors the Stock/Available row style. */}
+                    <div className="flex items-start justify-between gap-3">
+                        <span className="font-alte text-[12px] font-bold leading-[1.6] whitespace-nowrap">
+                            Statistics
+                        </span>
+                        <div className="w-[60%] font-inter text-[12px] leading-[1.6]">
+                            <div className="flex justify-between px-1 bg-[#f0f0f0]">
+                                <span className="font-bold">Total Sold</span>
+                                <span className="font-bold">{totalSold}</span>
+                            </div>
+                            <div className="flex justify-between px-1">
+                                <span className="font-normal">Total Revenue</span>
+                                <span className="font-normal">{formatPrice(totalRevenue)}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Stock history — sales and manual corrections, newest first. */}
+                    <div className="mt-9">
+                        <span className="font-alte text-[12px] font-bold leading-[1.6]">Stock History</span>
+                        <div className="mt-3 flex flex-col gap-3">
+                            {historyEntries.length === 0 ? (
+                                <p className="text-[12px] opacity-40">No history yet</p>
+                            ) : (
+                                historyEntries.map((entry) => (
+                                    <div key={entry.id} className="flex items-center justify-between gap-3 px-1 font-inter text-[12px] leading-[1.6]">
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="font-bold truncate">{entry.label}</span>
+                                            <span className="opacity-40 truncate">{entry.detail}</span>
+                                        </div>
+                                        <div className="flex flex-col items-end shrink-0">
+                                            <span className={`font-bold ${entry.delta > 0 ? 'text-[#1a7a1a]' : entry.delta < 0 ? 'text-[#a02020]' : ''}`}>
+                                                {entry.delta > 0 ? '+' : ''}
+                                                {entry.delta}
+                                            </span>
+                                            <span className="opacity-40">
+                                                {entry.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     )
