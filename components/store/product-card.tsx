@@ -102,7 +102,7 @@ export function ProductCard({
     // Mobile 1x1 view
     if (isMobile) {
         return (
-            <div className="group  px-[10vw] border-black/20 relative">
+            <div className="group  px-[10vw] pb-4 border-black/20 relative">
                 {/* Yellow highlight overlay - moved to cover entire card */}
                 <motion.div
                     initial={{ opacity: 0 }}

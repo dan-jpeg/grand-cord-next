@@ -27,7 +27,7 @@ const CATALOG_TAGS: { key: RoleKey; shortcut: string; label: string; overlay: st
     { key: 'isInventoryPrimary', shortcut: 'i', label: 'inventory', overlay: 'Inventory' },
 ]
 
-// Display order for the mobile detail view's designation row (Figma 1888:281).
+// Display order for the mobile detail view's design\ation row (Figma 1888:281).
 const DETAIL_TAGS: { key: RoleKey; label: string }[] = [
     { key: 'isMobilePrimary', label: 'Mobile' },
     { key: 'isGrid1x1Primary', label: '1x1' },
@@ -48,6 +48,33 @@ function withFallbackRoles(next: ImageRecord[]): ImageRecord[] {
     if (!next.some((img) => img.isGrid2x2Primary)) next[0].isGrid2x2Primary = true
     if (!next.some((img) => img.isGrid3x3Primary)) next[0].isGrid3x3Primary = true
     return next
+}
+
+// Desktop designation dots (Figma 2040:1458). Exported as 12px circles: filled
+// is a solid r=6 disc, empty is a 1px-stroke r=5.5 ring. The PDP dot reuses the
+// same geometry in green (#268339).
+const DESIGNATION_GREEN = '#268339'
+
+function DesignationDot({
+    filled,
+    size = 12,
+    color = '#000000',
+}: {
+    filled: boolean
+    size?: number
+    color?: string
+}) {
+    return (
+        <span
+            className="block rounded-full shrink-0"
+            style={{
+                width: size,
+                height: size,
+                backgroundColor: filled ? color : 'transparent',
+                border: filled ? 'none' : `1px solid ${color}`,
+            }}
+        />
+    )
 }
 
 function RadioDot({ filled, shortcut }: { filled: boolean; shortcut?: string }) {
@@ -76,6 +103,10 @@ export function ProductImagesView({
     const [images, setImages] = useState<ImageRecord[]>(initialImages)
     const [selectedIndex, setSelectedIndex] = useState(0)
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+    // Desktop — Figma 2040:1458 (grid) / 2049:1620 (modal). Clicking a pill
+    // image opens the modal in place; the grid stays visible on the left,
+    // dimmed, so switching images doesn't require closing first.
+    const [desktopModalOpen, setDesktopModalOpen] = useState(false)
     // Mobile detail view's info sheet — drag it down to collapse (leaving a
     // thin strip pinned to the bottom of the screen), tap that strip to expand.
     const [detailCollapsed, setDetailCollapsed] = useState(false)
@@ -181,6 +212,16 @@ export function ProductImagesView({
         persist(images.map((img, i) => (i === selectedIndex ? { ...img, showOnPdp: visible } : img)))
     }
 
+    // Desktop grid view — each image has its own radio-dot column, so tags and
+    // PDP visibility are set directly on that image rather than on `selected`.
+    function setTagForImage(index: number, role: RoleKey) {
+        persist(images.map((img, i) => ({ ...img, [role]: i === index })))
+    }
+
+    function togglePdpForImage(index: number) {
+        persist(images.map((img, i) => (i === index ? { ...img, showOnPdp: !img.showOnPdp } : img)))
+    }
+
     function openReorder() {
         setReorderList(images)
         setReorderOpen(true)
@@ -197,6 +238,10 @@ export function ProductImagesView({
         persist(next)
         setSelectedIndex((i) => Math.min(i, Math.max(next.length - 1, 0)))
         setMobileMenuOpen(false)
+        // Deleting dismisses the preview rather than sliding the neighbouring
+        // image into it — landing on an image you didn't pick reads like the
+        // wrong one got deleted.
+        setDesktopModalOpen(false)
     }
 
     return (
@@ -211,42 +256,34 @@ export function ProductImagesView({
                 hiddenClass="md:hidden"
             />
 
-            {/* Desktop header — product badge row, full-width divider, then Listing/Inventory/Images tabs.
-                The box's left border spans both rows, crossing over the divider. */}
-            <div className="hidden md:flex h-10 shrink-0 justify-end">
-                <div className="w-[240px] border-l border-black pl-4 pr-8 md:pr-4 flex items-center justify-end">
+            {/* Desktop header (Figma 2040:1458) — a single 35px row sharing the
+                line with the global nav: tabs centred on the page, product badge
+                at the far right, then the full-width rule the content hangs off. */}
+            <div className="hidden md:block relative h-[35px] shrink-0">
+                <nav className="flex justify-center gap-10 pt-[12px] text-[12px] font-bold">
+                    <span className="underline underline-offset-2">Images</span>
                     <Link
-                        href={`/admin/products/${product.id}/edit`}
-                        className="bg-neutral-200 px-1 text-[12px] font-bold"
+                        href={`/admin/products/${product.id}/edit?tab=sizing`}
+                        className="opacity-40 transition-opacity duration-150 hover:opacity-100"
                     >
-                        {product.name}
+                        Inventory
                     </Link>
-                </div>
+                    <Link
+                        href={`/admin/products/${product.id}/edit?tab=identity`}
+                        className="opacity-40 transition-opacity duration-150 hover:opacity-100"
+                    >
+                        Listing
+                    </Link>
+                </nav>
+                <Link
+                    href={`/admin/products/${product.id}/edit`}
+                    className="absolute right-[20px] top-[9px] bg-neutral-200 px-1 text-[12px] font-bold"
+                >
+                    {product.name}
+                </Link>
             </div>
 
             <div className="hidden md:block h-px shrink-0 bg-black" />
-
-            <div className="hidden md:flex h-8 shrink-0 justify-end">
-                <div className="w-[240px] border-l border-b border-black pl-4 pr-8 md:pr-4 flex items-center">
-                    <nav className="flex gap-4 justify-end text-[12px] font-bold w-full">
-                        <Link
-                            href={`/admin/products/${product.id}/edit?tab=identity`}
-                            className="opacity-40 transition-opacity duration-150 hover:opacity-100"
-                        >
-                            Listing
-                        </Link>
-                        <Link
-                            href={`/admin/products/${product.id}/edit?tab=sizing`}
-                            className="opacity-40 transition-opacity duration-150 hover:opacity-100"
-                        >
-                            Inventory
-                        </Link>
-                        <span className="underline underline-offset-2 transition-opacity duration-150 hover:opacity-70">
-                            Images
-                        </span>
-                    </nav>
-                </div>
-            </div>
 
             {/* Mobile — list of images (Figma 1888:312); tapping one morphs it into
                 a full-width detail view with designations, PDP visibility and
@@ -432,115 +469,205 @@ export function ProductImagesView({
             ) : null}
             </LayoutGroup>
 
-            <div className="hidden md:flex flex-1 overflow-hidden">
-                {/* Selection grid — 3 columns, contiguous rows, radio dot marks the previewed image */}
-                <div className="h-full flex-[1.4] shrink-0 overflow-y-auto p-4">
-                    {images.length === 0 ? (
-                        <div className="w-full h-full flex items-center justify-center text-[12px] text-neutral-400">
-                            No images yet
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-3 gap-x-[3px] gap-y-0">
-                            {images.map((img, i) => (
+            {/* Desktop — Figma 2040:1458 (images tab) / 2049:1620 (single-image
+                modal). Geometry is taken straight off the 1512px frame: the
+                strip starts 48px in, each group is a 12px dot column + 18px gap
+                + a 156.8x224 pill, and groups repeat every 221.5px (35px apart).
+                Opening the modal drops a 610x872 preview in at x=441, which
+                clips the strip to that edge and dims what's still visible. */}
+            <div
+                className="hidden md:flex flex-1 min-h-0 overflow-hidden pt-[28px]"
+                onClick={() => {
+                    // Clicking anywhere outside the modal dismisses it. The modal's
+                    // own subtree stops propagation, so only genuine outside clicks
+                    // land here — including on the thumbnails, which therefore just
+                    // close rather than swapping the previewed image straight over.
+                    if (desktopModalOpen) setDesktopModalOpen(false)
+                }}
+            >
+                {/* Thumbnail strip. Clipped to the modal's left edge while it's
+                    open so the covered thumbnails fall away, exactly as the
+                    preview occludes them in the Figma frame. */}
+                <div
+                    className={`shrink-0 overflow-hidden ${
+                        desktopModalOpen ? 'w-[441px]' : 'flex-1 overflow-x-auto'
+                    }`}
+                >
+                    <div
+                        className={`flex items-start gap-[35px] pl-[48px] transition-opacity duration-150 ${
+                            desktopModalOpen ? 'opacity-25' : ''
+                        }`}
+                    >
+                        {images.map((img, i) => (
+                            <div key={img.url + i} className="flex items-start gap-[18px] shrink-0">
+                                {/* Designation column — the tag dots on a 14px
+                                    pitch, then the green show-on-PDP dot. The
+                                    frame only drew five; inventory is a real
+                                    role too, so it rides along as a sixth. */}
+                                <div className="flex flex-col items-start pt-[21px]">
+                                    <div className="flex flex-col gap-[2px]">
+                                        {CATALOG_TAGS.map(({ key, label }) => (
+                                            <button
+                                                key={key}
+                                                type="button"
+                                                disabled={pending}
+                                                onClick={() => {
+                                                    if (desktopModalOpen) return
+                                                    setTagForImage(i, key)
+                                                }}
+                                                aria-label={label}
+                                                title={label}
+                                            >
+                                                <DesignationDot filled={!!img[key]} />
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={pending}
+                                        onClick={() => {
+                                            if (desktopModalOpen) return
+                                            togglePdpForImage(i)
+                                        }}
+                                        aria-label="Show on product page?"
+                                        title="Show on product page?"
+                                        className="mt-[22px]"
+                                    >
+                                        <DesignationDot filled={img.showOnPdp} color={DESIGNATION_GREEN} />
+                                    </button>
+                                </div>
+
                                 <button
-                                    key={img.url + i}
                                     type="button"
-                                    onClick={() => setSelectedIndex(i)}
-                                    className="relative aspect-[157/224]"
+                                    onClick={() => {
+                                        if (desktopModalOpen) return
+                                        setSelectedIndex(i)
+                                        setDesktopModalOpen(true)
+                                    }}
+                                    className="relative shrink-0 w-[156.8px] h-[224px] rounded-full overflow-hidden"
                                 >
-                                    <Image src={img.url} alt="" fill sizes="(min-width: 768px) 15vw, 33vw" className="object-contain p-3" />
-                                    <span className="absolute top-1.5 right-1.5">
-                                        <RadioDot filled={i === selectedIndex} />
-                                    </span>
+                                    <Image src={img.url} alt="" fill sizes="157px" className="object-cover" />
                                 </button>
-                            ))}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Upload New + — centred under the strip (y=503 on the frame,
+                        i.e. 216px below the pills). Hidden while the modal is up,
+                        where the preview would cover it. */}
+                    {!desktopModalOpen && (
+                        <div className="flex items-center justify-center gap-[6px] pt-[216px]">
+                            {images.length > 1 && (
+                                <button
+                                    type="button"
+                                    onClick={openReorder}
+                                    className="text-[12px] font-bold opacity-40 hover:opacity-70 mr-6"
+                                >
+                                    Reorder
+                                </button>
+                            )}
+                            <input
+                                type="file"
+                                multiple
+                                accept="image/*"
+                                onChange={handleUploadNew}
+                                disabled={isUploading}
+                                className="hidden"
+                                id="images-upload-new"
+                            />
+                            <label
+                                htmlFor="images-upload-new"
+                                className={`text-[12px] font-bold underline cursor-pointer hover:opacity-70 ${
+                                    isUploading ? 'cursor-wait' : ''
+                                }`}
+                            >
+                                {isUploading ? 'Uploading…' : 'Upload New'}
+                            </label>
+                            <span
+                                aria-hidden
+                                className="inline-flex items-center justify-center w-[13.4px] h-[11px] bg-[#fdee9e] text-[#2c2b2b] text-[10px] font-bold leading-none"
+                            >
+                                +
+                            </span>
                         </div>
                     )}
                 </div>
 
-                {/* Big preview */}
-                <div className="h-full flex-[1.4] pt-4 pb-4 px-4">
-                    <div className="relative w-full h-full">
-                        {selected?.url ? (
-                            <Image src={selected.url} alt="" fill sizes="(min-width: 768px) 47vw, 100vw" className="object-contain" priority />
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center text-[12px] text-neutral-400">
-                                No images yet
-                            </div>
-                        )}
+                {images.length === 0 && (
+                    <div className="flex-1 flex items-center justify-center text-[12px] text-neutral-400">
+                        No images yet
                     </div>
-                </div>
+                )}
 
-                {/* Controls */}
-                <div className="w-[260px] shrink-0 flex flex-col overflow-y-auto pl-8 md:pl-4 pr-8 md:pr-4 py-8">
-                    <div className="flex justify-end items-center gap-4">
-                        {images.length > 1 && (
-                            <button
-                                type="button"
-                                onClick={openReorder}
-                                className="text-[12px] font-bold opacity-40 hover:opacity-70"
-                            >
-                                Reorder
-                            </button>
-                        )}
-                        <input
-                            type="file"
-                            multiple
-                            accept="image/*"
-                            onChange={handleUploadNew}
-                            disabled={isUploading}
-                            className="hidden"
-                            id="images-upload-new"
-                        />
-                        <label
-                            htmlFor="images-upload-new"
-                            className={`text-[12px] font-bold cursor-pointer opacity-40 hover:opacity-70 ${
-                                isUploading ? 'cursor-wait' : ''
-                            }`}
-                        >
-                            {isUploading ? 'Uploading…' : 'Upload New'}
-                        </label>
-                    </div>
+                {/* Modal — 610x872 preview with the designation column inset at
+                    its top-left and the PDP toggle inside its bottom-right;
+                    Notes / Replace / Delete sit in a column 23px to its right. */}
+                {desktopModalOpen && selected && (
+                    <div className="flex-1 min-w-0 flex" onClick={(e) => e.stopPropagation()}>
+                        <div className="relative w-[610px] h-[872px] max-h-full shrink-0">
+                            <Image src={selected.url} alt="" fill sizes="610px" className="object-cover" priority />
 
-                    <div className="flex-1" />
-
-                    {selected && (
-                        <>
-                            <div className="flex flex-col gap-2.5 items-start mb-10">
-                                {CATALOG_TAGS.map(({ key, shortcut, label }) => (
+                            {/* Designations — dot, then its label directly below. */}
+                            <div className="absolute left-[17px] top-[9px] z-10 flex flex-col items-start">
+                                {CATALOG_TAGS.map(({ key, label }) => (
                                     <button
                                         key={key}
                                         type="button"
                                         disabled={pending}
                                         onClick={() => setTag(key)}
-                                        className="flex items-center gap-2 text-[12px] font-bold"
+                                        className="flex flex-col items-start"
                                     >
-                                        <RadioDot filled={!!selected[key]} shortcut={shortcut} />
-                                        {label}
+                                        <span className="h-[14px] flex items-center">
+                                            <DesignationDot filled={!!selected[key]} />
+                                        </span>
+                                        <span className="text-[7.2px] font-bold leading-normal">{label}</span>
                                     </button>
                                 ))}
                             </div>
 
                             <button
                                 type="button"
-                                disabled={pending}
-                                onClick={() => setPdpVisible(!selected.showOnPdp)}
-                                className="flex items-center gap-2 text-[12px] font-bold mb-10"
+                                onClick={() => setDesktopModalOpen(false)}
+                                aria-label="Close"
+                                className="absolute right-[14px] top-[9px] z-10 text-[12px] font-bold leading-none opacity-60 hover:opacity-100"
                             >
-                                <RadioDot filled={selected.showOnPdp} />
-                                Show on product page?
+                                ×
                             </button>
 
-                            {/* Delete / Replace */}
-                            <div className="flex items-center justify-end gap-6 mt-auto">
-                                <button
-                                    type="button"
-                                    disabled={pending}
-                                    onClick={removeSelected}
-                                    className="text-[12px] font-bold px-1 py-0.5 bg-[rgba(255,197,197,0.4)] hover:bg-[rgba(255,197,197,0.7)]"
-                                >
-                                    Delete
-                                </button>
+                            {/* show on product page? — inside the preview's bottom-right. */}
+                            <button
+                                type="button"
+                                disabled={pending}
+                                onClick={() => setPdpVisible(!selected.showOnPdp)}
+                                className="absolute right-[14px] bottom-[3px] z-10 flex items-center gap-[13px] text-[7.2px] font-bold"
+                            >
+                                show on product page?
+                                <DesignationDot filled={selected.showOnPdp} size={10} color={DESIGNATION_GREEN} />
+                            </button>
+                        </div>
+
+                        {/* Right column — Notes above, Replace / Delete on the
+                            preview's bottom line. */}
+                        <div className="relative flex-1 min-w-0 pl-[23px]">
+                            <div className="absolute left-[23px] right-4 bottom-[99px] flex flex-col">
+                                <span className="text-[7.2px] font-bold">Notes:</span>
+                                <textarea
+                                    value={selected.notes ?? ''}
+                                    onChange={(e) =>
+                                        setImages((prev) =>
+                                            prev.map((img, i) =>
+                                                i === selectedIndex ? { ...img, notes: e.target.value } : img,
+                                            ),
+                                        )
+                                    }
+                                    onBlur={() => persist(images)}
+                                    placeholder="Add notes"
+                                    rows={4}
+                                    className="mt-[6px] w-full resize-none outline-none bg-transparent text-[7.2px] font-bold leading-[1.6] placeholder:opacity-20"
+                                />
+                            </div>
+
+                            <div className="absolute left-[23px] bottom-[3px] flex items-center gap-[70px]">
                                 <input
                                     type="file"
                                     accept="image/*"
@@ -551,16 +678,24 @@ export function ProductImagesView({
                                 />
                                 <label
                                     htmlFor="images-replace"
-                                    className={`text-[12px] font-bold cursor-pointer hover:opacity-60 ${
+                                    className={`text-[7.2px] font-bold cursor-pointer hover:opacity-60 ${
                                         isReplacing ? 'cursor-wait opacity-40' : ''
                                     }`}
                                 >
                                     {isReplacing ? 'Uploading…' : 'Replace'}
                                 </label>
+                                <button
+                                    type="button"
+                                    disabled={pending}
+                                    onClick={removeSelected}
+                                    className="text-[7.2px] font-bold px-[2.4px] py-[0.6px] bg-[rgba(255,197,197,0.4)] text-[red] hover:bg-[rgba(255,197,197,0.7)]"
+                                >
+                                    Delete
+                                </button>
                             </div>
-                        </>
-                    )}
-                </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Reorder drawer — drag the stacked thumbnails to set the order images

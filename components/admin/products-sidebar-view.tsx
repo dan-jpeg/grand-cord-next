@@ -37,6 +37,8 @@ function primaryImage(p: ProductWithSizes): string | undefined {
     return inventory?.url ?? cart?.url ?? imgs[0]?.url
 }
 
+const HOVER_TRANSITION = 'transition-opacity duration-200'
+
 export function ProductsSidebarView({ products }: { products: ProductWithSizes[] }) {
     const [stockFilter, setStockFilter] = useState<StockFilter>('ALL')
 
@@ -97,6 +99,7 @@ function MobileInventoryPhotosView({
     totalProducts: number
 }) {
     const [tab, setTab] = useState<'photos' | 'stock'>('photos')
+    const [hoveredProductId, setHoveredProductId] = useState<string | null>(null)
 
     // Stock tab: tapping a row opens a single-item correction view (shared with
     // the product detail page's inventory tab). Locally-committed sizes are
@@ -151,7 +154,7 @@ function MobileInventoryPhotosView({
                 block (Inter). Tapping a row opens the single-item correction
                 view below (Figma 1866:318 many-view). */}
             {tab === 'stock' && !selectedStockId && (
-                <div className="flex-1 overflow-y-auto pt-28 pb-24 px-4">
+                <div className="flex-1 overflow-y-auto pt-28 pb-24 px-4 lg:pl-[18px]">
                     {filteredProducts.map((p) => {
                         const src = primaryImage(p)
                         const status = statusOf(p)
@@ -174,21 +177,22 @@ function MobileInventoryPhotosView({
                                 key={p.id}
                                 type="button"
                                 onClick={() => setSelectedStockId(p.id)}
-                                className="grid grid-cols-6 items-center gap-x-2 py-3 w-full text-left"
+                                className="grid grid-cols-6 items-center gap-x-2 py-3 w-full lg:w-[600px] lg:max-w-[400px] text-left"
                             >
                                 {/* Indicator + image (2 cols) — image centered & pushed
-                                    toward the right; dot pinned to the title/Stock line. */}
-                                <div className="col-span-2 relative flex items-center justify-end pr-1">
+                                    toward the right on mobile; on desktop everything
+                                    left-aligns within a set-width row. */}
+                                <div className="col-span-2 relative flex items-center justify-end lg:justify-start pr-1">
                                     <motion.span
                                         layoutId={`pdot-${p.id}`}
                                         transition={imgSpring}
-                                        className="absolute left-[10px] top-[34px] inline-block w-[6px] h-[6px] rounded-full shrink-0"
+                                        className="absolute left-[10px] top-[34px] lg:left-0 inline-block w-[6px] h-[6px] rounded-full shrink-0"
                                         style={{
                                             backgroundColor: dotColor,
                                             border: dotBordered ? '1px solid #1a1a1a' : 'none',
                                         }}
                                     />
-                                    <div className="w-[96px] h-[112px] flex items-center justify-center">
+                                    <div className="w-[96px] h-[112px] flex items-center justify-center lg:ml-[24px]">
                                         {src ? (
                                             // eslint-disable-next-line @next/next/no-img-element
                                             <motion.img
@@ -299,7 +303,7 @@ function MobileInventoryPhotosView({
             {/* Product grid — 3 columns, centered labels, generous horizontal padding */}
             {tab === 'photos' && (
             <div className="flex-1 overflow-y-auto pt-32 pb-24 px-6">
-                <div className="grid grid-cols-3 gap-x-4 gap-y-10">
+                <div className="max-w-[1200px] mx-auto grid grid-cols-3 gap-x-10 gap-y-14">
                         {filteredProducts.map((p) => {
                             const src = primaryImage(p)
                             const status = statusOf(p)
@@ -309,13 +313,22 @@ function MobileInventoryPhotosView({
                                 status === 'NO_STOCK' ? STOCK_COLORS.NO_STOCK :
                                 '#ffffff'
                             const dotBordered = status === 'UNPUBLISHED'
+                            const isHovered = hoveredProductId === p.id
+                            const isOtherHovered = hoveredProductId !== null && !isHovered
+                            const itemOpacity = isHovered ? 1 : isOtherHovered ? 0.6 : 0.9
+                            const titleOpacity = isHovered ? 1 : isOtherHovered ? 0.2 : 1
                             return (
                                 <Link
                                     key={p.id}
                                     href={`/admin/products/${p.id}/edit`}
                                     className="flex flex-col items-center"
+                                    onMouseEnter={() => setHoveredProductId(p.id)}
+                                    onMouseLeave={() => setHoveredProductId(null)}
                                 >
-                                    <div className="w-full aspect-[3/4] flex items-center justify-center px-3">
+                                    <div
+                                        className={`w-full max-w-[220px] aspect-[3/4] flex items-center justify-center px-3 ${HOVER_TRANSITION}`}
+                                        style={{ opacity: itemOpacity }}
+                                    >
                                         {src ? (
                                             // eslint-disable-next-line @next/next/no-img-element
                                             <motion.img
@@ -323,7 +336,7 @@ function MobileInventoryPhotosView({
                                                 transition={imgSpring}
                                                 src={src}
                                                 alt={p.name}
-                                                className="max-h-full max-w-full object-contain opacity-90"
+                                                className="max-h-full max-w-full object-contain"
                                                 draggable={false}
                                             />
                                         ) : (
@@ -334,17 +347,19 @@ function MobileInventoryPhotosView({
                                         <motion.span
                                             layoutId={`pdot-${p.id}`}
                                             transition={imgSpring}
-                                            className="inline-block w-[7px] h-[7px] rounded-full shrink-0"
+                                            className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${HOVER_TRANSITION}`}
                                             style={{
                                                 backgroundColor: dotColor,
                                                 border: dotBordered ? '1px solid #1a1a1a' : 'none',
+                                                opacity: itemOpacity,
                                             }}
                                         />
                                         <motion.span
                                             layoutId={`pname-${p.id}`}
                                             layout="position"
                                             transition={imgSpring}
-                                            className="text-[12px] font-bold leading-none"
+                                            className={`text-[12px] font-bold leading-none ${HOVER_TRANSITION}`}
+                                            style={{ opacity: titleOpacity }}
                                         >
                                             {p.name}
                                         </motion.span>
