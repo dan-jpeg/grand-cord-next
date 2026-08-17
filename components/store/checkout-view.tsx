@@ -88,7 +88,7 @@ export function CheckoutView() {
     // Minimal variant
     if (variant === 'minimal') {
         return (
-            <div className="min-h-screen bg-white flex flex-col items-center justify-center py-16 px-6">
+            <div className="min-h-[calc(100*var(--vh))] bg-white flex flex-col items-center justify-center py-16 px-6">
                 {/* Cart Items - Desktop Only */}
                 {!isMobile && (
                     <div className="absolute top-8 right-8 flex gap-16">
@@ -218,7 +218,7 @@ export function CheckoutView() {
 
     // Original variant
     return (
-        <div className="min-h-screen bg-white">
+        <div className="min-h-[calc(100*var(--vh))] bg-white">
             <div className="max-w-6xl mx-auto px-8 py-16">
                 <div className="border-b border-black pb-4 mb-8">
                     <h1 className="text-[9pt] font-bold uppercase">Checkout</h1>

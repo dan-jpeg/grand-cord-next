@@ -10,7 +10,7 @@ export function CartViewMobile() {
 
     if (items.length === 0) {
         return (
-            <div className="min-h-screen bg-black flex items-center justify-center p-6">
+            <div className="min-h-[calc(100*var(--vh))] bg-black flex items-center justify-center p-6">
                 <div className="bg-[#EAEAEA] px-6 py-20 max-w-md w-full">
                     <p className="text-center text-[9pt] mb-8">Your cart is empty.</p>
                     <Link
@@ -25,7 +25,7 @@ export function CartViewMobile() {
     }
 
     return (
-        <div className="min-h-screen bg-black flex items-start justify-center p-6">
+        <div className="min-h-[calc(100*var(--vh))] bg-black flex items-start justify-center p-6">
             <div className="bg-[#EAEAEA] w-full max-w-md">
                 <div className="px-[25px] pt-[80px] pb-[85px]">
                     {/* Items */}

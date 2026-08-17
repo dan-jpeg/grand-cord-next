@@ -957,7 +957,7 @@ export function MultiOrderUnavailableSheet({
 
     return (
         <div className="fixed inset-0 z-50 flex items-end bg-black/20" onClick={onClose}>
-            <div className="w-full bg-white rounded-t-[2rem] px-6 pt-6 pb-8 max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="w-full bg-white rounded-t-[2rem] px-6 pt-6 pb-8 max-h-[calc(88*var(--vh))] flex flex-col" onClick={e => e.stopPropagation()}>
                 <p className="text-[11px] font-semibold tracking-[0.12em] text-neutral-400 mb-1 text-center">ITEM UNAVAILABLE</p>
                 <p className="text-[12px] text-neutral-500 text-center mb-1">{task.productName}</p>
                 <p className="text-[10px] text-neutral-400 text-center mb-4">

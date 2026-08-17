@@ -58,7 +58,7 @@ export function ProductCard({
         const colInRow = cols > 1 ? index % cols : 0
         const isFirstCol = colInRow === 0
         const isLastCol = colInRow === cols - 1
-        const namePadding = isFirstCol ? 'pl-[2vw]' : isLastCol ? 'pr-[2vw] text-right' : 'text-center'
+        const namePadding = isFirstCol ? 'pl-[calc(2*var(--vw))]' : isLastCol ? 'pr-[calc(2*var(--vw))] text-right' : 'text-center'
         const is2x2 = cols === 2
         return (
             <div className="group font-inter ">
@@ -83,9 +83,9 @@ export function ProductCard({
                         )}
                     </div>
                     {is2x2 ? (
-                        <div className=" opacity-90 pt-6 pb-4 grid grid-cols-2 px-[2vw]">
-                            <p className="text-left text-[9pt] font-medium pl-[6vw] ">{product.name}</p>
-                            <div className="text-right text-[7pt] lowercase leading-[1.3] pr-[6vw]">
+                        <div className=" opacity-90 pt-6 pb-4 grid grid-cols-2 px-[calc(2*var(--vw))]">
+                            <p className="text-left text-[9pt] font-medium pl-[calc(6*var(--vw))] ">{product.name}</p>
+                            <div className="text-right text-[7pt] lowercase leading-[1.3] pr-[calc(6*var(--vw))]">
                                 {product.material && <p>{product.material}</p>}
                             </div>
                         </div>
@@ -102,7 +102,7 @@ export function ProductCard({
     // Mobile 1x1 view
     if (isMobile) {
         return (
-            <div className="group  px-[10vw] pb-4 border-black/20 relative">
+            <div className="group  px-[calc(10*var(--vw))] pb-4 border-black/20 relative">
                 {/* Yellow highlight overlay - moved to cover entire card */}
                 <motion.div
                     initial={{ opacity: 0 }}
@@ -136,8 +136,8 @@ export function ProductCard({
                 </Link>
 
                 <div className=" bg-gray-100/20 pb-8 pt-6 relative z-20 opacity-90 pr-[1px]">
-                    <div className="grid grid-cols-2 text-[clamp(8px,1vw+4px,22px)]">
-                        <div className="text-left pl-[5vw] ">
+                    <div className="grid grid-cols-2 text-[clamp(8px,1*var(--vw)+4px,22px)]">
+                        <div className="text-left pl-[calc(5*var(--vw))] ">
                             <p className="font-medium text-[clamp(10px,calc(1vw_+_8px),25px)] ">{product.name}</p>
                             {designerLabel && (
                                 <p className={`mt-4 ${keepDesignerSingleLine ? 'whitespace-nowrap' : ''}`}>
@@ -146,7 +146,7 @@ export function ProductCard({
                             )}
 
                         </div>
-                        <div className="text-right  pr-[6vw]">
+                        <div className="text-right  pr-[calc(6*var(--vw))]">
                             {product.material && (
                                 <p className="  lowercase mt-0">
                                     {product.material}
@@ -196,7 +196,7 @@ export function ProductCard({
 
             <div className=" /20 pb-6 pt-20 relative z-20 opacity-90 pr-[1px]">
                 <div className="grid grid-cols-2 text-[8pt]">
-                    <div className="text-left pl-[5vw] mt-6">
+                    <div className="text-left pl-[calc(5*var(--vw))] mt-6">
                         {product.material && (
                             <p className=" font-bold lowercase mt-1">
                                 {product.material}

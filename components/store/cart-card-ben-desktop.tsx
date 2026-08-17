@@ -11,16 +11,21 @@ export function CartCardBenDesktop({ item }: { item: any }) {
     const [isHovered, setIsHovered] = useState(false)
 
     return (
-        <div className="flex font-inter justify-center">
-            <motion.div
-                layout
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onMouseEnter={() => setIsHovered(true)}
-                onMouseLeave={() => setIsHovered(false)}
-                className="grid grid-cols-[180px_220px_140px] items-start"
-            >
+        // The motion element has to be the row itself, not a child of a plain
+        // wrapper: AnimatePresence mode="popLayout" can only pull an exiting
+        // card out of the layout flow when its own direct child is the motion
+        // component. Nested, the removed card kept its 220px row until an
+        // unrelated re-render dropped it.
+        <motion.div
+            layout
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            className="flex font-inter justify-center"
+        >
+            <div className="grid grid-cols-[180px_220px_140px] items-start">
                 {/* PHOTO */}
                 <div
                     className="relative w-[180px] h-[220px] bg-[#f2f2f2] transition-colors duration-1"
@@ -82,7 +87,7 @@ export function CartCardBenDesktop({ item }: { item: any }) {
                         {item.color}
                     </div>
                 </div>
-            </motion.div>
-        </div>
+            </div>
+        </motion.div>
     )
 }

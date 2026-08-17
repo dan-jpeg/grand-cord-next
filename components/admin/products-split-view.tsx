@@ -9,6 +9,7 @@ import { getProductDetail, patchProductIdentity } from '@/app/admin/products-spl
 import { deleteProduct } from '@/app/admin/products/actions'
 import { STOCK_THRESHOLDS, STOCK_COLORS } from '@/lib/constants'
 import { matchesProductSearch } from '@/lib/product-search'
+import { toLayoutPx } from '@/lib/app-zoom'
 import type {
     Product,
     ProductSize,
@@ -214,16 +215,18 @@ export function ProductsSplitView({ products }: { products: ProductWithSizes[] }
         const path = pathRef.current
         const svg = svgRef.current
         if (!wrap || !thumbEl || !target || !path || !svg) return
+        // Rect deltas are screen px; the SVG's user units are layout px, so
+        // scale by 1/--app-zoom before emitting the path. No-op at zoom 1.
         const parent = wrap.getBoundingClientRect()
         const thumb = thumbEl.getBoundingClientRect()
         const tgt = target.getBoundingClientRect()
         const from = {
-            x: thumb.left + thumb.width / 2 - parent.left,
-            y: thumb.bottom - parent.top + 6,
+            x: toLayoutPx(thumb.left + thumb.width / 2 - parent.left),
+            y: toLayoutPx(thumb.bottom - parent.top) + 6,
         }
         const to = {
-            x: tgt.left + tgt.width / 2 - parent.left,
-            y: tgt.top - parent.top,
+            x: toLayoutPx(tgt.left + tgt.width / 2 - parent.left),
+            y: toLayoutPx(tgt.top - parent.top),
         }
         const midY = from.y + Math.max(24, (to.y - from.y) * 0.45)
         const d = `M ${from.x} ${from.y} L ${from.x} ${midY} L ${to.x} ${midY} L ${to.x} ${to.y}`
@@ -246,16 +249,17 @@ export function ProductsSplitView({ products }: { products: ProductWithSizes[] }
         const activeTabEl = tabRefs.current[activeTab]
         const path = bottomPathRef.current
         if (!outer || !cardAnchor || !activeTabEl || !path) return
+        // As in writeConnector: screen px in, layout px (SVG user units) out.
         const parent = outer.getBoundingClientRect()
         const card = cardAnchor.getBoundingClientRect()
         const tab = activeTabEl.getBoundingClientRect()
         const from = {
-            x: card.left - parent.left,
-            y: card.bottom - parent.top + 6,
+            x: toLayoutPx(card.left - parent.left),
+            y: toLayoutPx(card.bottom - parent.top) + 6,
         }
         const to = {
-            x: tab.left + tab.width / 2 - parent.left,
-            y: tab.top - parent.top,
+            x: toLayoutPx(tab.left + tab.width / 2 - parent.left),
+            y: toLayoutPx(tab.top - parent.top),
         }
         const midY = from.y + Math.max(24, (to.y - from.y) * 0.55)
         const d = `M ${from.x} ${from.y} L ${from.x} ${midY} L ${to.x} ${midY} L ${to.x} ${to.y}`
@@ -807,7 +811,7 @@ export function ProductsSplitView({ products }: { products: ProductWithSizes[] }
                 )}
 
                 {selected && (
-                    <div className="relative w-full px-8 pt-24 min-h-[calc(100vh-200px)]">
+                    <div className="relative w-full px-8 pt-24 min-h-[calc(100*var(--vh)-200px)]">
                         {/* product image — centered on the page */}
                         <div ref={imageWrapRef} className="mx-auto w-fit">
                             {selectedImg ? (
@@ -828,7 +832,7 @@ export function ProductsSplitView({ products }: { products: ProductWithSizes[] }
                         {/* tab-swapping card — anchored to the right of the centered image */}
                         <div
                             key={`${selected.id}-${activeTab}`}
-                            className={`absolute bottom-[10vh] w-[440px] ${
+                            className={`absolute bottom-[calc(10*var(--vh))] w-[440px] ${
                                 lastNavKind === 'tab'
                                     ? navDir === 'back'
                                         ? 'split-tab-anim-back'

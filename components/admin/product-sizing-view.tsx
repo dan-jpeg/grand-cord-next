@@ -105,7 +105,7 @@ export function ProductSizingView({
     const backHref = `/admin/products/${product.id}/edit?tab=listing`
 
     return (
-        <div className="min-h-[100dvh] bg-white text-black font-inter">
+        <div className="min-h-[calc(100*var(--dvh))] bg-white text-black font-inter">
             <AdminNav active="inventory" mobileLabel="Inventory" mobileBackHref={backHref} />
 
             {/* Product name badge, top-right — same yellow as the store-side sizing highlight. Links back to the product listing editor. */}

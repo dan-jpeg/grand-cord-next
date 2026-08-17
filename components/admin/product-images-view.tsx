@@ -66,14 +66,24 @@ function DesignationDot({
 }) {
     return (
         <span
-            className="block rounded-full shrink-0"
+            className="relative block rounded-full shrink-0"
             style={{
                 width: size,
                 height: size,
                 backgroundColor: filled ? color : 'transparent',
                 border: filled ? 'none' : `1px solid ${color}`,
             }}
-        />
+        >
+            {/* Hovering an empty dot ghosts in the colour it would take, so you
+                can tell black tag dots from the green PDP one before clicking. */}
+            {!filled && (
+                <span
+                    aria-hidden
+                    className="absolute inset-[1px] rounded-full opacity-0 transition-opacity duration-150 group-hover:opacity-30"
+                    style={{ backgroundColor: color }}
+                />
+            )}
+        </span>
     )
 }
 
@@ -259,7 +269,7 @@ export function ProductImagesView({
             {/* Desktop header (Figma 2040:1458) — a single 35px row sharing the
                 line with the global nav: tabs centred on the page, product badge
                 at the far right, then the full-width rule the content hangs off. */}
-            <div className="hidden md:block relative h-[35px] shrink-0">
+            <div className="hidden md:block relative h-[44px] shrink-0">
                 <nav className="flex justify-center gap-10 pt-[12px] text-[12px] font-bold">
                     <span className="underline underline-offset-2">Images</span>
                     <Link
@@ -517,6 +527,7 @@ export function ProductImagesView({
                                                 }}
                                                 aria-label={label}
                                                 title={label}
+                                                className="group py-[1px]"
                                             >
                                                 <DesignationDot filled={!!img[key]} />
                                             </button>
@@ -531,7 +542,7 @@ export function ProductImagesView({
                                         }}
                                         aria-label="Show on product page?"
                                         title="Show on product page?"
-                                        className="mt-[22px]"
+                                        className="group mt-[22px]"
                                     >
                                         <DesignationDot filled={img.showOnPdp} color={DESIGNATION_GREEN} />
                                     </button>
@@ -583,12 +594,22 @@ export function ProductImagesView({
                             >
                                 {isUploading ? 'Uploading…' : 'Upload New'}
                             </label>
-                            <span
+                            {/* Exported glyph rather than a "+" character, whose
+                                optical centring drifts with the font. */}
+                            <svg
                                 aria-hidden
-                                className="inline-flex items-center justify-center w-[13.4px] h-[11px] bg-[#fdee9e] text-[#2c2b2b] text-[10px] font-bold leading-none"
+                                viewBox="0 0 13.3913 11"
+                                className="w-[13.4px] h-[11px] shrink-0"
                             >
-                                +
-                            </span>
+                                <rect width="13.3913" height="11" fill="#FDEE9E" />
+                                {/* Scaled about the box centre so the glyph
+                                    shrinks without moving off-centre. */}
+                                <path
+                                    transform="translate(6.6957 5.5) scale(0.8) translate(-6.6957 -5.5)"
+                                    d="M7.76214 1.43479L6.10684 1.43479L6.10684 4.47762L2.86927 4.47762L2.86927 6.13291L6.10684 6.13291L6.10684 9.56522L7.76214 9.56522L7.76214 6.13291L10.9997 6.13291L10.9997 4.47762L7.76214 4.47762L7.76214 1.43479Z"
+                                    fill="#2C2B2B"
+                                />
+                            </svg>
                         </div>
                     )}
                 </div>
@@ -615,12 +636,12 @@ export function ProductImagesView({
                                         type="button"
                                         disabled={pending}
                                         onClick={() => setTag(key)}
-                                        className="flex flex-col items-start"
+                                        className="group flex flex-col items-start"
                                     >
                                         <span className="h-[14px] flex items-center">
                                             <DesignationDot filled={!!selected[key]} />
                                         </span>
-                                        <span className="text-[7.2px] font-bold leading-normal">{label}</span>
+                                        <span className="text-[7.2pt] font-bold leading-normal">{label}</span>
                                     </button>
                                 ))}
                             </div>
@@ -639,7 +660,7 @@ export function ProductImagesView({
                                 type="button"
                                 disabled={pending}
                                 onClick={() => setPdpVisible(!selected.showOnPdp)}
-                                className="absolute right-[14px] bottom-[3px] z-10 flex items-center gap-[13px] text-[7.2px] font-bold"
+                                className="group absolute right-[14px] bottom-[3px] z-10 flex items-center gap-[13px] text-[7.2pt] font-bold"
                             >
                                 show on product page?
                                 <DesignationDot filled={selected.showOnPdp} size={10} color={DESIGNATION_GREEN} />
@@ -650,7 +671,7 @@ export function ProductImagesView({
                             preview's bottom line. */}
                         <div className="relative flex-1 min-w-0 pl-[23px]">
                             <div className="absolute left-[23px] right-4 bottom-[99px] flex flex-col">
-                                <span className="text-[7.2px] font-bold">Notes:</span>
+                                <span className="text-[7.2pt] font-bold">Notes:</span>
                                 <textarea
                                     value={selected.notes ?? ''}
                                     onChange={(e) =>
@@ -663,7 +684,7 @@ export function ProductImagesView({
                                     onBlur={() => persist(images)}
                                     placeholder="Add notes"
                                     rows={4}
-                                    className="mt-[6px] w-full resize-none outline-none bg-transparent text-[7.2px] font-bold leading-[1.6] placeholder:opacity-20"
+                                    className="mt-[6px] w-full resize-none outline-none bg-transparent text-[7.2pt] font-bold leading-[1.6] placeholder:opacity-20"
                                 />
                             </div>
 
@@ -678,7 +699,7 @@ export function ProductImagesView({
                                 />
                                 <label
                                     htmlFor="images-replace"
-                                    className={`text-[7.2px] font-bold cursor-pointer hover:opacity-60 ${
+                                    className={`text-[7.2pt] font-bold cursor-pointer hover:opacity-60 ${
                                         isReplacing ? 'cursor-wait opacity-40' : ''
                                     }`}
                                 >
@@ -688,7 +709,7 @@ export function ProductImagesView({
                                     type="button"
                                     disabled={pending}
                                     onClick={removeSelected}
-                                    className="text-[7.2px] font-bold px-[2.4px] py-[0.6px] bg-[rgba(255,197,197,0.4)] text-[red] hover:bg-[rgba(255,197,197,0.7)]"
+                                    className="text-[7.2pt] font-bold px-[2.4px] py-[0.6px] bg-[rgba(255,197,197,0.4)] text-[red] hover:bg-[rgba(255,197,197,0.7)]"
                                 >
                                     Delete
                                 </button>

@@ -22,7 +22,7 @@ export default async function OrderConfirmationPage({
     }
 
     return (
-        <div className="min-h-screen bg-white flex items-center justify-center p-8">
+        <div className="min-h-[calc(100*var(--vh))] bg-white flex items-center justify-center p-8">
             <div className="max-w-2xl w-full">
                 <div className="border border-black p-8">
                     <h1 className="text-2xl font-bold mb-4">Order Confirmed</h1>

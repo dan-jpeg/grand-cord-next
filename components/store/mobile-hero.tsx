@@ -30,7 +30,7 @@ export function MobileHero() {
     const titleTransform = Math.min(scrollY / 1, 200)
 
     return (
-        <div className="relative" style={{minHeight: '150vh'}}>
+        <div className="relative" style={{minHeight: 'calc(150*var(--vh))'}}>
             {/* Fixed title that fades and moves */}
             <div
                 className="fixed left-0 right-0 px-6 z-10"
@@ -52,7 +52,7 @@ export function MobileHero() {
             </div>
 
             {/* Contact info - positioned in the flow, revealed on scroll */}
-            <div className="absolute top-[100vh] left-0 right-0 px-6">
+            <div className="absolute top-[calc(100*var(--vh))] left-0 right-0 px-6">
                 <div className="text-[8pt]">
                     <div className="italic opacity-60 mb-2">messenger @ grand-cord.com</div>
                     <div className="leading-tight">

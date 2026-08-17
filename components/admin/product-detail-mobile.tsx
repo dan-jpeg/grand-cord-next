@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ProductMobileHeader } from '@/components/admin/product-mobile-header'
 import type { Product, ProductSize, Order, OrderItem, InventoryChangeLog } from '@prisma/client'
 import { AdminNav } from '@/components/admin/admin-nav'
-import { updateProduct } from '@/app/admin/products/actions'
+import { deleteProduct, updateProduct } from '@/app/admin/products/actions'
+import { STOCK_COLORS, STOCK_THRESHOLDS } from '@/lib/constants'
 import { StockCorrectionPanel } from '@/components/admin/stock-correction-panel'
 import type { Tab } from '@/components/admin/product-form'
 import { formatPrice } from '@/lib/utils'
@@ -180,7 +182,13 @@ export function ProductDetailMobile({
     const [price, setPrice] = useState(String(product.price))
     const [description, setDescription] = useState(product.description ?? '')
     const [keywordsText, setKeywordsText] = useState(product.keywords.join(', '))
+    const [published, setPublished] = useState(product.published)
     const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+
+    // Delete (page 2) — two-step, the second tap confirms.
+    const router = useRouter()
+    const [confirmDelete, setConfirmDelete] = useState(false)
+    const [deleting, setDeleting] = useState(false)
 
     const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -227,11 +235,15 @@ export function ProductDetailMobile({
 
     // Persist the whole listing. updateProduct ignores sizes, and we pass the
     // product's existing images/published through unchanged (edited elsewhere).
-    async function commit(nextDesigners = designerNames) {
+    async function commit(nextDesigners = designerNames, nextPublished = published) {
         setStatus('saving')
         try {
             await updateProduct(product.id, {
                 name: name.trim() || product.name,
+                // A brand-new draft has no name yet, and slugifying '' would
+                // give every unnamed draft the same empty slug (unique
+                // constraint). Keep the placeholder slug until it's named.
+                slug: name.trim() ? undefined : product.slug,
                 description: description.trim(),
                 keywords: keywordsText.split(',').map((k) => k.trim()).filter(Boolean),
                 designerNames: nextDesigners.map((d) => d.trim()).filter(Boolean),
@@ -241,7 +253,7 @@ export function ProductDetailMobile({
                 attribute1: attribute1.trim(),
                 attribute2: attribute2.trim(),
                 price: parseFloat(price) || 0,
-                published: product.published,
+                published: nextPublished,
                 images: images.map((im) => ({
                     url: im.url,
                     isMobilePrimary: !!im.isMobilePrimary,
@@ -274,6 +286,36 @@ export function ProductDetailMobile({
 
     function updateDesigner(i: number, v: string) {
         setDesignerNames((prev) => prev.map((d, idx) => (idx === i ? v : d)))
+    }
+
+    // Listed / unlisted. The indicator is the same status dot the inventory
+    // views use: unlisted is the white circle with a black outline; listed
+    // swaps to the stock chip color for this item's available count.
+    const availableTotal = sizes.reduce((sum, s) => sum + s.available, 0)
+    const listedDotColor = !published
+        ? STOCK_COLORS.UNPUBLISHED
+        : availableTotal === 0
+          ? STOCK_COLORS.NO_STOCK
+          : availableTotal <= STOCK_THRESHOLDS.LOW_STOCK
+            ? STOCK_COLORS.LOW_STOCK
+            : STOCK_COLORS.IN_STOCK
+
+    function toggleListed() {
+        const next = !published
+        setPublished(next)
+        commit(designerNames, next)
+    }
+
+    async function handleDelete() {
+        setDeleting(true)
+        try {
+            await deleteProduct(product.id)
+            router.push('/admin/products-new')
+            router.refresh()
+        } catch {
+            setDeleting(false)
+            setConfirmDelete(false)
+        }
     }
 
     // Rows for each page. Same layout, different field set.
@@ -372,12 +414,35 @@ export function ProductDetailMobile({
                 </button>
             ),
         },
+        {
+            label: 'Listed:',
+            content: (
+                <div className={`flex w-full ${showLabels ? 'justify-end' : 'justify-center'}`}>
+                    <button
+                        type="button"
+                        onClick={toggleListed}
+                        aria-pressed={published}
+                        aria-label={published ? 'Unlist item' : 'List item'}
+                        className="p-1 -m-1"
+                    >
+                        <motion.span
+                            animate={{
+                                backgroundColor: listedDotColor,
+                                borderColor: published ? 'rgba(0,0,0,0)' : '#1a1a1a',
+                            }}
+                            transition={spring}
+                            className="block w-[11px] h-[11px] rounded-full border"
+                        />
+                    </button>
+                </div>
+            ),
+        },
     ]
 
     const rows = page === 1 ? page1Rows : page2Rows
 
     return (
-        <div className="relative min-h-[100dvh] bg-white text-black">
+        <div className="relative min-h-[calc(100*var(--dvh))] bg-white text-black">
             {/* Real admin nav (mobile eye-hub) in the top-left */}
             <AdminNav active="inventory" mobileLabel="Inventory" mobileBackHref="/admin/products-new" />
 
@@ -385,8 +450,12 @@ export function ProductDetailMobile({
                 Rendered at all sizes for now — desktop editor removed. */}
             <ProductMobileHeader
                 productId={product.id}
-                productSlug={product.slug}
-                name={name}
+                // An unnamed draft has only a placeholder slug and isn't
+                // published, so the badge stays a plain label until it's named.
+                productSlug={name.trim() ? product.slug : undefined}
+                // Unlisted items open in preview mode — the public page 404s.
+                unlisted={!published}
+                name={name.trim() || 'New Item'}
                 active={isInventory ? 'inventory' : 'listing'}
                 status={status}
                 hiddenClass=""
@@ -443,6 +512,42 @@ export function ProductDetailMobile({
                                     </SplitRow>
                                 </div>
                             ))}
+
+                            {/* Delete — bottom of page 2 only. Two-step: the
+                                first tap arms it, the second confirms, so an
+                                item can't go away on a stray tap. */}
+                            {page === 2 && (
+                                <div className={`mt-12 flex ${showLabels ? 'justify-start' : 'justify-center'}`}>
+                                    {confirmDelete ? (
+                                        <div className="flex items-center gap-4 text-[10px] font-bold leading-[1.5]">
+                                            <button
+                                                type="button"
+                                                onClick={handleDelete}
+                                                disabled={deleting}
+                                                className="text-[#DB0B00] underline underline-offset-[3px] disabled:opacity-40"
+                                            >
+                                                {deleting ? 'Deleting…' : 'Confirm delete'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setConfirmDelete(false)}
+                                                disabled={deleting}
+                                                className="opacity-40 hover:opacity-70"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => setConfirmDelete(true)}
+                                            className="text-[10px] font-bold leading-[1.5] opacity-40 hover:opacity-70"
+                                        >
+                                            Delete Item
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                         </motion.div>
                     </AnimatePresence>
                 </div>
@@ -456,8 +561,8 @@ export function ProductDetailMobile({
                     initial={false}
                     animate={
                         showLabels
-                            ? { width: 150, bottom: -10, left: 'calc(100vw - 140px)' }
-                            : { width: 150, bottom: 10, left: 'calc(50vw - 75px)' }
+                            ? { width: 150, bottom: -10, left: 'calc(100*var(--vw) - 140px)' }
+                            : { width: 150, bottom: 10, left: 'calc(50*var(--vw) - 75px)' }
                     }
                     transition={spring}
                     className="fixed z-0 pointer-events-none"

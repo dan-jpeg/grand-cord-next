@@ -11,7 +11,7 @@ export function LogsView({
     colorById: Record<string, string | null>
 }) {
     return (
-        <div className="min-h-screen flex flex-col justify-end pb-3">
+        <div className="min-h-[calc(100*var(--vh))] flex flex-col justify-end pb-3">
             <div>
                 {logs.map((log) => (
                     <LogRow

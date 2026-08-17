@@ -45,7 +45,7 @@ export function OrderStatusView() {
     } | null
 
     return (
-        <div className="min-h-screen bg-white">
+        <div className="min-h-[calc(100*var(--vh))] bg-white">
             <div className="max-w-2xl mx-auto px-8 py-16">
                 <div className="border-b border-black pb-4 mb-8">
                     <h1 className="text-[9pt] font-bold uppercase">Order Status</h1>

@@ -43,6 +43,7 @@ function Tab({
 export function ProductMobileHeader({
     productId,
     productSlug,
+    unlisted = false,
     name,
     active,
     status = 'idle',
@@ -51,6 +52,8 @@ export function ProductMobileHeader({
     productId: string
     /** Store-facing slug; when set, the item-name badge links to the live product page. */
     productSlug?: string
+    /** Unpublished items have no public page — the badge links to the admin preview instead. */
+    unlisted?: boolean
     name: string
     active: ProductMobileTab
     status?: SaveStatus
@@ -71,7 +74,7 @@ export function ProductMobileHeader({
                     </span>
                     {productSlug ? (
                         <Link
-                            href={`/products/${productSlug}`}
+                            href={`/products/${productSlug}${unlisted ? '?preview=1' : ''}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center bg-[#e8e6e6] px-2 h-[13px]"

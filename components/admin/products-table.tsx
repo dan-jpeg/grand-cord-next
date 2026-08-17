@@ -701,7 +701,7 @@ function HoverInfoOverlay({ product }: { product: ProductWithSizes | null }) {
                 ? STOCK_COLORS.NO_STOCK
                 : '#ffffff'
     return (
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-[72px] z-[15] flex flex-col items-center gap-[6px] pointer-events-none text-center max-w-[80vw]">
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-[72px] z-[15] flex flex-col items-center gap-[6px] pointer-events-none text-center max-w-[calc(80*var(--vw))]">
             <p className="text-[12px] font-bold tracking-tight text-black">{product.name}</p>
             {designerLabel && (
                 <p className="text-[11px] font-bold tracking-tight text-black opacity-70">

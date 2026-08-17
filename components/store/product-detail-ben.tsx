@@ -7,7 +7,7 @@ import { useCart } from '@/contexts/cart-context'
 import { CartIndicator } from '@/components/store/cart-indicator'
 import type { Product, ProductSize } from '@prisma/client'
 import { motion } from 'framer-motion'
-import { formatDesignerNames } from '@/lib/designers'
+import { Designers } from '@/components/designers'
 
 type ImageData = {
     url: string
@@ -61,7 +61,6 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
     const toggleUnit = () => setUnit(u => (u === 'in' ? 'cm' : 'in'))
 
     const images = product.images as unknown as ImageData[]
-    const designerLabel = formatDesignerNames(product.designerNames)
     const displayImage = images.find(img => img.isDesktopPrimary)?.url || images[0]?.url
 
     // Gallery images, in the order set on the Images admin tab, filtered to those marked visible on the PDP.
@@ -103,86 +102,92 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
     }))
     const hasSizingChart = measurements.length > 0
 
+    // data-app-zoom="off": this page opts out of the --app-zoom design-width scaling.
+    // It is already fluid — the columns are grid fractions and the image height follows
+    // from aspect-[3/4] — so it tracks the viewport on its own at any window shape.
+    // See the opt-out rule in globals.css.
     return (
-        <div className="min-h-screen bg-white lg:h-screen lg:overflow-hidden">
+        <div data-app-zoom="off" className="min-h-[calc(100*var(--vh))] bg-white lg:h-[calc(100*var(--vh))] lg:overflow-hidden">
             {/* Desktop cart indicator — top-right, replaces the sticky nav that PDPs opt out of. */}
-            <CartIndicator className="hidden lg:flex fixed top-4 right-[2vw] z-30" />
+            <CartIndicator className="hidden lg:flex fixed top-4 right-[calc(2*var(--vw))] z-30" />
 
             {/* Desktop Layout */}
             <div className="hidden lg:grid h-full max-w-[1700px] mx-auto grid-cols-11 font-inter">
                 {/* Product Info - 5 columns. Padding is per-section so the sizing bg can fill full width. */}
-                <div className="col-span-5 pt-4">
+                <div className="col-span-5 pt-4 ">
                     {/* Header — Catalog link on the left (replaces the global sticky nav on PDPs),
                         product name + designer on the right. */}
-                    <div className="flex items-baseline justify-between mb-12 pl-[20%] pr-[8vw]">
-                        <div className="flex items-baseline gap-8">
+                    <div className="flex items-baseline justify-between  mb-12 pl-[20%] pr-[calc(8*var(--vw))]">
+                        <div className="flex items-baseline  gap-8">
                             <Link href="/#catalog-desktop" scroll={false} className="text-[12px] hover:underline">
                                 Catalog
                             </Link>
                             <h1 className="text-[12px]">{product.name}</h1>
                         </div>
-                        {designerLabel && (
-                            <p className={`text-[11px] tracking-tight font-medium transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
-                                {designerLabel}
-                            </p>
-                        )}
+                        <Designers
+                            designerNames={product.designerNames}
+                            gap="2ch"
+                            className={`text-[7pt] tracking-tight font-medium transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}
+                        />
                     </div>
 
                     {/* Manufacturing Info */}
-                    <div className={`mb-8 pt-32 pl-[20%] pr-[8vw] transition-opacity ${showSizing ? 'opacity-50' : 'opacity-80'}`}>
-                        <p className="text-[8pt] tracking-wide font-inter font-bold">Manufactured in the USA for Grand-Cord</p>
+                    <div className={`mb-6 pt-24 pl-[20%] pr-[calc(8*var(--vw))]  transition-opacity ${showSizing ? 'opacity-50' : 'opacity-80'}`}>
+                        <p className="text-[7pt] tracking-wide font-inter font-medium">Manufactured in the USA for Grand-Cord</p>
                     </div>
 
                     {/* Materials */}
-                    <div className={`mb-20 flex gap-8 pl-[20%] pr-[8vw] font-inter transition-opacity ${showSizing ? 'opacity-50' : 'opacity-80'}`}>
+                    <div className={`mb-12 flex gap-8 pl-[20%] pr-[calc(8*var(--vw))]  font-inter transition-opacity ${showSizing ? 'opacity-50' : 'opacity-80'}`}>
                         {product.attribute1 && (
-                            <p className="text-[8pt] capitalize">{product.attribute1}</p>
+                            <p className="text-[7pt] capitalize">{product.attribute1}</p>
                         )}
                         {product.attribute2 && (
-                            <p className="text-[8pt]">{product.attribute2}</p>
+                            <p className="text-[7pt]">{product.attribute2}</p>
                         )}
                     </div>
 
                     {/* Description */}
                     {product.description && (
-                        <div className={`mb-20 w-full pl-[20%] pr-[8vw] font-inter min-h-[200px] transition-opacity ${showSizing ? 'opacity-50' : 'opacity-80'}`}>
-                            <p className="text-[7.5pt] leading-[1.8] tracking-[1.0] text-justify">{product.description}</p>
+                        <div className={`mb-12 w-full pl-[20%] pr-[calc(8*var(--vw))]  font-inter min-h-[140px] transition-opacity ${showSizing ? 'opacity-50' : 'opacity-80'}`}>
+                            <p className="text-[7pt] leading-[1.8] tracking-[1.0] text-justify">{product.description}</p>
                         </div>
                     )}
 
                     {/* Size Selector — wrapper gets yellow bg when open. Negative margins extend the yellow up/left while matching padding keeps content in place. */}
-                    <div className={`font-inter ${showSizing ? '-mt-[160px] pt-[160px] -ml-[100vw] pl-[100vw] pb-[100vh] bg-[#FCFDF0]' : 'mb-8'}`}>
-                        <div className="pl-[20%] pr-[8vw]">
-                            {/* Numbers and Price Row */}
+                    <div className={`font-inter ${showSizing ? '-mt-[100px] pt-[100px] -ml-[calc(100*var(--vw))] pl-[calc(100*var(--vw))] pb-[calc(100*var(--vh))] bg-[#FCFDF0]' : 'mb-8'}`}>
+                        <div className="pl-[20%] pr-[calc(8*var(--vw))]">
+                            {/* Numbers and Price Row — the label is the size's own
+                                name, not its position: numeric sizes read the same
+                                either way, but a one-size item is "o/s", not "1". */}
                             <div className="flex items-center justify-between mb-6">
                                 <div className="flex gap-3">
-                                    {availableSizes.map((size, index) => (
+                                    {availableSizes.map((size) => (
                                         <button
                                             key={size.id}
                                             onClick={() => setSelectedSize(size.size)}
-                                            className={`text-[9pt] transition-opacity ${
+                                            className={`text-[7pt] transition-opacity ${
                                                 selectedSize === size.size
-                                                    ? 'opacity-100 font-bold'
+                                                    ? 'opacity-100 font-semibold'
                                                     : 'opacity-50 hover:opacity-75'
                                             }`}
                                         >
-                                            {index + 1}
+                                            {size.size}
                                         </button>
                                     ))}
                                 </div>
-                                <p className="text-sm">
+                                <p className="text-[9pt]">
                                     $ {product.price.toFixed(2).replace('.', '. ')}
                                 </p>
                             </div>
 
                             {/* Sizing Dropdown and Add Row */}
-                            <div className="flex items-start justify-between -mr-[8vw]">
+                            <div className="flex items-start justify-between -mr-[calc(8*var(--vw))]">
                                 {hasSizingChart ? (
                                     <button
                                         onClick={() => showSizing ? setShowSizing(false) : openSizing()}
                                         className="flex items-center gap-4 hover:opacity-70"
                                     >
-                                        <span className="text-[8.5pt]">Sizing</span>
+                                        <span className="text-[7.5pt]">Sizing</span>
                                         <span className="text-[5pt]">{showSizing ? '▲' : '▼'}</span>
                                     </button>
                                 ) : (
@@ -191,7 +196,7 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                                 <button
                                     onClick={handleAdd}
                                     disabled={!selectedSize}
-                                    className="text-xs w-1/2 py-2 -my-2 pr-[8vw] text-right disabled:opacity-30 transition-colors enabled:hover:bg-[#FCFDF0]"
+                                    className="text-[9pt] w-1/2 py-2 -my-2 pr-[calc(8*var(--vw))] text-right disabled:opacity-30 transition-colors bg-[#FCFDF0] enabled:hover:bg-transparent"
                                 >
                                     {buttonState === 'added' ? 'Added' : 'Add'}
                                 </button>
@@ -203,18 +208,18 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                                     initial={{opacity: 0, height: 0}}
                                     animate={{opacity: 1, height: 'auto'}}
                                     exit={{opacity: 0, height: 0}}
-                                    className="mt-8 text-xs"
+                                    className="mt-8 text-[7pt]"
                                 >
-                                    <div className="space-y-2">
+                                      <div className="space-y-2">
                                         {measurements.map((measurement, index) => (
                                             <div key={index} className="grid grid-cols-[40px_50px_80px_16px_1fr] gap-x-4 items-baseline">
-                                                <span className="font-bold text-sm">{displayValue(measurement.value)}</span>
+                                                <span className="font-semibold text-[7pt]">{displayValue(measurement.value)}</span>
                                                 <button onClick={toggleUnit} className="text-[8pt] text-neutral-500 text-left">
                                                     <span className={unit === 'in' ? '' : 'opacity-30'}>in</span>
                                                     <span className="opacity-30">/</span>
                                                     <span className={unit === 'cm' ? '' : 'opacity-30'}>cm</span>
                                                 </button>
-                                                <span className="font-bold">{measurement.label}</span>
+                                                <span className="font-semibold">{measurement.label}</span>
                                                 <span className="text-neutral-600">:</span>
                                                 <span className="text-neutral-600">{measurement.description}</span>
                                             </div>
@@ -227,11 +232,17 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                 </div>
 
                 {/* Scrollable Images - 5 columns */}
-                <div className="col-span-5 overflow-y-scroll h-full snap-y snap-mandatory scroll-smooth scrollbar-hide">
+                {/* Viewport height, not h-full: the grid row is as tall as the taller column, so
+                    h-full here would inherit the left column's content height instead of the
+                    screen and the slides would overshoot. */}
+                <div className="col-span-5 overflow-y-scroll h-[calc(100*var(--vh))] snap-y snap-mandatory scroll-smooth scrollbar-hide">
                     {imageArray.map((img, index) => (
-                        <div key={index} className="w-full snap-start snap-always">
+                        // h-full instead of aspect-[3/4]: each slide is exactly one viewport tall,
+                        // so snap-mandatory lands cleanly and no dead space opens under the image
+                        // when the window is taller than 3:4. object-cover crops instead.
+                        <div key={index} className="w-full h-full snap-start snap-always">
                             {img ? (
-                                <div className="relative w-full aspect-[3/4]">
+                                <div className="relative w-full h-full">
                                     <Image
                                         src={img}
                                         alt={`${product.name} ${index + 1}`}
@@ -242,7 +253,7 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                                 </div>
                             ) : (
                                 <div
-                                    className="w-full aspect-[3/4] flex items-center justify-center bg-neutral-100 text-neutral-400">
+                                    className="w-full h-full flex items-center justify-center bg-neutral-100 text-neutral-400">
                                     No Image
                                 </div>
                             )}
@@ -264,14 +275,11 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                         <h1 className={`text-[10px] transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
                             {product.name}
                         </h1>
-                        {product.designerNames && product.designerNames.length > 0 && (
-                            <div
-                                className={`flex gap-4 text-right transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}>
-                                {product.designerNames.map((name) => (
-                                    <p key={name} className="text-[10px] tracking-tight">{name}</p>
-                                ))}
-                            </div>
-                        )}
+                        <Designers
+                            designerNames={product.designerNames}
+                            gap="1rem"
+                            className={`text-[10px] tracking-tight text-right transition-opacity ${showSizing ? 'opacity-50' : 'opacity-100'}`}
+                        />
                     </div>
 
                     <div
@@ -286,7 +294,7 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
 
                     {/* Content area with conditional background */}
                     <div
-                        className={`transition-colors   ${showSizing ? 'bg-[#FCFDF0] -mx-[100vw] px-[100vw] pt-4 pb-24' : ''}`}>
+                        className={`transition-colors   ${showSizing ? 'bg-[#FCFDF0] -mx-[calc(100*var(--vw))] px-[calc(100*var(--vw))] pt-4 pb-24' : ''}`}>
 
 
                         {/* Manufacturing Info - only show when sizing is closed */}
@@ -330,19 +338,20 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                         )}
 
 
-                        {/* Size Numbers */}
+                        {/* Size Numbers — see the desktop row: label is the size's
+                            own name so "o/s" doesn't render as "1". */}
                         <div className="flex gap-3 mb-8">
-                            {availableSizes.map((size, index) => (
+                            {availableSizes.map((size) => (
                                 <button
                                     key={size.id}
                                     onClick={() => setSelectedSize(size.size)}
-                                    className={`text-sm transition-opacity ${
+                                    className={`text-[7pt] transition-opacity ${
                                         selectedSize === size.size
                                             ? 'opacity-100 font-bold'
                                             : 'opacity-50 hover:opacity-75'
                                     }`}
                                 >
-                                    {index + 1}
+                                    {size.size}
                                 </button>
                             ))}
                         </div>
@@ -379,7 +388,7 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                 </div>
 
                 {/* Mobile Images */}
-                <div className=" -mx-6  scale-100 h-[59vh] snap-y snap-mandatory scroll-smooth">
+                <div className=" -mx-6  scale-100 h-[calc(59*var(--vh))] snap-y snap-mandatory scroll-smooth">
                     {imageArray.map((img, index) => (
                         <div key={index} className="w-full snap-start snap-always">
                        {img ? (

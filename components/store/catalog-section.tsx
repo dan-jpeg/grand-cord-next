@@ -56,7 +56,7 @@ export function CatalogSection({
     }, [mobileLayout])
 
     return (
-        <section id="catalog" className={`pb-20 lg:pb-0 lg:pt-24 max-lg:min-h-[calc(100dvh-72px)] ${mobileLayout === '3x3' ? 'pt-8' : mobileLayout === '2x2' ? 'pt-14' : 'pt-24'}`}>
+        <section id="catalog" className={`pb-20 lg:pb-0 lg:pt-24 max-lg:min-h-[calc(100*var(--dvh)-72px)] ${mobileLayout === '3x3' ? 'pt-8' : mobileLayout === '2x2' ? 'pt-14' : 'pt-24'}`}>
             {/* Non-sticky marker for scroll-to-top targeting. The nav below is
                 position: sticky, so once it's pinned its own rect always
                 reads top:0 and scrollIntoView on it becomes a no-op. */}
@@ -73,12 +73,12 @@ export function CatalogSection({
             </div>
 
             {filteredProducts.length === 0 ? (
-                <div className="min-h-[60vh] flex items-center justify-center">
+                <div className="min-h-[calc(60*var(--vh))] flex items-center justify-center">
                     <p className="text-[9pt] text-neutral-400">No results found</p>
                 </div>
             ) : (
                 <>
-                    <div className={`grid gap-x-[1.5vw] lg:gap-x-2 gap-y-0 pb-0 ${gridClasses}`}>
+                    <div className={`grid gap-x-[calc(1.5*var(--vw))] lg:gap-x-2 gap-y-0 pb-0 ${gridClasses}`}>
                         {filteredProducts.map((product, index) => (
                             <ProductCard
                                 key={product.id}

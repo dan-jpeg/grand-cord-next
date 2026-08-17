@@ -98,7 +98,7 @@ export function ProductDetail({ product }: { product: ProductWithSizes }) {
     // Mobile Layout
     if (isMobile) {
         return (
-            <div className="min-h-screen bg-white pb-32">
+            <div className="min-h-[calc(100*var(--vh))] bg-white pb-32">
                 {/* Hero Image */}
                 <div className="w-full">
                     {mobileImage && (
@@ -249,7 +249,7 @@ export function ProductDetail({ product }: { product: ProductWithSizes }) {
 
     // Desktop Layout (existing code)
     return (
-        <div className="h-screen overflow-hidden flex justify-center">
+        <div className="h-[calc(100*var(--vh))] overflow-hidden flex justify-center">
             <div className="flex w-full max-w-[1200px]">
                 {/* LEFT — TEXT */}
                 <div className="w-1/2 flex flex-col justify-between px-6 lg:px-24 pt-32 pb-40">
@@ -356,7 +356,7 @@ export function ProductDetail({ product }: { product: ProductWithSizes }) {
                 {/* RIGHT — IMAGES with snap scrolling */}
                 <div
                     ref={scrollContainerRef}
-                    className="w-1/2 pr-6 lg:pr-12 h-screen overflow-y-scroll"
+                    className="w-1/2 pr-6 lg:pr-12 h-[calc(100*var(--vh))] overflow-y-scroll"
                     style={{
                         scrollSnapType: 'y mandatory',
                         overscrollBehavior: 'contain',

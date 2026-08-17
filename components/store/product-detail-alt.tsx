@@ -81,11 +81,11 @@ export function ProductDetailAlt({ product }: { product: ProductWithSizes }) {
     }
 
     return (
-        <div className="h-screen overflow-hidden bg-white flex justify-center">
-            <div className="h-screen overflow-hidden relative bg-white w-full max-w-[1512px]">
+        <div className="h-[calc(100*var(--vh))] overflow-hidden bg-white flex justify-center">
+            <div className="h-[calc(100*var(--vh))] overflow-hidden relative bg-white w-full max-w-[1512px]">
                 {/* Left Side - Absolutely Positioned Text Content */}
                 <div
-                    className="absolute left-0 top-0 h-screen w-[45%] z-50 flex flex-col justify-between pointer-events-none">
+                    className="absolute left-0 top-0 h-[calc(100*var(--vh))] w-[45%] z-50 flex flex-col justify-between pointer-events-none">
                     <div className="pl-24 pt-32 pb-12 pointer-events-auto">
                         {/* Header */}
                         <div className="mb-8">
@@ -197,7 +197,7 @@ export function ProductDetailAlt({ product }: { product: ProductWithSizes }) {
                 {/* Right Side - Scrollable Images (Full Width) */}
                 <div
                     ref={scrollContainerRef}
-                    className="w-full h-screen pl-[440px] overflow-y-scroll "
+                    className="w-full h-[calc(100*var(--vh))] pl-[440px] overflow-y-scroll "
                     style={{
                         scrollbarWidth: 'none',
                         msOverflowStyle: 'none',

@@ -396,6 +396,18 @@ function MobileInventoryPhotosView({
                     />
                 </button>
             )}
+
+            {/* New Item (floating pill) — same treatment as the products table
+                view. Hidden alongside the filter circle in the single-item
+                stock view, where it doesn't apply. */}
+            {!selectedStockProduct && (
+                <Link
+                    href="/admin/products/new"
+                    className="fixed bottom-5 right-5 z-[20] bg-neutral-200/30 rounded-full px-3 py-1 text-[12px] font-bold opacity-40 hover:opacity-70"
+                >
+                    New Item +
+                </Link>
+            )}
         </div>
         </LayoutGroup>
     )

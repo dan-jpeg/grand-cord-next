@@ -1,16 +1,17 @@
-import { ProductForm } from '@/components/admin/product-form'
+import { auth } from '@/lib/auth'
+import { redirect } from 'next/navigation'
+import { createDraftProduct } from '@/app/admin/products/actions'
 
-export default function NewProductPage() {
-    return (
-        <div className="absolute inset-0 bg-white overflow-auto">
-            <div className="min-h-full flex items-start justify-center py-10 px-6">
-                <div className="w-full max-w-2xl bg-white border border-neutral-200 text-[0.8em]" style={{borderRadius: '2px'}}>
-                    <div className="p-8">
-                        <p className="text-xs font-bold uppercase tracking-widest mb-8">New Product</p>
-                        <ProductForm />
-                    </div>
-                </div>
-            </div>
-        </div>
-    )
+// No separate create form — "New Item +" spins up a blank draft and hands the
+// user the normal product edit view with every field empty.
+export const dynamic = 'force-dynamic'
+
+export default async function NewProductPage() {
+    const session = await auth()
+    if (!session) {
+        redirect('/admin/login')
+    }
+
+    const id = await createDraftProduct()
+    redirect(`/admin/products/${id}/edit`)
 }

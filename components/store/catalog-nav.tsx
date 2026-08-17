@@ -534,7 +534,7 @@ export function CatalogNav({
                 data-catalog-nav
                 onClick={handleNavBackgroundClick}
             >
-                <div className={`flex flex-col pr-[2vw] pl-[calc(5vw+0px)] relative transition-all ${
+                <div className={`flex flex-col pr-[calc(2*var(--vw))] pl-[calc(5*var(--vw)+0px)] relative transition-all ${
                     isDesktopSearchMode
                         ? 'gap-4 pt-6 pb-0'
                         : isDesktopCollapsed
@@ -561,7 +561,7 @@ export function CatalogNav({
 
                     {/* Search Breadcrumb Strip */}
                     {isDesktopSearchMode && (
-                        <div className="-mx-[calc(5vw+16px)] -mr-[2vw] bg-[#FCFDF0] px-[calc(5vw+16px)] pr-[2vw] py-4 text-[9pt] z-10">
+                        <div className="-mx-[calc(5*var(--vw)+16px)] -mr-[calc(2*var(--vw))] bg-[#FCFDF0] px-[calc(5*var(--vw)+16px)] pr-[calc(2*var(--vw))] py-4 text-[9pt] z-10">
                             {isSearchOpen ? (
                                 <form
                                     className="flex items-center gap-2"

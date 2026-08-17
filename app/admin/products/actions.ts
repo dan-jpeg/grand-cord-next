@@ -49,6 +49,33 @@ function normalizeKeywords(keywords?: string[]): string[] {
 }
 
 
+/** Creates a blank, unpublished draft and returns its id.
+ *  The "New Item +" flow drops straight into the normal edit view rather than a
+ *  separate create form, so the row has to exist first — every field there
+ *  commits on blur against a product id. No Stripe product is created yet: the
+ *  draft has no name or price to sync, and updateProduct picks Stripe back up
+ *  once a stripeProductId exists. The placeholder slug keeps the unique
+ *  constraint happy while the name is still empty. */
+export async function createDraftProduct(): Promise<string> {
+    const session = await auth()
+    if (!session) throw new Error('Not authenticated')
+
+    const product = await prisma.product.create({
+        data: {
+            name: '',
+            slug: `draft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+            price: 0,
+            published: false,
+            images: [],
+        },
+    })
+
+    // No revalidatePath here — this runs during the /admin/products/new render,
+    // where revalidation isn't allowed. The inventory pages are force-dynamic,
+    // so they pick the draft up on their next request anyway.
+    return product.id
+}
+
 export async function createProduct(data: ProductFormData) {
     const slug = data.slug || slugify(data.name)
     const designerNames = normalizeDesignerNames(data.designerNames)

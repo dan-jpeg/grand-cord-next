@@ -6,6 +6,44 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Design-width scaling. The desktop layout was authored at 1800px logical
+     width (macOS "More Space" on a 14" MBP). --app-zoom shrinks the whole page
+     so a narrower display renders that same layout, proportionally. Set by the
+     inline script in app/layout.tsx; stays 1 below 1024px and on displays
+     1800px or wider. */
+  --app-zoom: 1;
+}
+
+body {
+  zoom: var(--app-zoom);
+
+  /* Viewport units inside the zoomed subtree resolve against the real viewport
+     and are THEN multiplied by --app-zoom, so raw vw/vh come up short. Use
+     these instead anywhere inside <body>: calc(100 * var(--vh)) etc.
+
+     These MUST be declared here rather than on :root. A custom property's
+     var()s are substituted on the element that declares it, so defining them on
+     :root would bake in the root's --app-zoom and the per-page opt-out below
+     (which overrides --app-zoom on body) would silently have no effect on them. */
+  --vw: calc(1vw / var(--app-zoom));
+  --vh: calc(1vh / var(--app-zoom));
+  --dvh: calc(1dvh / var(--app-zoom));
+}
+
+/* Per-page opt-out: put data-app-zoom="off" on a page's root element and the
+   whole page renders unscaled. Redefining --app-zoom on <body> does all the
+   work at once — body's own `zoom` above resolves to 1, and every descendant
+   inherits 1 so the --vw/--vh units below stay raw.
+
+   For pages that are already fluid this is the right call. The PDP is the case
+   in point: its columns come from grid fractions and its image height comes
+   from an aspect ratio, so both used to track the real viewport and stay in
+   sync. Pinning the layout width to the design width froze the image height
+   while the layout height kept floating with the window, which opened a gap
+   under the image at any non-design aspect ratio. */
+body:has([data-app-zoom='off']) {
+  --app-zoom: 1;
 }
 
 @theme inline {
@@ -100,6 +138,18 @@ html::-webkit-scrollbar,
 body::-webkit-scrollbar {
   display: none;
 }
+
+/* NOTE: don't use Tailwind's h-screen / min-h-screen / max-h-screen / w-screen.
+   They compile to raw 100vh/100vw, which shrink under --app-zoom, so a
+   "full-height" box only covers 84% of the screen. Overriding them centrally
+   doesn't work either: a plain rule in @layer utilities gets stripped by v4 for
+   colliding with a generated utility name, and an @utility override is ignored
+   by the variants (lg:h-screen still compiles to 100vh). Write the compensated
+   value at the call site instead:
+     h-screen      -> h-[calc(100*var(--vh))]
+     min-h-screen  -> min-h-[calc(100*var(--vh))]
+     w-screen      -> w-[calc(100*var(--vw))]
+   Same for any raw vw/vh/dvh in an arbitrary value. */
 
 @layer utilities {
   .scrollbar-hide {

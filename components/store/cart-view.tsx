@@ -31,7 +31,7 @@ export function CartView() {
 
     if (items.length === 0) {
         return (
-            <div className="min-h-screen bg-white flex items-center justify-center p-8">
+            <div className="min-h-[calc(100*var(--vh))] bg-white flex items-center justify-center p-8">
                 <div className="text-center">
                     <h1 className="text-[9pt] mb-2">Your cart is empty.</h1>
                     <div className="flex flex-col gap-4 items-center">
@@ -54,9 +54,9 @@ export function CartView() {
     }
 
     return (
-        <div className="min-h-screen bg-white">
+        <div className="min-h-[calc(100*var(--vh))] bg-white">
             {/* Main Content - Responsive Layout */}
-            <div className="min-h-screen flex flex-col md:flex-row items-start justify-center">
+            <div className="min-h-[calc(100*var(--vh))] flex flex-col md:flex-row items-start justify-center">
                 {/* Left Side / Top on Mobile - Images Grid */}
                 <div className="w-full md:flex-1 md:flex md:justify-end md:pr-[2px]">
                     <div className="w-full md:max-w-4xl py-12 px-8">
@@ -75,7 +75,7 @@ export function CartView() {
                 </div>
 
                 {/* Center Divider - Hidden on Mobile */}
-                <div className="hidden md:flex flex-shrink-0 justify-center min-h-screen">
+                <div className="hidden md:flex flex-shrink-0 justify-center min-h-[calc(100*var(--vh))]">
                     <div className="w-px bg-black"/>
                     <div className="w-[4px]"/>
                     <div className="w-px bg-black"/>

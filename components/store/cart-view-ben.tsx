@@ -1,16 +1,25 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useCart } from '@/contexts/cart-context'
 import { formatPrice } from '@/lib/utils'
 import Link from 'next/link'
 import { CartCardBen } from '@/components/store/cart-card-ben'
-import { AnimatePresence } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import {CartCardBenDesktop} from "@/components/store/cart-card-ben-desktop";
 
 export function CartViewBen() {
     const { items, totalPrice } = useCart()
     const isEmpty = items.length === 0
+
+    // The desktop cards exit with an opacity-only fade, so the last removed row
+    // still holds its 220px of layout until framer unmounts it. Rendering the
+    // empty state right away would put "Return to catalog" below that ghost row
+    // and then snap it upward on unmount — so wait for the exit to finish.
+    const [cardsCleared, setCardsCleared] = useState(true)
+    useEffect(() => {
+        if (!isEmpty) setCardsCleared(false)
+    }, [isEmpty])
 
     // Disable the page's scroll bounce while the cart is open. This page
     // scrolls the document, so overscroll-behavior has to live on <html>, not
@@ -22,8 +31,10 @@ export function CartViewBen() {
         return () => el.classList.remove('cart-no-bounce')
     }, [])
 
+    // data-app-zoom="off": the cart renders unscaled at the browser's real resolution,
+    // like the PDP and the admin. See the opt-out rule in app/globals.css.
     return (
-        <div className="min-h-[100dvh] bg-white font-inter pb-16 max-lg:pb-40 overflow-x-hidden">
+        <div data-app-zoom="off" className="min-h-[calc(100*var(--dvh))] bg-white font-inter pb-16 max-lg:pb-40 overflow-x-hidden">
             <div className="max-w-6xl  px-8 md:max-w-7xl">
                 {/* Mobile Layout - Completely Original */}
                 <div className="lg:hidden flex flex-col gap-1.5">
@@ -51,7 +62,7 @@ export function CartViewBen() {
                     {/* Left Column - Cart Items */}
                     <div className="flex-1">
                         <div className="flex flex-col gap-1.5">
-                            <AnimatePresence mode="popLayout">
+                            <AnimatePresence onExitComplete={() => setCardsCleared(true)}>
                                 {items.map((item) => (
                                     <CartCardBenDesktop
                                         key={`${item.productId}-${item.size}`}
@@ -59,8 +70,12 @@ export function CartViewBen() {
                                     />
                                 ))}
                             </AnimatePresence>
-                            {isEmpty && (
-                                <div className="flex font-inter justify-center">
+                            {isEmpty && cardsCleared && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    className="flex font-inter justify-center"
+                                >
                                     <div className="grid grid-cols-[180px_220px_440px] items-start">
                                         <div />
                                         <div />
@@ -71,7 +86,7 @@ export function CartViewBen() {
                                             </Link>
                                         </div>
                                     </div>
-                                </div>
+                                </motion.div>
                             )}
                         </div>
                     </div>
@@ -80,7 +95,7 @@ export function CartViewBen() {
                     <div className="w-[376px]">
                         <div className="sticky top-16">
                             <div className="relative">
-                                <div className="absolute inset-y-0 left-0 right-0 bg-[#FCFDF0]" style={{ right: '-100vw' }}></div>
+                                <div className="absolute inset-y-0 left-0 right-0 bg-[#FCFDF0]" style={{ right: 'calc(-100*var(--vw))' }}></div>
                                 <div className={`relative px-8 pb-2 ${isEmpty ? 'pt-12' : 'pt-50'}`}>
                                     <div className="text-[8.5pt] font-medium">Order Subtotal</div>
                                 </div>

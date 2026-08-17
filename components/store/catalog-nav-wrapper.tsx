@@ -3,6 +3,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { motion, useScroll, useTransform, useMotionValueEvent } from 'framer-motion'
 import { CatalogNav } from '@/components/store/catalog-nav'
+import { layoutViewport } from '@/lib/app-zoom'
 
 type NavConfig = {
     showSearch: boolean
@@ -32,8 +33,12 @@ export function CatalogNavWrapper(props: CatalogNavWrapperProps) {
     useLayoutEffect(() => {
         const measureNav = () => {
             if (measureRef.current) {
+                // navHeight is offsetHeight (layout px), and the two are mixed
+                // in currentSheetHeight below to produce a CSS length, so the
+                // viewport height has to be in layout px too — window.innerHeight
+                // is screen px and would leave the sheet short under --app-zoom.
                 setNavHeight(measureRef.current.offsetHeight)
-                setVh(window.innerHeight)
+                setVh(layoutViewport().height)
             }
         }
         measureNav()
@@ -73,7 +78,7 @@ export function CatalogNavWrapper(props: CatalogNavWrapperProps) {
                 <CatalogNav {...props} />
             </div>
 
-            <div ref={releaseRef} className="h-[200vh] pointer-events-none" />
+            <div ref={releaseRef} className="h-[calc(200*var(--vh))] pointer-events-none" />
 
             <motion.div
                 style={{

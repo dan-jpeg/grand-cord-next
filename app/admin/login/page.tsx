@@ -12,7 +12,7 @@ export default async function LoginPage() {
     }
 
     return (
-        <div className="w-full min-h-screen bg-white">
+        <div className="w-full min-h-[calc(100*var(--vh))] bg-white">
             <LoginForm />
         </div>
     )

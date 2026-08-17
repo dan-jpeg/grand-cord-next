@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { signOut } from 'next-auth/react'
+import { toLayoutPx } from '@/lib/app-zoom'
 import navFrame1 from '@/app/admin/nav-icon/frame00001.png'
 import navFrame2 from '@/app/admin/nav-icon/frame00002.png'
 import navFrame3 from '@/app/admin/nav-icon/frame00003.png'
@@ -95,21 +96,26 @@ function MobileHubNav({ active, pickUrgency, onClose }: { active: AdminNavProps[
         const labelEl = labelRefs.current[index]
         if (!labelEl) return
 
+        // getBoundingClientRect and e.clientX/Y are screen px, but these end up
+        // as SVG user units inside the zoomed <body>, which are layout px — so
+        // convert before storing. No-op when --app-zoom is 1.
         const rect = labelEl.getBoundingClientRect()
-        const labelX = rect.left + rect.width / 2
-        const labelY = rect.top + rect.height / 2
+        const pointerX = toLayoutPx(e.clientX)
+        const pointerY = toLayoutPx(e.clientY)
+        const labelX = toLayoutPx(rect.left + rect.width / 2)
+        const labelY = toLayoutPx(rect.top + rect.height / 2)
 
-        const dx = labelX - e.clientX
-        const dy = labelY - e.clientY
+        const dx = labelX - pointerX
+        const dy = labelY - pointerY
         const dist = Math.sqrt(dx * dx + dy * dy)
-        const toX = dist > 20 ? labelX - (dx / dist) * 20 : e.clientX
-        const toY = dist > 20 ? labelY - (dy / dist) * 20 : e.clientY
+        const toX = dist > 20 ? labelX - (dx / dist) * 20 : pointerX
+        const toY = dist > 20 ? labelY - (dy / dist) * 20 : pointerY
 
         if (timerRef.current) clearTimeout(timerRef.current)
 
         setAnim({
-            fromX: e.clientX,
-            fromY: e.clientY,
+            fromX: pointerX,
+            fromY: pointerY,
             toX,
             toY,
             fading: false,
