@@ -13,6 +13,7 @@ import {
     deleteSizingAttribute,
     setCategoryEnabled,
 } from '@/app/admin/manage-catalog/actions'
+import { DEFAULT_WELCOME_MESSAGE } from '@/lib/site-settings'
 
 type ProductLite = { id: string; name: string; slug: string }
 
@@ -33,6 +34,7 @@ type SiteSettings = {
     showSampleInNav: boolean
     scrollToTopOnCatalogTapMobile: boolean
     scrollToTopOnCatalogTapDesktop: boolean
+    welcomeMessage: string | null
 }
 
 type SizingAttribute = {
@@ -126,6 +128,24 @@ function SettingsTab({
         })
     }
 
+    const [welcome, setWelcome] = useState(
+        settings.welcomeMessage ?? DEFAULT_WELCOME_MESSAGE,
+    )
+    const [savedWelcome, setSavedWelcome] = useState(
+        settings.welcomeMessage ?? DEFAULT_WELCOME_MESSAGE,
+    )
+
+    const welcomeDirty = welcome.trim() !== savedWelcome.trim()
+
+    const saveWelcome = () => {
+        const next = welcome.trim() || DEFAULT_WELCOME_MESSAGE
+        startTransition(async () => {
+            await updateSiteSettings({ welcomeMessage: next })
+            setWelcome(next)
+            setSavedWelcome(next)
+        })
+    }
+
     const setGroupVisibility = (groupId: string, next: boolean) => {
         startTransition(async () => {
             await updateCatalogGroup(groupId, { showInCatalog: next })
@@ -134,6 +154,45 @@ function SettingsTab({
 
     return (
         <div className="flex flex-col gap-10 max-w-[640px]">
+            {/* Welcome message */}
+            <section>
+                <p className="text-[9pt] font-bold uppercase tracking-[0.05em] text-neutral-500 mb-3">
+                    Welcome message
+                </p>
+                <p className="text-[9pt] text-neutral-500 mb-4">
+                    The italic paragraph at the top of the storefront catalog, on
+                    mobile and desktop.
+                </p>
+                <textarea
+                    value={welcome}
+                    onChange={(e) => setWelcome(e.target.value)}
+                    rows={4}
+                    disabled={pending}
+                    className="w-full border border-neutral-200 px-3 py-2 text-[10pt] leading-[1.5] focus:outline-none focus:border-neutral-500 disabled:opacity-50"
+                />
+                <div className="flex items-center gap-4 mt-3">
+                    <button
+                        type="button"
+                        onClick={saveWelcome}
+                        disabled={pending || !welcomeDirty}
+                        className="text-[9pt] font-bold uppercase tracking-[0.05em] border border-neutral-900 px-3 py-1.5 disabled:opacity-30"
+                    >
+                        Save
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setWelcome(DEFAULT_WELCOME_MESSAGE)}
+                        disabled={pending || welcome.trim() === DEFAULT_WELCOME_MESSAGE}
+                        className="text-[9pt] uppercase tracking-[0.05em] text-neutral-500 disabled:opacity-30"
+                    >
+                        Reset to default
+                    </button>
+                    {welcomeDirty && (
+                        <span className="text-[9pt] text-neutral-400">Unsaved changes</span>
+                    )}
+                </div>
+            </section>
+
             {/* Built-in nav items */}
             <section>
                 <p className="text-[9pt] font-bold uppercase tracking-[0.05em] text-neutral-500 mb-3">

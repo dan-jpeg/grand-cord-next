@@ -62,6 +62,7 @@ export default async function AdminManageCatalogPage() {
                         showSampleInNav: settings.showSampleInNav,
                         scrollToTopOnCatalogTapMobile: settings.scrollToTopOnCatalogTapMobile,
                         scrollToTopOnCatalogTapDesktop: settings.scrollToTopOnCatalogTapDesktop,
+                        welcomeMessage: settings.welcomeMessage,
                     }}
                     sizingAttributes={sizingAttributes.map((a) => ({
                         id: a.id,

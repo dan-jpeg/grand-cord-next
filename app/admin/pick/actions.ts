@@ -1,11 +1,14 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/lib/require-admin'
 import { stripe } from '@/lib/stripe'
 import { getCheapestQuote, buyLabel, type ShippoQuote } from '@/lib/shippo'
 import { revalidatePath } from 'next/cache'
 
 export async function markOrderShipped(orderId: string, trackingNumber?: string) {
+    await requireAdmin()
+
     await prisma.order.update({
         where: { id: orderId },
         data: {
@@ -18,6 +21,8 @@ export async function markOrderShipped(orderId: string, trackingNumber?: string)
 }
 
 export async function quoteShippoLabel(orderId: string): Promise<ShippoQuote> {
+    await requireAdmin()
+
     const order = await prisma.order.findUnique({
         where: { id: orderId },
         select: { shippingAddress: true },
@@ -39,6 +44,8 @@ export async function purchaseShippoLabel(orderId: string, rateId: string): Prom
     labelUrl: string
     trackingNumber: string
 }> {
+    await requireAdmin()
+
     const result = await buyLabel(rateId)
 
     await prisma.order.update({
@@ -59,6 +66,8 @@ export async function purchaseShippoLabel(orderId: string, rateId: string): Prom
 }
 
 export async function partialRefundItem(orderId: string, amountCents: number) {
+    await requireAdmin()
+
     const order = await prisma.order.findUnique({
         where: { id: orderId },
         select: { stripePaymentIntentId: true },
@@ -72,6 +81,8 @@ export async function partialRefundItem(orderId: string, amountCents: number) {
 }
 
 export async function cancelOrder(orderId: string) {
+    await requireAdmin()
+
     const order = await prisma.order.findUnique({
         where: { id: orderId },
         select: { stripePaymentIntentId: true },

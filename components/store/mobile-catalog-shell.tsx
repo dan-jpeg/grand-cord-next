@@ -20,9 +20,11 @@ type NavConfig = {
 export function MobileCatalogShell({
     products,
     navConfig,
+    welcomeMessage,
 }: {
     products: ProductWithSizes[]
     navConfig?: NavConfig
+    welcomeMessage?: string
 }) {
     const [searchQuery, setSearchQuery] = useState('')
     const [mobileLayout, setMobileLayout] = useState<'1x1' | '2x2' | '3x3'>('1x1')
@@ -34,7 +36,7 @@ export function MobileCatalogShell({
 
     return (
         <>
-            <MobileHero />
+            <MobileHero welcomeMessage={welcomeMessage} />
             <CatalogNavWrapper
                 productCount={filteredProducts.length}
                 onSearchChange={setSearchQuery}

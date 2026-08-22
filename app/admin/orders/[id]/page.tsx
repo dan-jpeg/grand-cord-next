@@ -1,8 +1,10 @@
 import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth'
 import { formatPrice } from '@/lib/utils'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { OrderStatusForm } from '@/components/admin/order-status-form'
 import { OrderDetailMobile } from '@/components/admin/order-detail-mobile'
+import { PaymentInfoButton } from '@/components/admin/payment-info-modal'
 
 import { OrderItem } from "@prisma/client";
 
@@ -11,6 +13,11 @@ export default async function OrderDetailPage({
                                               }: {
     params: Promise<{ id: string }>
 }) {
+    const session = await auth()
+    if (!session?.user) {
+        redirect('/admin/login')
+    }
+
     const { id } = await params
 
     const order = await prisma.order.findUnique({
@@ -127,6 +134,10 @@ export default async function OrderDetailPage({
                                 <div className="text-neutral-600">Stripe Payment ID</div>
                                 <div className="font-mono text-xs break-all">{order.stripePaymentIntentId}</div>
                             </div>
+                            <PaymentInfoButton
+                                orderId={order.id}
+                                className="w-full mt-2 border border-neutral-900 py-2 font-medium hover:bg-neutral-100 transition-colors"
+                            />
                         </div>
                     </div>
 

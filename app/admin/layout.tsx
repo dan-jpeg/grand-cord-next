@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { auth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
@@ -22,7 +23,17 @@ export default async function AdminLayout({
         session = null
     }
 
+    // The login route is the one admin path that has to render signed out.
+    // Everything else is turned away here rather than merely restyled — pages
+    // under /admin otherwise render their data to anonymous visitors.
+    const pathname = (await headers()).get('x-pathname') ?? ''
+    const isLoginRoute = pathname.startsWith('/admin/login')
+
     if (!session) {
+        if (!isLoginRoute) {
+            redirect('/admin/login')
+        }
+
         return (
             <div data-app-zoom="off" className="min-h-[calc(100*var(--vh))] bg-white flex items-center justify-center">
                 {children}

@@ -5,10 +5,17 @@ import { CatalogNav } from '@/components/store/catalog-nav'
 import { CatalogSection } from '@/components/store/catalog-section'
 import type { Product, ProductSize } from '@prisma/client'
 import { matchesProductSearch } from '@/lib/product-search'
+import { DEFAULT_WELCOME_MESSAGE } from '@/lib/site-settings'
 
 type ProductWithSizes = Product & { sizes: ProductSize[] }
 
-export function DesktopCatalogShell({ products }: { products: ProductWithSizes[] }) {
+export function DesktopCatalogShell({
+    products,
+    welcomeMessage,
+}: {
+    products: ProductWithSizes[]
+    welcomeMessage?: string
+}) {
     const [searchQuery, setSearchQuery] = useState('')
     const [mobileLayout, setMobileLayout] = useState<'1x1' | '2x2' | '3x3'>('1x1')
 
@@ -21,8 +28,7 @@ export function DesktopCatalogShell({ products }: { products: ProductWithSizes[]
         <div className="min-h-[calc(100*var(--vh))] font-inter bg-white">
             <div className="px-[calc(9*var(--vw))] lg:grid grid-cols-12 pt-[calc(100*var(--vh)-200px)] gap-y-[260px] w-full">
                 <p className="col-span-9 text-left leading-3 pr-[5rem] font-inter text-[7pt] italic">
-                    This catalog is the work of many people; founded as a shared framework for independent studios.
-                    Grand-Cord is supported by those involved and takes no commission. All orders are shipped from Chicago.
+                    {welcomeMessage?.trim() || DEFAULT_WELCOME_MESSAGE}
                 </p>
                 <div className="col-span-1"></div>
                 <p className="text-[9.5pt] col-span-1 text-right font-semibold italic whitespace-nowrap">Grand-Cord</p>

@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { DEFAULT_WELCOME_MESSAGE } from '@/lib/site-settings'
 
-export function MobileHero() {
+export function MobileHero({ welcomeMessage }: { welcomeMessage?: string }) {
     const [scrollY, setScrollY] = useState(0)
 
     useEffect(() => {
@@ -45,9 +46,7 @@ export function MobileHero() {
                 </h1>
 
                 <p className="text-[6pt] pt-0 italic leading-[1.4]">
-                    This catalog is the work of many people; founded as a shared framework for independent studios.
-                    Grand-Cord is supported by those involved and takes no commission. All orders are shipped from
-                    Chicago.
+                    {welcomeMessage?.trim() || DEFAULT_WELCOME_MESSAGE}
                 </p>
             </div>
 

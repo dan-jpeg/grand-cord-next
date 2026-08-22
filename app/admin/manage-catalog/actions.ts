@@ -220,6 +220,7 @@ export async function updateSiteSettings(patch: {
     showSampleInNav?: boolean
     scrollToTopOnCatalogTapMobile?: boolean
     scrollToTopOnCatalogTapDesktop?: boolean
+    welcomeMessage?: string | null
 }) {
     const session = await auth()
     if (!session) throw new Error('Unauthorized')
@@ -229,6 +230,9 @@ export async function updateSiteSettings(patch: {
     if (patch.showSampleInNav !== undefined) data.showSampleInNav = patch.showSampleInNav
     if (patch.scrollToTopOnCatalogTapMobile !== undefined) data.scrollToTopOnCatalogTapMobile = patch.scrollToTopOnCatalogTapMobile
     if (patch.scrollToTopOnCatalogTapDesktop !== undefined) data.scrollToTopOnCatalogTapDesktop = patch.scrollToTopOnCatalogTapDesktop
+    if (patch.welcomeMessage !== undefined) {
+        data.welcomeMessage = patch.welcomeMessage?.toString().trim() || null
+    }
 
     await prisma.siteSettings.upsert({
         where: { id: 'default' },

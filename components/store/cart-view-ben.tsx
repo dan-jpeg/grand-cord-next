@@ -18,7 +18,15 @@ export function CartViewBen() {
     // and then snap it upward on unmount — so wait for the exit to finish.
     const [cardsCleared, setCardsCleared] = useState(true)
     useEffect(() => {
-        if (!isEmpty) setCardsCleared(false)
+        if (!isEmpty) {
+            setCardsCleared(false)
+            return
+        }
+        // onExitComplete covers the normal case; the timer is the fallback for
+        // when the fade never reports back (background tab, interrupted anim)
+        // so the link can't get stranded off-screen.
+        const timer = setTimeout(() => setCardsCleared(true), 400)
+        return () => clearTimeout(timer)
     }, [isEmpty])
 
     // Disable the page's scroll bounce while the cart is open. This page
@@ -62,7 +70,10 @@ export function CartViewBen() {
                     {/* Left Column - Cart Items */}
                     <div className="flex-1">
                         <div className="flex flex-col gap-1.5">
-                            <AnimatePresence onExitComplete={() => setCardsCleared(true)}>
+                            <AnimatePresence
+                                mode="popLayout"
+                                onExitComplete={() => setCardsCleared(true)}
+                            >
                                 {items.map((item) => (
                                     <CartCardBenDesktop
                                         key={`${item.productId}-${item.size}`}

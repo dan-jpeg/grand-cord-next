@@ -122,7 +122,7 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                             <Link href="/#catalog-desktop" scroll={false} className="text-[12px] hover:underline">
                                 Catalog
                             </Link>
-                            <h1 className="text-[12px]">{product.name}</h1>
+                            <h1 className="relative top-[1px] text-[12px]">{product.name}</h1>
                         </div>
                         <Designers
                             designerNames={product.designerNames}
@@ -196,7 +196,10 @@ export function ProductDetailBen({ product }: { product: ProductWithSizes }) {
                                 <button
                                     onClick={handleAdd}
                                     disabled={!selectedSize}
-                                    className="text-[9pt] w-1/2 py-2 -my-2 pr-[calc(8*var(--vw))] text-right disabled:opacity-30 transition-colors bg-[#FCFDF0] enabled:hover:bg-transparent"
+                                    // The sizing panel paints this whole area #FCFDF0, so the
+                                    // usual "fade the fill away" hover would read as no hover at
+                                    // all. While it's open, hover to white instead.
+                                    className={`text-[9pt] w-1/2 py-2 -my-2 pr-[calc(8*var(--vw))] text-right disabled:opacity-30 transition-colors bg-[#FCFDF0] ${showSizing ? 'enabled:hover:bg-white' : 'enabled:hover:bg-transparent'}`}
                                 >
                                     {buttonState === 'added' ? 'Added' : 'Add'}
                                 </button>

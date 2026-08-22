@@ -6,6 +6,8 @@ import Image from 'next/image'
 import { formatPrice } from '@/lib/utils'
 import { updateOrderStatus } from '@/app/admin/orders/actions'
 import type { Order, OrderItem } from '@prisma/client'
+import { PaymentInfoModal } from '@/components/admin/payment-info-modal'
+import { TrackingPrompt } from '@/components/admin/tracking-prompt'
 
 type OrderWithItems = Order & { items: OrderItem[] }
 
@@ -35,6 +37,10 @@ export function OrderDetailMobile({
     productImages: Record<string, string>
 }) {
     const [status, setStatus] = useState(order.status)
+    const [showPayment, setShowPayment] = useState(false)
+    // Set while the admin is being asked for tracking details before the order
+    // flips to SHIPPED.
+    const [pendingShip, setPendingShip] = useState(false)
 
     const orderNumber = order.orderNumber.startsWith('O-')
         ? order.orderNumber
@@ -53,6 +59,11 @@ export function OrderDetailMobile({
     })
 
     async function handleStatusChange(next: string) {
+        // Shipping needs tracking details, so collect them before committing.
+        if (next === 'SHIPPED') {
+            setPendingShip(true)
+            return
+        }
         setStatus(next as typeof status)
         await updateOrderStatus(
             order.id,
@@ -135,14 +146,36 @@ export function OrderDetailMobile({
                     <div>{shippingAddress.country}</div>
                 </div>
 
-                {/* Email. */}
-                <div className="pt-[11px]">{order.email}</div>
-
-                {/* Tracking — label left, number right. */}
-                <div className="flex items-start justify-between pt-[27px]">
-                    <span>tracking:</span>
-                    <span>{order.trackingNumber || 'XXXXXNOTRACKINGYET'}</span>
+                {/* Email · Payment Info. */}
+                <div className="flex items-center justify-between pt-[11px]">
+                    <span>{order.email}</span>
+                    <button
+                        type="button"
+                        onClick={() => setShowPayment(true)}
+                        className="bg-[#e8e6e6] px-[8px] py-[1px]"
+                    >
+                        Payment Info
+                    </button>
                 </div>
+
+                {/* Tracking — label left, number right. Editable once shipped. */}
+                {status === 'SHIPPED' ? (
+                    <button
+                        type="button"
+                        onClick={() => setPendingShip(true)}
+                        className="w-full flex items-start justify-between pt-[27px] text-left"
+                    >
+                        <span>tracking:</span>
+                        <span className="underline">
+                            {order.trackingNumber || 'XXXXXNOTRACKINGYET'}
+                        </span>
+                    </button>
+                ) : (
+                    <div className="flex items-start justify-between pt-[27px]">
+                        <span>tracking:</span>
+                        <span>{order.trackingNumber || 'XXXXXNOTRACKINGYET'}</span>
+                    </div>
+                )}
 
                 {/* Product shots — bottom-right. */}
                 <div className="flex justify-end gap-[8px] pt-[17px] pr-[6px]">
@@ -171,6 +204,25 @@ export function OrderDetailMobile({
                     </span>
                 </div>
             </div>
+
+            {showPayment && (
+                <PaymentInfoModal orderId={order.id} onClose={() => setShowPayment(false)} />
+            )}
+
+            {pendingShip && (
+                <TrackingPrompt
+                    orderId={order.id}
+                    orderNumber={orderNumber}
+                    trackingNumber={order.trackingNumber}
+                    trackingUrl={order.trackingUrl}
+                    alreadyShipped={status === 'SHIPPED'}
+                    onDone={() => {
+                        setPendingShip(false)
+                        setStatus('SHIPPED')
+                    }}
+                    onCancel={() => setPendingShip(false)}
+                />
+            )}
         </div>
     )
 }

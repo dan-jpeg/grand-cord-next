@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation'
 import { slugify } from '@/lib/utils'
 import { normalizeDesignerNames } from '@/lib/designers'
 import { auth } from '@/lib/auth'
+import { requireAdmin } from '@/lib/require-admin'
 import type { Prisma } from '@prisma/client'
 
 type ProductFormData = {
@@ -77,6 +78,8 @@ export async function createDraftProduct(): Promise<string> {
 }
 
 export async function createProduct(data: ProductFormData) {
+    await requireAdmin()
+
     const slug = data.slug || slugify(data.name)
     const designerNames = normalizeDesignerNames(data.designerNames)
     const keywords = normalizeKeywords(data.keywords)
@@ -146,6 +149,8 @@ export async function createProduct(data: ProductFormData) {
 }
 
 export async function updateProduct(id: string, data: ProductFormData) {
+    await requireAdmin()
+
     const designerNames = normalizeDesignerNames(data.designerNames)
     const keywords = normalizeKeywords(data.keywords)
     // Get existing product to check for Stripe product ID
@@ -213,6 +218,8 @@ export async function updateProduct(id: string, data: ProductFormData) {
 }
 
 export async function updateSizeStock(sizeId: string, delta: number) {
+    await requireAdmin()
+
     const size = await prisma.productSize.findUnique({ where: { id: sizeId } })
     if (!size) return
     const newAvailable = Math.max(0, size.available + delta)
@@ -348,6 +355,8 @@ export async function commitInventoryChanges(
 }
 
 export async function deleteProduct(id: string) {
+    await requireAdmin()
+
     // Get product to check for Stripe product ID
     const product = await prisma.product.findUnique({
         where: { id },

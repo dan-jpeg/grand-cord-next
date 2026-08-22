@@ -204,6 +204,7 @@ model SiteSettings {
   showSampleInNav                 Boolean  @default(true)
   scrollToTopOnCatalogTapMobile   Boolean  @default(false)
   scrollToTopOnCatalogTapDesktop  Boolean  @default(false)
+  welcomeMessage                  String?
   updatedAt                       DateTime @updatedAt
 }
 
