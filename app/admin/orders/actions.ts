@@ -11,20 +11,28 @@ import {
     type RefundChoice,
 } from '@/lib/orders/cancel-order'
 import { applyOrderStockMove } from '@/lib/orders/stock'
+import type { OrderStatus } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
+/**
+ * Every status except CANCELLED, which carries a refund decision and goes
+ * through cancelOrderAction instead. Typed here so the compiler enforces what
+ * updateOrderStatus would otherwise only catch at runtime.
+ */
+export type LiveOrderStatus = Exclude<OrderStatus, 'CANCELLED'>
+
 export async function updateOrderStatus(
     orderId: string,
-    status: 'PENDING' | 'PAID' | 'SHIPPED' | 'CANCELLED',
+    status: LiveOrderStatus,
     trackingNumber?: string,
     trackingUrl?: string
 ) {
     const actor = await requireAdmin()
 
-    // Cancellation carries a refund decision, so it cannot be expressed as a
-    // plain status write. Callers go through cancelOrderAction instead.
-    if (status === 'CANCELLED') {
+    // Belt and braces: the type above rules this out for TS callers, but server
+    // actions are reachable as plain POST endpoints.
+    if ((status as OrderStatus) === 'CANCELLED') {
         throw new Error('Use cancelOrderAction to cancel an order.')
     }
 

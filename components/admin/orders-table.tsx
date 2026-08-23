@@ -3,13 +3,13 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { formatPrice } from '@/lib/utils'
-import type { Order, OrderItem } from '@prisma/client'
+import type { Order, OrderItem, OrderStatus } from '@prisma/client'
 
 type OrderWithItems = Order & {
     items: OrderItem[]
 }
 
-type StatusFilter = 'ALL' | 'SHIPPED' | 'PENDING' | 'PAID' | 'CANCELLED'
+type StatusFilter = 'ALL' | OrderStatus
 
 const ITEMS_PER_PAGE = 15
 
@@ -21,8 +21,17 @@ const STATUS_COLORS = {
     CANCELLED: '#ef4444', // red
 }
 
-// Mobile Filter button cycles through these; ALL is the unfiltered "Filter" state.
-const MOBILE_FILTER_CYCLE: StatusFilter[] = ['ALL', 'SHIPPED', 'PENDING', 'PAID']
+/**
+ * The filter options, in display order. ALL is the unfiltered state.
+ *
+ * One list for both views: the desktop row renders it, the mobile Filter button
+ * cycles through it. They were previously separate literals and had already
+ * drifted — CANCELLED existed on desktop but not in the cycle, so a filter the
+ * desktop could reach left the mobile button with nothing to advance from
+ * (indexOf returned -1 and it snapped back to ALL). Both views share one
+ * statusFilter, so they have to offer the same set.
+ */
+const ORDER_STATUS_FILTERS: StatusFilter[] = ['ALL', 'SHIPPED', 'PENDING', 'PAID', 'CANCELLED']
 
 function MobileOrdersView({
     orders,
@@ -54,8 +63,8 @@ function MobileOrdersView({
     )
 
     const cycleFilter = () => {
-        const i = MOBILE_FILTER_CYCLE.indexOf(statusFilter)
-        setStatusFilter(MOBILE_FILTER_CYCLE[(i + 1) % MOBILE_FILTER_CYCLE.length])
+        const i = ORDER_STATUS_FILTERS.indexOf(statusFilter)
+        setStatusFilter(ORDER_STATUS_FILTERS[(i + 1) % ORDER_STATUS_FILTERS.length])
     }
 
     const fmtDate = (d: Date | string) =>
@@ -240,7 +249,7 @@ export function OrdersTable({
             <div className="text-[8pt] border-black">
                 {/* Status Filter Row */}
                 <div className="flex items-center justify-end gap-4 px-4 py-2 border-b border-black  lowercase ">
-                    {(['ALL', 'SHIPPED', 'PENDING', 'PAID', 'CANCELLED'] as StatusFilter[]).map((status) => (
+                    {ORDER_STATUS_FILTERS.map((status) => (
                         <button
                             key={status}
                             onClick={() => {

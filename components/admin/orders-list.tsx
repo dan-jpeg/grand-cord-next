@@ -3,14 +3,14 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { formatPrice } from '@/lib/utils'
-import type { Order, OrderItem } from '@prisma/client'
+import type { Order, OrderItem, OrderStatus } from '@prisma/client'
 
 type OrderWithItems = Order & {
     items: OrderItem[]
 }
 
 type SortOption = 'date-desc' | 'date-asc' | 'total-desc' | 'total-asc'
-type StatusFilter = 'ALL' | 'PENDING' | 'PAID' | 'SHIPPED' | 'CANCELLED'
+type StatusFilter = 'ALL' | OrderStatus
 
 export function OrdersList({ orders }: { orders: OrderWithItems[] }) {
     const [search, setSearch] = useState('')

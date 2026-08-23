@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { formatPrice } from '@/lib/utils'
-import { updateOrderStatus } from '@/app/admin/orders/actions'
+import { updateOrderStatus, type LiveOrderStatus } from '@/app/admin/orders/actions'
 import type { Order, OrderItem } from '@prisma/client'
 import { PaymentInfoModal } from '@/components/admin/payment-info-modal'
 import { TrackingPrompt } from '@/components/admin/tracking-prompt'
@@ -75,7 +75,7 @@ export function OrderDetailMobile({
         setStatus(next as typeof status)
         await updateOrderStatus(
             order.id,
-            next as 'PENDING' | 'PAID' | 'SHIPPED' | 'CANCELLED',
+            next as LiveOrderStatus,
             order.trackingNumber || undefined,
             order.trackingUrl || undefined,
         )

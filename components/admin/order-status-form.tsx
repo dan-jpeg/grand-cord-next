@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { updateOrderStatus } from '@/app/admin/orders/actions'
+import { updateOrderStatus, type LiveOrderStatus } from '@/app/admin/orders/actions'
 import { CancelOrderPrompt } from '@/components/admin/cancel-order-prompt'
 import type { Order, OrderStatus } from '@prisma/client'
 
@@ -26,7 +26,7 @@ export function OrderStatusForm({ order }: { order: Order }) {
 
         await updateOrderStatus(
             order.id,
-            status as 'PENDING' | 'PAID' | 'SHIPPED',
+            status as LiveOrderStatus,
             trackingNumber || undefined,
             trackingUrl || undefined
         )
