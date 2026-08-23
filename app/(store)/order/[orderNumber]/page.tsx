@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { stripe } from '@/lib/stripe'
 import { notFound } from 'next/navigation'
 import { formatPrice } from '@/lib/utils'
 import Link from 'next/link'
@@ -7,10 +8,13 @@ import { OrderItem } from "@prisma/client";
 
 export default async function OrderConfirmationPage({
                                                         params,
+                                                        searchParams,
                                                     }: {
     params: Promise<{ orderNumber: string }>
+    searchParams: Promise<{ session_id?: string }>
 }) {
     const { orderNumber } = await params
+    const { session_id: sessionId } = await searchParams
 
     const order = await prisma.order.findUnique({
         where: { orderNumber },
@@ -18,6 +22,26 @@ export default async function OrderConfirmationPage({
     })
 
     if (!order) {
+        notFound()
+    }
+
+    // Order numbers are sequential and public, so the number alone cannot gate
+    // this page — it shows the customer's email. Stripe's checkout session is
+    // the proof of arrival: it is unguessable, and Stripe only hands it to the
+    // person who completed this payment. Anyone returning later uses the order
+    // status page, which asks for the email instead.
+    if (!sessionId) {
+        notFound()
+    }
+
+    // Resolved before the check so that notFound()'s control-flow throw is not
+    // swallowed by this catch.
+    const sessionOrderId = await stripe.checkout.sessions
+        .retrieve(sessionId)
+        .then((session) => session.metadata?.orderId ?? null)
+        .catch(() => null)
+
+    if (sessionOrderId !== order.id) {
         notFound()
     }
 

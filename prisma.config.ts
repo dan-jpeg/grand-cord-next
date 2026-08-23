@@ -7,6 +7,13 @@ export default defineConfig({
         path: 'prisma/migrations',
     },
     datasource: {
-        url: env('DATABASE_URL'),
+        // Migrations and introspection only — the CLI is the sole consumer of
+        // this datasource. The runtime client builds its own pg adapter from
+        // DATABASE_URL in lib/prisma.ts and keeps using the pooler.
+        //
+        // This has to be the direct 5432 connection: Prisma's migration engine
+        // cannot take its advisory lock through Supabase's pgbouncer, so
+        // pointing it at the 6543 pooler makes `migrate` hang rather than fail.
+        url: env('DIRECT_URL'),
     },
 })

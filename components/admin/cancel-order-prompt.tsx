@@ -28,6 +28,10 @@ export function CancelOrderPrompt({
     const [lookupError, setLookupError] = useState<string | null>(null)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    // The cancel went through, but something about it needs saying — a refund
+    // that was already issued, or stock that could not be returned. Distinct
+    // from `error`, which means nothing happened.
+    const [notes, setNotes] = useState<string[] | null>(null)
 
     useEffect(() => {
         let active = true
@@ -62,20 +66,21 @@ export function CancelOrderPrompt({
             return
         }
 
-        // Surface anything the cancel could not finish rather than closing over it.
-        const { refundSkippedReason, unrestoredItems } = res.result
-        if (refundSkippedReason || unrestoredItems.length > 0) {
+        // The order is cancelled either way. Anything that could not be finished
+        // is reported as a note, not an error — saying "failed" here would
+        // invite a retry of something that already succeeded.
+        const { refundSkippedReason, unrestoredItems, cancelled } = res.result
+        const collected = [
+            !cancelled ? 'This order was already cancelled; nothing changed.' : null,
+            refundSkippedReason ?? null,
+            unrestoredItems.length > 0
+                ? `Stock was not returned for: ${unrestoredItems.join(', ')}. Adjust it by hand.`
+                : null,
+        ].filter((n): n is string => n !== null)
+
+        if (collected.length > 0) {
             setSaving(false)
-            setError(
-                [
-                    refundSkippedReason,
-                    unrestoredItems.length > 0
-                        ? `Order cancelled, but stock was not returned for: ${unrestoredItems.join(', ')}. Adjust it by hand.`
-                        : null,
-                ]
-                    .filter(Boolean)
-                    .join(' '),
-            )
+            setNotes(collected)
             return
         }
 
@@ -145,18 +150,39 @@ export function CancelOrderPrompt({
 
                     {error && <div className="text-red-700 font-normal leading-[1.5]">{error}</div>}
 
-                    <button
-                        type="button"
-                        onClick={handleConfirm}
-                        disabled={saving || !choice}
-                        className="w-full bg-black text-white py-[12px] disabled:opacity-30"
-                    >
-                        {saving
-                            ? 'Cancelling…'
-                            : choice === 'FULL_REFUND'
-                              ? 'Cancel Order and Refund'
-                              : 'Cancel Order'}
-                    </button>
+                    {notes && (
+                        <div className="border border-black px-[12px] py-[11px] flex flex-col gap-[6px]">
+                            <span>Order cancelled.</span>
+                            {notes.map((n) => (
+                                <span key={n} className="font-normal opacity-70 leading-[1.5]">
+                                    {n}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
+                    {notes ? (
+                        <button
+                            type="button"
+                            onClick={onDone}
+                            className="w-full bg-black text-white py-[12px]"
+                        >
+                            Done
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={handleConfirm}
+                            disabled={saving || !choice}
+                            className="w-full bg-black text-white py-[12px] disabled:opacity-30"
+                        >
+                            {saving
+                                ? 'Cancelling…'
+                                : choice === 'FULL_REFUND'
+                                  ? 'Cancel Order and Refund'
+                                  : 'Cancel Order'}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

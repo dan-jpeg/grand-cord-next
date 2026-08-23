@@ -106,9 +106,9 @@ export async function partialRefundItem(orderId: string, amountCents: number) {
  * now comes back, something this route previously skipped.
  */
 export async function cancelOrder(orderId: string) {
-    await requireAdmin()
+    const actor = await requireAdmin()
 
-    const result = await cancelOrderCore(orderId, 'FULL_REFUND')
+    const result = await cancelOrderCore(orderId, 'FULL_REFUND', actor)
 
     revalidatePath('/admin/orders')
     revalidatePath('/admin/pick')

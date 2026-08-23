@@ -395,7 +395,7 @@ export function AdminNav({ active, variant = 'top-left', mobileVariant = 'eye', 
                 <div className="lg:hidden">
                     {mobile}
                 </div>
-                <div className={`hidden lg:flex absolute ${topClass} ${leftClass} z-[300] items-start text-[8pt] font-bold gap-4`}>
+                <div className={`hidden lg:flex fixed ${topClass} ${leftClass} z-[300] items-start text-[8pt] font-bold gap-4`}>
                     {PRIMARY_NAV_ITEMS.map(item => (
                         <Link
                             key={item.key}
@@ -419,7 +419,7 @@ export function AdminNav({ active, variant = 'top-left', mobileVariant = 'eye', 
             <div className="lg:hidden">
                 {mobile}
             </div>
-            <div className="hidden lg:flex absolute top-3 left-3 z-[300] items-start text-[8pt] font-bold gap-4">
+            <div className="hidden lg:flex fixed top-3 left-3 z-[300] items-start text-[8pt] font-bold gap-4">
                 {PRIMARY_NAV_ITEMS.map(item => (
                     <Link
                         key={item.key}

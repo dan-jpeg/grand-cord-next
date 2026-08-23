@@ -220,6 +220,14 @@ model InventoryChangeLog {
   adminUserId   String?
   adminEmail    String
   adminName     String?
+  // Which counter moved: "available" for manual edits and cancel restores,
+  // "total" when shipping takes stock off the shelf. Null on rows written
+  // before order transitions were logged.
+  field         String?
+  // Why the stock moved. Null means a manual edit from the product screen.
+  reason        String?
+  orderId       String?
+  orderNumber   String?
   createdAt     DateTime @default(now())
 
   adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
@@ -228,4 +236,5 @@ model InventoryChangeLog {
   @@index([productSizeId])
   @@index([adminUserId])
   @@index([createdAt])
+  @@index([orderId])
 }

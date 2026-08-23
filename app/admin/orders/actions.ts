@@ -10,6 +10,7 @@ import {
     type CancelResult,
     type RefundChoice,
 } from '@/lib/orders/cancel-order'
+import { applyOrderStockMove } from '@/lib/orders/stock'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
@@ -19,7 +20,7 @@ export async function updateOrderStatus(
     trackingNumber?: string,
     trackingUrl?: string
 ) {
-    await requireAdmin()
+    const actor = await requireAdmin()
 
     // Cancellation carries a refund decision, so it cannot be expressed as a
     // plain status write. Callers go through cancelOrderAction instead.
@@ -36,37 +37,51 @@ export async function updateOrderStatus(
 
     const previousStatus = order.status
 
-    // Update order status
-    await prisma.order.update({
-        where: { id: orderId },
-        data: {
-            status,
-            // Clear tracking if not SHIPPED
-            trackingNumber: status === 'SHIPPED' ? (trackingNumber || order.trackingNumber) : null,
-            trackingUrl: status === 'SHIPPED' ? (trackingUrl || order.trackingUrl) : null,
-        },
-    })
+    // Status and stock move together, so a failure part-way through cannot
+    // leave the order shipped with only some of its stock drawn down.
+    await prisma.$transaction(async (tx) => {
+        await tx.order.update({
+            where: { id: orderId },
+            data: {
+                status,
+                // Tracking is history: it survives a revert to PENDING or PAID
+                // and is only replaced when new details are supplied. Clearing
+                // it here used to destroy the record of what was sent.
+                ...(trackingNumber ? { trackingNumber } : {}),
+                ...(trackingUrl ? { trackingUrl } : {}),
+            },
+        })
 
-    // Handle inventory changes based on status transition
-    if (previousStatus === 'PAID' && status === 'SHIPPED') {
-        // Order shipped: decrement committed and total
-        for (const item of order.items) {
-            await prisma.productSize.updateMany({
-                where: {
-                    productId: item.productId,
-                    size: item.size,
-                },
-                data: {
-                    committed: {
-                        decrement: item.quantity,
-                    },
-                    total: {
-                        decrement: item.quantity,
-                    },
-                },
-            })
+        // Shipping takes the goods off the shelf for good.
+        if (previousStatus === 'PAID' && status === 'SHIPPED') {
+            for (const item of order.items) {
+                const { applied, shortfall } = await applyOrderStockMove(
+                    tx,
+                    item,
+                    'ORDER_SHIPPED',
+                    { orderId, orderNumber: order.orderNumber, actor },
+                )
+                // Nothing has been paid out on this path, so refusing the whole
+                // transition is safe and beats silently shipping against
+                // inventory that no longer lines up.
+                if (!applied) {
+                    throw new Error(
+                        `No stock row for ${item.productName} (${item.size}). ` +
+                            `The size may have been renamed or removed since the order was placed. ` +
+                            `Fix the product's sizes, then mark it shipped again.`,
+                    )
+                }
+                if (shortfall > 0) {
+                    throw new Error(
+                        `${item.productName} (${item.size}) has only ` +
+                            `${item.quantity - shortfall} of ${item.quantity} units committed. ` +
+                            `The stock count has drifted from this order — correct it on the ` +
+                            `product, then mark it shipped again.`,
+                    )
+                }
+            }
         }
-    }
+    })
 
     revalidatePath('/admin/orders')
     revalidatePath(`/admin/orders/${orderId}`)
@@ -122,8 +137,16 @@ export async function getOrderPaymentInfo(
         select: { stripePaymentIntentId: true },
     })
     if (!order) return { ok: false, error: 'Order not found' }
-    if (!order.stripePaymentIntentId) {
+    if (!order.stripePaymentIntentId || order.stripePaymentIntentId === 'pending') {
         return { ok: false, error: 'No Stripe payment is attached to this order.' }
+    }
+    // Until the checkout.session.completed webhook lands, this column holds the
+    // checkout session id, not a payment intent.
+    if (order.stripePaymentIntentId.startsWith('cs_')) {
+        return {
+            ok: false,
+            error: 'Checkout has not completed yet — there is no payment to show.',
+        }
     }
 
     try {
@@ -227,10 +250,10 @@ export async function cancelOrderAction(
     orderId: string,
     refundChoice: RefundChoice,
 ): Promise<{ ok: true; result: CancelResult } | { ok: false; error: string }> {
-    await requireAdmin()
+    const actor = await requireAdmin()
 
     try {
-        const result = await cancelOrderCore(orderId, refundChoice)
+        const result = await cancelOrderCore(orderId, refundChoice, actor)
         revalidatePath('/admin/orders')
         revalidatePath(`/admin/orders/${orderId}`)
         revalidatePath('/admin/products')

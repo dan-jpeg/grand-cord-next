@@ -11,6 +11,7 @@ type OrderWithItems = Order & {
 
 export function OrderStatusView() {
     const [orderNumber, setOrderNumber] = useState('')
+    const [email, setEmail] = useState('')
     const [order, setOrder] = useState<OrderWithItems | null>(null)
     const [isSearching, setIsSearching] = useState(false)
     const [notFound, setNotFound] = useState(false)
@@ -22,13 +23,13 @@ export function OrderStatusView() {
         setOrder(null)
 
         try {
-            const result = await lookupOrder(orderNumber.trim())
+            const result = await lookupOrder(orderNumber.trim(), email.trim())
             if (result) {
                 setOrder(result)
             } else {
                 setNotFound(true)
             }
-        } catch (error) {
+        } catch {
             setNotFound(true)
         } finally {
             setIsSearching(false)
@@ -56,13 +57,27 @@ export function OrderStatusView() {
                     <label htmlFor="orderNumber" className="block text-[9pt] font-bold uppercase mb-2">
                         Order Number
                     </label>
+                    <input
+                        id="orderNumber"
+                        type="text"
+                        value={orderNumber}
+                        onChange={(e) => setOrderNumber(e.target.value)}
+                        placeholder="0001"
+                        className="w-full px-4 py-3 border border-black focus:outline-none mb-4"
+                        required
+                    />
+
+                    {/* Second factor: the order number alone is not a secret. */}
+                    <label htmlFor="email" className="block text-[9pt] font-bold uppercase mb-2">
+                        Email
+                    </label>
                     <div className="flex gap-2">
                         <input
-                            id="orderNumber"
-                            type="text"
-                            value={orderNumber}
-                            onChange={(e) => setOrderNumber(e.target.value)}
-                            placeholder="ORD-XXXXX"
+                            id="email"
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="the address you ordered with"
                             className="flex-1 px-4 py-3 border border-black focus:outline-none"
                             required
                         />
@@ -80,7 +95,7 @@ export function OrderStatusView() {
                 {notFound && (
                     <div className="text-center py-8">
                         <p className="text-sm text-neutral-600">
-                            Order not found. Please check your order number and try again.
+                            No order matches that number and email. Check both and try again.
                         </p>
                     </div>
                 )}

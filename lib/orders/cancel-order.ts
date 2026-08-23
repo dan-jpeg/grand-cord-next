@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { stripe } from '@/lib/stripe'
+import { applyOrderStockMove } from '@/lib/orders/stock'
+import type { AdminSessionUser } from '@/lib/require-admin'
 
 /**
  * What cancelling should do to the customer's money. There is no implicit
@@ -49,11 +51,13 @@ export async function getRefundableCents(paymentIntentId: string): Promise<numbe
  * only restored for orders that never shipped — once goods are out the door the
  * stock is genuinely gone.
  *
- * Not yet transactional; that is phase 3, along with the audit rows.
+ * The status write and every stock movement share one transaction, and each
+ * movement writes an InventoryChangeLog row attributed to the acting admin.
  */
 export async function cancelOrder(
     orderId: string,
     refundChoice: RefundChoice,
+    actor: AdminSessionUser,
 ): Promise<CancelResult> {
     const order = await prisma.order.findUnique({
         where: { id: orderId },
@@ -89,30 +93,38 @@ export async function cancelOrder(
         }
     }
 
-    await prisma.order.update({
-        where: { id: orderId },
-        data: { status: 'CANCELLED' },
-    })
-
-    // Stock only comes back if it never left. A cancelled-after-shipping order
-    // has already had both `committed` and `total` decremented.
+    // Status and stock move together — a partial failure here would leave the
+    // order cancelled with only some of its inventory returned.
     const unrestoredItems: string[] = []
-    if (previousStatus === 'PENDING' || previousStatus === 'PAID') {
-        for (const item of order.items) {
-            const { count } = await prisma.productSize.updateMany({
-                where: { productId: item.productId, size: item.size },
-                data: {
-                    committed: { decrement: item.quantity },
-                    available: { increment: item.quantity },
-                },
-            })
-            // A renamed or deleted size matches nothing and would otherwise
-            // swallow the restore silently.
-            if (count === 0) {
-                unrestoredItems.push(`${item.productName} (${item.size})`)
+    await prisma.$transaction(async (tx) => {
+        await tx.order.update({
+            where: { id: orderId },
+            data: { status: 'CANCELLED' },
+        })
+
+        // Stock only comes back if it never left. A cancelled-after-shipping
+        // order has already had both `committed` and `total` decremented.
+        if (previousStatus === 'PENDING' || previousStatus === 'PAID') {
+            for (const item of order.items) {
+                const { applied, shortfall } = await applyOrderStockMove(
+                    tx,
+                    item,
+                    'ORDER_CANCELLED',
+                    { orderId, orderNumber: order.orderNumber, actor },
+                )
+                // Reported rather than thrown: the refund has already gone out,
+                // so rolling the cancellation back would strand the customer
+                // refunded but still holding an open order.
+                if (!applied) {
+                    unrestoredItems.push(`${item.productName} (${item.size}) — no such size`)
+                } else if (shortfall > 0) {
+                    unrestoredItems.push(
+                        `${item.productName} (${item.size}) — ${shortfall} of ${item.quantity} not committed`,
+                    )
+                }
             }
         }
-    }
+    })
 
     return { cancelled: true, refundedCents, refundSkippedReason, unrestoredItems }
 }

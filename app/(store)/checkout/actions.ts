@@ -47,9 +47,13 @@ type OrderData = {
             }
         }
 
-        // Generate sequential order number
-        const orderCount = await prisma.order.count()
-        const orderNumber = String(orderCount + 1).padStart(4, '0')
+        // Sequential order number, handed out by a Postgres sequence so two
+        // simultaneous checkouts cannot read the same value and collide on the
+        // unique constraint. Same zero-padded format as before.
+        const [{ nextval }] = await prisma.$queryRaw<{ nextval: bigint }[]>`
+            SELECT nextval('order_number_seq')
+        `
+        const orderNumber = String(nextval).padStart(4, '0')
 
         // Create order
         const order = await prisma.order.create({

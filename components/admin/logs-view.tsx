@@ -10,8 +10,11 @@ export function LogsView({
     logs: InventoryChangeLog[]
     colorById: Record<string, string | null>
 }) {
+    // Top padding matches the fade distance so that at rest the newest row sits
+    // clear of both the mask and the pinned nav — the fade should only bite once
+    // you actually scroll.
     return (
-        <div className="min-h-[calc(100*var(--vh))] flex flex-col justify-end pb-3">
+        <div className="min-h-[calc(100*var(--vh))] flex flex-col justify-end pt-[calc(11*var(--vh))] pb-3">
             <div>
                 {logs.map((log) => (
                     <LogRow
@@ -37,6 +40,14 @@ function LogRow({
     log: InventoryChangeLog
     color: string | null
 }) {
+    // Manual product-screen edits have no reason; order-driven rows name the order.
+    const causeText =
+        log.reason === 'ORDER_SHIPPED'
+            ? `Shipped: ${log.orderNumber ?? '—'}`
+            : log.reason === 'ORDER_CANCELLED'
+              ? `Cancelled: ${log.orderNumber ?? '—'}`
+              : null
+
     const deltaText = (
         <span
             className="whitespace-nowrap text-right tabular-nums"
@@ -70,10 +81,15 @@ function LogRow({
                     <span className="flex-1" />
                     {deltaText}
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                     <span className="font-reformat tabular-nums whitespace-nowrap">
                         <Timestamp createdAt={log.createdAt} />
                     </span>
+                    {causeText && (
+                        <span className="font-reformat whitespace-nowrap truncate opacity-60">
+                            {causeText}
+                        </span>
+                    )}
                     <span className="font-reformat whitespace-nowrap">
                         {log.adminName || 'Admin'}
                     </span>
@@ -105,7 +121,9 @@ function LogRow({
 
                 {deltaText}
 
-                <span />
+                <span className="font-reformat whitespace-nowrap truncate opacity-60 pl-4">
+                    {causeText ?? ''}
+                </span>
 
                 <span className="font-reformat whitespace-nowrap text-right">
                     {log.adminName || 'Admin'}
