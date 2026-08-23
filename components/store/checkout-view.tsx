@@ -59,15 +59,14 @@ export function CheckoutView() {
                     zip,
                     country,
                 },
+                // Identity and count only. Names and prices are the catalogue's
+                // to state, not the cart's — the server reads them from the
+                // database and ignores anything sent from here.
                 items: items.map(item => ({
                     productId: item.productId,
-                    productName: item.productName,
-                    productSlug: item.productSlug,
                     size: item.size,
                     quantity: item.quantity,
-                    price: item.price,
                 })),
-                total: totalPrice,
             }
 
             const { url } = await createCheckoutSession(orderData)
