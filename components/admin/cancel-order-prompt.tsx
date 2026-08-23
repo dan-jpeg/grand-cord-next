@@ -73,9 +73,7 @@ export function CancelOrderPrompt({
         const collected = [
             !cancelled ? 'This order was already cancelled; nothing changed.' : null,
             refundSkippedReason ?? null,
-            unrestoredItems.length > 0
-                ? `Stock was not returned for: ${unrestoredItems.join(', ')}. Adjust it by hand.`
-                : null,
+            ...unrestoredItems,
         ].filter((n): n is string => n !== null)
 
         if (collected.length > 0) {

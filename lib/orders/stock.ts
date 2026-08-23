@@ -1,8 +1,15 @@
 import type { Prisma, OrderItem } from '@prisma/client'
 import type { AdminSessionUser } from '@/lib/require-admin'
 
-/** Why an order moved stock. Stored on the audit row. */
-export type StockReason = 'ORDER_SHIPPED' | 'ORDER_CANCELLED'
+/**
+ * Why an order moved stock. Stored on the audit row.
+ *
+ * The state model: PENDING and PAID both hold their units in `committed` —
+ * reserved, still on the shelf. SHIPPED is the only status that takes them out
+ * of `total`, because that is when the goods physically leave. So un-shipping
+ * has to put them back into both.
+ */
+export type StockReason = 'ORDER_SHIPPED' | 'ORDER_CANCELLED' | 'ORDER_UNSHIPPED'
 
 export type StockMoveContext = {
     orderId: string
@@ -49,31 +56,31 @@ export async function applyOrderStockMove(
     })
     if (!size) return { applied: false, shortfall: item.quantity }
 
-    const movable = Math.min(item.quantity, Math.max(0, size.committed))
+    // Un-shipping re-reserves stock rather than draining it, so the committed
+    // ceiling below does not apply — there is nothing to run short of.
+    const restoring = reason === 'ORDER_UNSHIPPED'
+    const movable = restoring
+        ? item.quantity
+        : Math.min(item.quantity, Math.max(0, size.committed))
     const shortfall = item.quantity - movable
 
     if (movable === 0) {
         return { applied: true, shortfall }
     }
 
-    const field = reason === 'ORDER_SHIPPED' ? 'total' : 'available'
+    const field = reason === 'ORDER_CANCELLED' ? 'available' : 'total'
     const before = field === 'total' ? size.total : size.available
     const delta = reason === 'ORDER_SHIPPED' ? -movable : movable
     const after = before + delta
 
-    await tx.productSize.update({
-        where: { id: size.id },
-        data:
-            reason === 'ORDER_SHIPPED'
-                ? {
-                      committed: { decrement: movable },
-                      total: { decrement: movable },
-                  }
-                : {
-                      committed: { decrement: movable },
-                      available: { increment: movable },
-                  },
-    })
+    const data =
+        reason === 'ORDER_SHIPPED'
+            ? { committed: { decrement: movable }, total: { decrement: movable } }
+            : reason === 'ORDER_UNSHIPPED'
+              ? { committed: { increment: movable }, total: { increment: movable } }
+              : { committed: { decrement: movable }, available: { increment: movable } }
+
+    await tx.productSize.update({ where: { id: size.id }, data })
 
     await tx.inventoryChangeLog.create({
         data: {

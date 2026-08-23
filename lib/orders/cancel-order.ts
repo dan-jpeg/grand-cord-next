@@ -116,10 +116,16 @@ export async function cancelOrder(
                 // so rolling the cancellation back would strand the customer
                 // refunded but still holding an open order.
                 if (!applied) {
-                    unrestoredItems.push(`${item.productName} (${item.size}) — no such size`)
+                    unrestoredItems.push(
+                        `${item.productName} (${item.size}): none of the ${item.quantity} could be` +
+                            ` returned — that size no longer exists on the product.`,
+                    )
                 } else if (shortfall > 0) {
                     unrestoredItems.push(
-                        `${item.productName} (${item.size}) — ${shortfall} of ${item.quantity} not committed`,
+                        `${item.productName} (${item.size}): returned ${item.quantity - shortfall} of` +
+                            ` ${item.quantity}. The other ${shortfall} was never reserved against this` +
+                            ` order, so there was nothing to return — the stock count had already` +
+                            ` drifted. Worth checking the product.`,
                     )
                 }
             }

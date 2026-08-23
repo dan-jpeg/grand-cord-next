@@ -46,7 +46,9 @@ function LogRow({
             ? `Shipped: ${log.orderNumber ?? '—'}`
             : log.reason === 'ORDER_CANCELLED'
               ? `Cancelled: ${log.orderNumber ?? '—'}`
-              : null
+              : log.reason === 'ORDER_UNSHIPPED'
+                ? `Un-shipped: ${log.orderNumber ?? '—'}`
+                : null
 
     const deltaText = (
         <span

@@ -52,6 +52,19 @@ export async function updateOrderStatus(
             },
         })
 
+        // Un-shipping puts the goods back on the shelf and back under
+        // reservation. Without this the ship decrement is one-way: reverting a
+        // shipped order silently un-reserves its stock for good.
+        if (previousStatus === 'SHIPPED' && (status === 'PAID' || status === 'PENDING')) {
+            for (const item of order.items) {
+                await applyOrderStockMove(tx, item, 'ORDER_UNSHIPPED', {
+                    orderId,
+                    orderNumber: order.orderNumber,
+                    actor,
+                })
+            }
+        }
+
         // Shipping takes the goods off the shelf for good.
         if (previousStatus === 'PAID' && status === 'SHIPPED') {
             for (const item of order.items) {
