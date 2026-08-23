@@ -8,6 +8,7 @@ import { updateOrderStatus } from '@/app/admin/orders/actions'
 import type { Order, OrderItem } from '@prisma/client'
 import { PaymentInfoModal } from '@/components/admin/payment-info-modal'
 import { TrackingPrompt } from '@/components/admin/tracking-prompt'
+import { CancelOrderPrompt } from '@/components/admin/cancel-order-prompt'
 
 type OrderWithItems = Order & { items: OrderItem[] }
 
@@ -41,6 +42,8 @@ export function OrderDetailMobile({
     // Set while the admin is being asked for tracking details before the order
     // flips to SHIPPED.
     const [pendingShip, setPendingShip] = useState(false)
+    // Set while the admin is being asked what to do about the refund.
+    const [pendingCancel, setPendingCancel] = useState(false)
 
     const orderNumber = order.orderNumber.startsWith('O-')
         ? order.orderNumber
@@ -62,6 +65,11 @@ export function OrderDetailMobile({
         // Shipping needs tracking details, so collect them before committing.
         if (next === 'SHIPPED') {
             setPendingShip(true)
+            return
+        }
+        // Cancelling needs a refund decision.
+        if (next === 'CANCELLED') {
+            setPendingCancel(true)
             return
         }
         setStatus(next as typeof status)
@@ -207,6 +215,18 @@ export function OrderDetailMobile({
 
             {showPayment && (
                 <PaymentInfoModal orderId={order.id} onClose={() => setShowPayment(false)} />
+            )}
+
+            {pendingCancel && (
+                <CancelOrderPrompt
+                    orderId={order.id}
+                    orderNumber={orderNumber}
+                    onDone={() => {
+                        setPendingCancel(false)
+                        setStatus('CANCELLED')
+                    }}
+                    onCancel={() => setPendingCancel(false)}
+                />
             )}
 
             {pendingShip && (

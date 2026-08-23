@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { updateOrderStatus } from '@/app/admin/orders/actions'
-import type { Order } from '@prisma/client'
+import { CancelOrderPrompt } from '@/components/admin/cancel-order-prompt'
+import type { Order, OrderStatus } from '@prisma/client'
 
 export function OrderStatusForm({ order }: { order: Order }) {
     const [isEditing, setIsEditing] = useState(false)
@@ -10,14 +11,22 @@ export function OrderStatusForm({ order }: { order: Order }) {
     const [trackingNumber, setTrackingNumber] = useState(order.trackingNumber || '')
     const [trackingUrl, setTrackingUrl] = useState(order.trackingUrl || '')
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [pendingCancel, setPendingCancel] = useState(false)
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
+
+        // Cancelling carries a refund decision, so it goes through its own sheet.
+        if (status === 'CANCELLED') {
+            setPendingCancel(true)
+            return
+        }
+
         setIsSubmitting(true)
 
         await updateOrderStatus(
             order.id,
-            status as 'PENDING' | 'PAID' | 'SHIPPED' | 'CANCELLED',
+            status as 'PENDING' | 'PAID' | 'SHIPPED',
             trackingNumber || undefined,
             trackingUrl || undefined
         )
@@ -80,6 +89,18 @@ export function OrderStatusForm({ order }: { order: Order }) {
     }
 
     return (
+        <>
+        {pendingCancel && (
+            <CancelOrderPrompt
+                orderId={order.id}
+                orderNumber={order.orderNumber}
+                onDone={() => {
+                    setPendingCancel(false)
+                    setIsEditing(false)
+                }}
+                onCancel={() => setPendingCancel(false)}
+            />
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
             <div>
                 <label htmlFor="status" className="block text-sm font-medium mb-2">
@@ -88,7 +109,7 @@ export function OrderStatusForm({ order }: { order: Order }) {
                 <select
                     id="status"
                     value={status}
-                    onChange={(e) => setStatus(e.target.value as any)}
+                    onChange={(e) => setStatus(e.target.value as OrderStatus)}
                     className="w-full px-4 py-3 border border-neutral-300 focus:outline-none focus:border-black"
                 >
                     <option value="PENDING">Pending</option>
@@ -155,5 +176,6 @@ export function OrderStatusForm({ order }: { order: Order }) {
                 )}
             </div>
         </form>
+        </>
     )
 }

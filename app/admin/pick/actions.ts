@@ -2,6 +2,10 @@
 
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/require-admin'
+import {
+    cancelOrder as cancelOrderCore,
+    getRefundableCents,
+} from '@/lib/orders/cancel-order'
 import { stripe } from '@/lib/stripe'
 import { getCheapestQuote, buyLabel, type ShippoQuote } from '@/lib/shippo'
 import { revalidatePath } from 'next/cache'
@@ -74,31 +78,41 @@ export async function partialRefundItem(orderId: string, amountCents: number) {
     })
     if (!order?.stripePaymentIntentId || order.stripePaymentIntentId === 'pending') return
 
+    if (!Number.isInteger(amountCents) || amountCents <= 0) {
+        throw new Error('Refund amount must be a positive whole number of cents.')
+    }
+
+    // Never hand back more than the payment still holds, however this is called.
+    const refundable = await getRefundableCents(order.stripePaymentIntentId)
+    if (refundable <= 0) {
+        throw new Error('This payment has already been fully refunded.')
+    }
+    if (amountCents > refundable) {
+        throw new Error(
+            `Refund of ${amountCents} cents exceeds the ${refundable} cents still refundable.`,
+        )
+    }
+
     await stripe.refunds.create({
         payment_intent: order.stripePaymentIntentId,
         amount: amountCents,
     })
 }
 
+/**
+ * Cancel from the pick flow. The sheet's own button states the outcome ("Full
+ * refund, remove from queue"), so the choice is already explicit here — but it
+ * runs the same canonical path as the order screen, which also means the stock
+ * now comes back, something this route previously skipped.
+ */
 export async function cancelOrder(orderId: string) {
     await requireAdmin()
 
-    const order = await prisma.order.findUnique({
-        where: { id: orderId },
-        select: { stripePaymentIntentId: true },
-    })
-
-    if (order?.stripePaymentIntentId && order.stripePaymentIntentId !== 'pending') {
-        await stripe.refunds.create({
-            payment_intent: order.stripePaymentIntentId,
-        })
-    }
-
-    await prisma.order.update({
-        where: { id: orderId },
-        data: { status: 'CANCELLED' },
-    })
+    const result = await cancelOrderCore(orderId, 'FULL_REFUND')
 
     revalidatePath('/admin/orders')
     revalidatePath('/admin/pick')
+    revalidatePath('/admin/products')
+
+    return result
 }

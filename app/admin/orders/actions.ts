@@ -4,6 +4,12 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { requireAdmin } from '@/lib/require-admin'
 import { stripe } from '@/lib/stripe'
+import {
+    cancelOrder as cancelOrderCore,
+    getRefundableCents,
+    type CancelResult,
+    type RefundChoice,
+} from '@/lib/orders/cancel-order'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
@@ -14,6 +20,12 @@ export async function updateOrderStatus(
     trackingUrl?: string
 ) {
     await requireAdmin()
+
+    // Cancellation carries a refund decision, so it cannot be expressed as a
+    // plain status write. Callers go through cancelOrderAction instead.
+    if (status === 'CANCELLED') {
+        throw new Error('Use cancelOrderAction to cancel an order.')
+    }
 
     const order = await prisma.order.findUnique({
         where: { id: orderId },
@@ -54,30 +66,6 @@ export async function updateOrderStatus(
                 },
             })
         }
-    }
-
-    if (previousStatus !== 'CANCELLED' && status === 'CANCELLED') {
-        // Only restore inventory if order hasn't been shipped yet
-        if (previousStatus === 'PENDING' || previousStatus === 'PAID') {
-            // Order cancelled before shipping: move from committed back to available
-            for (const item of order.items) {
-                await prisma.productSize.updateMany({
-                    where: {
-                        productId: item.productId,
-                        size: item.size,
-                    },
-                    data: {
-                        committed: {
-                            decrement: item.quantity,
-                        },
-                        available: {
-                            increment: item.quantity,
-                        },
-                    },
-                })
-            }
-        }
-        // If previousStatus was SHIPPED, inventory is already gone - don't restore
     }
 
     revalidatePath('/admin/orders')
@@ -199,6 +187,60 @@ export async function getOrderPaymentInfo(
         return {
             ok: false,
             error: e instanceof Error ? e.message : 'Could not reach Stripe.',
+        }
+    }
+}
+
+/**
+ * How much can still be refunded on an order, for the cancel prompt to show
+ * before the admin commits. Returns null when there is nothing to refund.
+ */
+export async function getOrderRefundableCents(
+    orderId: string,
+): Promise<{ ok: true; cents: number } | { ok: false; error: string }> {
+    await requireAdmin()
+
+    const order = await prisma.order.findUnique({
+        where: { id: orderId },
+        select: { stripePaymentIntentId: true },
+    })
+    if (!order) return { ok: false, error: 'Order not found' }
+    if (!order.stripePaymentIntentId || order.stripePaymentIntentId === 'pending') {
+        return { ok: false, error: 'No Stripe payment is attached to this order.' }
+    }
+
+    try {
+        return { ok: true, cents: await getRefundableCents(order.stripePaymentIntentId) }
+    } catch (e) {
+        return {
+            ok: false,
+            error: e instanceof Error ? e.message : 'Could not reach Stripe.',
+        }
+    }
+}
+
+/**
+ * The only way to cancel an order from the admin. The refund decision is made
+ * by the admin at cancel time and passed explicitly.
+ */
+export async function cancelOrderAction(
+    orderId: string,
+    refundChoice: RefundChoice,
+): Promise<{ ok: true; result: CancelResult } | { ok: false; error: string }> {
+    await requireAdmin()
+
+    try {
+        const result = await cancelOrderCore(orderId, refundChoice)
+        revalidatePath('/admin/orders')
+        revalidatePath(`/admin/orders/${orderId}`)
+        revalidatePath('/admin/products')
+        revalidatePath('/admin/pick')
+        return { ok: true, result }
+    } catch (e) {
+        // A failed refund leaves the order untouched, so the admin can retry.
+        return {
+            ok: false,
+            error: e instanceof Error ? e.message : 'Could not cancel the order.',
         }
     }
 }
