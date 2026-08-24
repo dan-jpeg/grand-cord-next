@@ -14,7 +14,10 @@ import { transitionOrderStatus, type LiveOrderStatus } from '@/lib/orders/transi
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-export type { LiveOrderStatus }
+// LiveOrderStatus is deliberately NOT re-exported from here. A 'use server'
+// file may only export async functions, and Next's server-actions transform
+// turns a bare `export type { X }` re-export into a runtime export it then
+// cannot resolve. Consumers import the type from lib/orders/transition.
 
 export async function updateOrderStatus(
     orderId: string,

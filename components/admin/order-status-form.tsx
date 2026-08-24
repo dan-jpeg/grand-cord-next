@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { updateOrderStatus, type LiveOrderStatus } from '@/app/admin/orders/actions'
+import { updateOrderStatus } from '@/app/admin/orders/actions'
+import type { LiveOrderStatus } from '@/lib/orders/transition'
 import { CancelOrderPrompt } from '@/components/admin/cancel-order-prompt'
 import type { Order, OrderStatus } from '@prisma/client'
 
