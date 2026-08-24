@@ -7,21 +7,25 @@ import {
     getRefundableCents,
 } from '@/lib/orders/cancel-order'
 import { stripe } from '@/lib/stripe'
+import { transitionOrderStatus } from '@/lib/orders/transition'
 import { getCheapestQuote, buyLabel, type ShippoQuote } from '@/lib/shippo'
 import { revalidatePath } from 'next/cache'
 
 export async function markOrderShipped(orderId: string, trackingNumber?: string) {
-    await requireAdmin()
+    const actor = await requireAdmin()
 
-    await prisma.order.update({
-        where: { id: orderId },
-        data: {
-            status: 'SHIPPED',
-            ...(trackingNumber ? { trackingNumber } : {}),
-        },
+    // Was a bare order.update. Stock never came off the shelf and nothing was
+    // audited, which is how reverting one of these orders came to invent
+    // inventory.
+    const { warnings } = await transitionOrderStatus(orderId, 'SHIPPED', actor, {
+        trackingNumber,
     })
+
     revalidatePath('/admin/orders')
     revalidatePath('/admin/pick')
+    revalidatePath('/admin/products')
+
+    return { warnings }
 }
 
 export async function quoteShippoLabel(orderId: string): Promise<ShippoQuote> {
@@ -48,20 +52,30 @@ export async function purchaseShippoLabel(orderId: string, rateId: string): Prom
     labelUrl: string
     trackingNumber: string
 }> {
-    await requireAdmin()
+    const actor = await requireAdmin()
 
     const result = await buyLabel(rateId)
 
-    await prisma.order.update({
-        where: { id: orderId },
-        data: {
-            status: 'SHIPPED',
+    // The label is already bought and paid for by the time we get here, so a
+    // refused transition must not lose the tracking number — an admin who sees
+    // only "stock has drifted" would have no way back to the label they just
+    // purchased.
+    try {
+        await transitionOrderStatus(orderId, 'SHIPPED', actor, {
             trackingNumber: result.trackingNumber,
             trackingUrl: result.trackingUrl ?? undefined,
-        },
-    })
+        })
+    } catch (e) {
+        const reason = e instanceof Error ? e.message : 'the order could not be marked shipped'
+        throw new Error(
+            `The label was purchased (tracking ${result.trackingNumber}, ${result.labelUrl}) ` +
+                `but the order was not marked shipped: ${reason}`,
+        )
+    }
+
     revalidatePath('/admin/orders')
     revalidatePath('/admin/pick')
+    revalidatePath('/admin/products')
 
     return {
         labelUrl: result.labelUrl,

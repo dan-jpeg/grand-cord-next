@@ -10,17 +10,11 @@ import {
     type CancelResult,
     type RefundChoice,
 } from '@/lib/orders/cancel-order'
-import { applyOrderStockMove } from '@/lib/orders/stock'
-import type { OrderStatus } from '@prisma/client'
+import { transitionOrderStatus, type LiveOrderStatus } from '@/lib/orders/transition'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-/**
- * Every status except CANCELLED, which carries a refund decision and goes
- * through cancelOrderAction instead. Typed here so the compiler enforces what
- * updateOrderStatus would otherwise only catch at runtime.
- */
-export type LiveOrderStatus = Exclude<OrderStatus, 'CANCELLED'>
+export type { LiveOrderStatus }
 
 export async function updateOrderStatus(
     orderId: string,
@@ -30,79 +24,10 @@ export async function updateOrderStatus(
 ) {
     const actor = await requireAdmin()
 
-    // Belt and braces: the type above rules this out for TS callers, but server
-    // actions are reachable as plain POST endpoints.
-    if ((status as OrderStatus) === 'CANCELLED') {
-        throw new Error('Use cancelOrderAction to cancel an order.')
-    }
-
-    const order = await prisma.order.findUnique({
-        where: { id: orderId },
-        include: { items: true },
-    })
-
-    if (!order) throw new Error('Order not found')
-
-    const previousStatus = order.status
-
-    // Status and stock move together, so a failure part-way through cannot
-    // leave the order shipped with only some of its stock drawn down.
-    await prisma.$transaction(async (tx) => {
-        await tx.order.update({
-            where: { id: orderId },
-            data: {
-                status,
-                // Tracking is history: it survives a revert to PENDING or PAID
-                // and is only replaced when new details are supplied. Clearing
-                // it here used to destroy the record of what was sent.
-                ...(trackingNumber ? { trackingNumber } : {}),
-                ...(trackingUrl ? { trackingUrl } : {}),
-            },
-        })
-
-        // Un-shipping puts the goods back on the shelf and back under
-        // reservation. Without this the ship decrement is one-way: reverting a
-        // shipped order silently un-reserves its stock for good.
-        if (previousStatus === 'SHIPPED' && (status === 'PAID' || status === 'PENDING')) {
-            for (const item of order.items) {
-                await applyOrderStockMove(tx, item, 'ORDER_UNSHIPPED', {
-                    orderId,
-                    orderNumber: order.orderNumber,
-                    actor,
-                })
-            }
-        }
-
-        // Shipping takes the goods off the shelf for good.
-        if (previousStatus === 'PAID' && status === 'SHIPPED') {
-            for (const item of order.items) {
-                const { applied, shortfall } = await applyOrderStockMove(
-                    tx,
-                    item,
-                    'ORDER_SHIPPED',
-                    { orderId, orderNumber: order.orderNumber, actor },
-                )
-                // Nothing has been paid out on this path, so refusing the whole
-                // transition is safe and beats silently shipping against
-                // inventory that no longer lines up.
-                if (!applied) {
-                    throw new Error(
-                        `No stock row for ${item.productName} (${item.size}). ` +
-                            `The size may have been renamed or removed since the order was placed. ` +
-                            `Fix the product's sizes, then mark it shipped again.`,
-                    )
-                }
-                if (shortfall > 0) {
-                    throw new Error(
-                        `${item.productName} (${item.size}) has only ` +
-                            `${item.quantity - shortfall} of ${item.quantity} units committed. ` +
-                            `The stock count has drifted from this order — correct it on the ` +
-                            `product, then mark it shipped again.`,
-                    )
-                }
-            }
-        }
-    })
+    // Validation, the stock move and the audit rows all live in the shared
+    // transition — this screen and the pick flow have to agree about what
+    // shipping means, and they used to disagree.
+    await transitionOrderStatus(orderId, status, actor, { trackingNumber, trackingUrl })
 
     revalidatePath('/admin/orders')
     revalidatePath(`/admin/orders/${orderId}`)

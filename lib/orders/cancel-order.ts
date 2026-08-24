@@ -22,8 +22,18 @@ export type CancelResult = {
     unrestoredItems: string[]
 }
 
+/**
+ * Whether the column actually holds a payment intent.
+ *
+ * It holds three different things across an order's life: the sentinel
+ * `'pending'`, then the checkout session id (`cs_…`) once Stripe has a session,
+ * and only after `checkout.session.completed` an actual payment intent.
+ * Retrieving a session id as an intent throws, which is how cancelling a
+ * not-yet-paid order from the pick flow used to fail outright and leave its
+ * stock reserved.
+ */
 function hasUsablePaymentIntent(id: string | null | undefined): id is string {
-    return !!id && id !== 'pending'
+    return !!id && id !== 'pending' && !id.startsWith('cs_')
 }
 
 /**
@@ -76,8 +86,14 @@ export async function cancelOrder(
     let refundSkippedReason: string | undefined
 
     if (refundChoice === 'FULL_REFUND') {
+        // Read before the guard narrows it away — the guard's whole job is to
+        // reject this value, so afterwards it is no longer inspectable.
+        const neverCompletedCheckout = order.stripePaymentIntentId?.startsWith('cs_') ?? false
+
         if (!hasUsablePaymentIntent(order.stripePaymentIntentId)) {
-            refundSkippedReason = 'No Stripe payment is attached to this order.'
+            refundSkippedReason = neverCompletedCheckout
+                ? 'Checkout was never completed, so there is no payment to refund.'
+                : 'No Stripe payment is attached to this order.'
         } else {
             const refundable = await getRefundableCents(order.stripePaymentIntentId)
             if (refundable <= 0) {
