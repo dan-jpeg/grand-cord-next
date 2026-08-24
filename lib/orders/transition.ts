@@ -1,7 +1,6 @@
 import type { OrderStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { applyOrderStockMove } from '@/lib/orders/stock'
-import type { AdminSessionUser } from '@/lib/require-admin'
+import { applyOrderStockMove, type StockActor } from '@/lib/orders/stock'
 
 /**
  * Every status except CANCELLED, which carries a refund decision and goes
@@ -56,7 +55,7 @@ export type TrackingDetails = {
 export async function transitionOrderStatus(
     orderId: string,
     status: LiveOrderStatus,
-    actor: AdminSessionUser,
+    actor: StockActor,
     tracking?: TrackingDetails,
 ): Promise<TransitionResult> {
     // Server actions are reachable as plain POST endpoints, so the type is not

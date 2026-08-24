@@ -1,7 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { stripe } from '@/lib/stripe'
-import { applyOrderStockMove } from '@/lib/orders/stock'
-import type { AdminSessionUser } from '@/lib/require-admin'
+import { applyOrderStockMove, type StockActor } from '@/lib/orders/stock'
 
 /**
  * What cancelling should do to the customer's money. There is no implicit
@@ -67,7 +66,7 @@ export async function getRefundableCents(paymentIntentId: string): Promise<numbe
 export async function cancelOrder(
     orderId: string,
     refundChoice: RefundChoice,
-    actor: AdminSessionUser,
+    actor: StockActor,
 ): Promise<CancelResult> {
     const order = await prisma.order.findUnique({
         where: { id: orderId },

@@ -1,5 +1,4 @@
 import type { Prisma, OrderItem } from '@prisma/client'
-import type { AdminSessionUser } from '@/lib/require-admin'
 
 /**
  * Why an order moved stock. Stored on the audit row.
@@ -11,10 +10,24 @@ import type { AdminSessionUser } from '@/lib/require-admin'
  */
 export type StockReason = 'ORDER_SHIPPED' | 'ORDER_CANCELLED' | 'ORDER_UNSHIPPED'
 
+/**
+ * Who moved the stock.
+ *
+ * `id` is nullable because not every mover is a signed-in admin — Stripe's
+ * expired-checkout webhook releases reservations too, and `adminUserId` is a
+ * foreign key, so a made-up id would fail the constraint. An AdminSessionUser
+ * satisfies this shape as-is.
+ */
+export type StockActor = {
+    id: string | null
+    email?: string | null
+    name?: string | null
+}
+
 export type StockMoveContext = {
     orderId: string
     orderNumber: string
-    actor: AdminSessionUser
+    actor: StockActor
 }
 
 export type StockMoveResult = {
