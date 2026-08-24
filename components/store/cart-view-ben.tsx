@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { CartCardBen } from '@/components/store/cart-card-ben'
 import { AnimatePresence, motion } from 'framer-motion'
 import {CartCardBenDesktop} from "@/components/store/cart-card-ben-desktop";
+import { CartPriceNotice } from '@/components/store/cart-price-notice'
 
 export function CartViewBen() {
     const { items, totalPrice } = useCart()
@@ -46,6 +47,11 @@ export function CartViewBen() {
             <div className="max-w-6xl  px-8 md:max-w-7xl">
                 {/* Mobile Layout - Completely Original */}
                 <div className="lg:hidden flex flex-col gap-1.5">
+                    {!isEmpty && (
+                        <div className="pt-4">
+                            <CartPriceNotice />
+                        </div>
+                    )}
                     <AnimatePresence mode="popLayout">
                         {items.map((item) => (
                             <CartCardBen
@@ -70,6 +76,7 @@ export function CartViewBen() {
                     {/* Left Column - Cart Items */}
                     <div className="flex-1">
                         <div className="flex flex-col gap-1.5">
+                            {!isEmpty && <CartPriceNotice />}
                             <AnimatePresence
                                 mode="popLayout"
                                 onExitComplete={() => setCardsCleared(true)}
