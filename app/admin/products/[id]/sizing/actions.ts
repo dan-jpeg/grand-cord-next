@@ -1,6 +1,6 @@
 'use server'
 
-import { auth } from '@/lib/auth'
+import { requireAdmin } from '@/lib/require-admin'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 
@@ -10,8 +10,7 @@ function revalidate(productId: string) {
 }
 
 export async function addAttributeToProduct(productId: string, sizingAttributeId: string) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     const max = await prisma.productSizingAttribute.aggregate({
         where: { productId },
@@ -33,8 +32,7 @@ export async function addAttributeToProduct(productId: string, sizingAttributeId
 }
 
 export async function addCategoryToProduct(productId: string, category: string) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     const cat = category.trim()
     if (!cat) throw new Error('Category required')
@@ -72,8 +70,7 @@ export async function addCategoryToProduct(productId: string, category: string) 
 }
 
 export async function removeCategoryFromProduct(productId: string, category: string) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     const cat = category.trim()
     if (!cat) throw new Error('Category required')
@@ -112,8 +109,7 @@ export async function removeAttributeFromProduct(
     productId: string,
     sizingAttributeId: string,
 ) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     // Wipe values for this product+attribute (cascade is by productSize, not
     // by product, so do it explicitly).
@@ -144,8 +140,7 @@ export async function reorderAttribute(
     sizingAttributeId: string,
     direction: 'up' | 'down',
 ) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     const rows = await prisma.productSizingAttribute.findMany({
         where: { productId },
@@ -186,8 +181,7 @@ export async function setMeasurement(
     sizingAttributeId: string,
     value: string,
 ) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     const trimmed = value.trim()
 

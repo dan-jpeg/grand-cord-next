@@ -1,13 +1,12 @@
 'use server'
 
-import { auth } from '@/lib/auth'
+import { requireAdmin } from '@/lib/require-admin'
 import { prisma } from '@/lib/prisma'
 import { normalizeDesignerNames } from '@/lib/designers'
 import { revalidatePath } from 'next/cache'
 
 export async function getProductDetail(id: string) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     const [orders, inventoryLogs] = await Promise.all([
         prisma.order.findMany({
@@ -34,8 +33,7 @@ type IdentityPatch = {
 }
 
 export async function patchProductIdentity(id: string, data: IdentityPatch) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     const updateData: Record<string, unknown> = {}
     if ('material' in data) updateData.material = data.material || null

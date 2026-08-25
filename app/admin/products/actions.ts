@@ -6,7 +6,6 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { slugify } from '@/lib/utils'
 import { normalizeDesignerNames } from '@/lib/designers'
-import { auth } from '@/lib/auth'
 import { requireAdmin } from '@/lib/require-admin'
 import type { Prisma } from '@prisma/client'
 
@@ -58,8 +57,7 @@ function normalizeKeywords(keywords?: string[]): string[] {
  *  once a stripeProductId exists. The placeholder slug keeps the unique
  *  constraint happy while the name is still empty. */
 export async function createDraftProduct(): Promise<string> {
-    const session = await auth()
-    if (!session) throw new Error('Not authenticated')
+    await requireAdmin()
 
     const product = await prisma.product.create({
         data: {
@@ -217,22 +215,6 @@ export async function updateProduct(id: string, data: ProductFormData) {
     revalidatePath(`/admin/products/${id}/edit`)
 }
 
-export async function updateSizeStock(sizeId: string, delta: number) {
-    await requireAdmin()
-
-    const size = await prisma.productSize.findUnique({ where: { id: sizeId } })
-    if (!size) return
-    const newAvailable = Math.max(0, size.available + delta)
-    await prisma.productSize.update({
-        where: { id: sizeId },
-        data: {
-            available: newAvailable,
-            total: newAvailable + size.committed,
-        },
-    })
-    revalidatePath('/admin/products')
-}
-
 export async function commitInventoryChanges(
     productId: string,
     changes: { sizeId: string; delta: number }[],
@@ -243,13 +225,10 @@ export async function commitInventoryChanges(
         return { ok: true as const, createdSizes: [] as { id: string; size: string; available: number }[] }
     }
 
-    const session = await auth()
-    if (!session?.user) {
-        throw new Error('Not authenticated')
-    }
-    const adminUserId = (session.user.id as string | undefined) ?? null
-    const adminEmail = (session.user.email as string | undefined) ?? 'unknown'
-    const adminName = (session.user.name as string | null | undefined) ?? null
+    const actor = await requireAdmin()
+    const adminUserId = actor.id
+    const adminEmail = actor.email ?? 'unknown'
+    const adminName = actor.name ?? null
 
     const product = await prisma.product.findUnique({
         where: { id: productId },

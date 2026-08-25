@@ -1,6 +1,6 @@
 'use server'
 
-import { auth } from '@/lib/auth'
+import { requireAdmin } from '@/lib/require-admin'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 
@@ -28,8 +28,7 @@ export async function createCatalogGroup(input: {
     name: string
     description?: string
 }) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     const name = input.name.trim()
     if (!name) throw new Error('Name required')
@@ -59,8 +58,7 @@ export async function updateCatalogGroup(
         showInSearch?: boolean
     },
 ) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     const data: Record<string, unknown> = {}
     if (typeof patch.name === 'string') {
@@ -84,8 +82,7 @@ export async function updateCatalogGroup(
 }
 
 export async function deleteCatalogGroup(id: string) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     await prisma.collection.delete({ where: { id } })
     revalidatePath('/admin/manage-catalog')
@@ -94,8 +91,7 @@ export async function deleteCatalogGroup(id: string) {
 }
 
 export async function addProductToGroup(groupId: string, productId: string) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     const max = await prisma.collectionProduct.aggregate({
         where: { collectionId: groupId },
@@ -119,8 +115,7 @@ export async function addProductToGroup(groupId: string, productId: string) {
 }
 
 export async function removeProductFromGroup(groupId: string, productId: string) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     await prisma.collectionProduct.delete({
         where: {
@@ -137,8 +132,7 @@ export async function createSizingAttribute(input: {
     description?: string
     category: string
 }) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     const title = input.title.trim()
     const category = input.category.trim()
@@ -170,8 +164,7 @@ export async function updateSizingAttribute(
         enabled?: boolean
     },
 ) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     const data: Record<string, unknown> = {}
     if (typeof patch.title === 'string') {
@@ -194,16 +187,14 @@ export async function updateSizingAttribute(
 }
 
 export async function deleteSizingAttribute(id: string) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     await prisma.sizingAttribute.delete({ where: { id } })
     revalidatePath('/admin/manage-catalog')
 }
 
 export async function setCategoryEnabled(category: string, enabled: boolean) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     const cat = category.trim()
     if (!cat) throw new Error('Category required')
@@ -222,8 +213,7 @@ export async function updateSiteSettings(patch: {
     scrollToTopOnCatalogTapDesktop?: boolean
     welcomeMessage?: string | null
 }) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     const data: Record<string, unknown> = {}
     if (patch.showSearchInNav !== undefined) data.showSearchInNav = patch.showSearchInNav

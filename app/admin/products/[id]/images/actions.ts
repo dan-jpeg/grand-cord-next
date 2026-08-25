@@ -1,6 +1,6 @@
 'use server'
 
-import { auth } from '@/lib/auth'
+import { requireAdmin } from '@/lib/require-admin'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 
@@ -28,8 +28,7 @@ function revalidate(productId: string, slug: string) {
 }
 
 export async function updateProductImages(productId: string, images: ImageRecord[]) {
-    const session = await auth()
-    if (!session) throw new Error('Unauthorized')
+    await requireAdmin()
 
     const product = await prisma.product.update({
         where: { id: productId },

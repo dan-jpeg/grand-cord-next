@@ -1,7 +1,6 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { auth } from '@/lib/auth'
 import { requireAdmin } from '@/lib/require-admin'
 import { stripe } from '@/lib/stripe'
 import {
@@ -78,8 +77,11 @@ export type PaymentInfo = {
 export async function getOrderPaymentInfo(
     orderId: string,
 ): Promise<{ ok: true; payment: PaymentInfo } | { ok: false; error: string }> {
-    const session = await auth()
-    if (!session) return { ok: false, error: 'Unauthorized' }
+    try {
+        await requireAdmin()
+    } catch {
+        return { ok: false, error: 'Unauthorized' }
+    }
 
     const order = await prisma.order.findUnique({
         where: { id: orderId },
