@@ -19,9 +19,30 @@ export async function lookupOrder(orderNumber: string, email: string) {
 
     if (!number || !address) return null
 
+    // Explicit fields: the whole row used to go to the browser, including
+    // `stripePaymentIntentId` and internal `notes`. A customer needs neither.
     const order = await prisma.order.findUnique({
         where: { orderNumber: number },
-        include: { items: true },
+        select: {
+            orderNumber: true,
+            email: true,
+            status: true,
+            total: true,
+            shippingAddress: true,
+            trackingNumber: true,
+            trackingUrl: true,
+            createdAt: true,
+            items: {
+                select: {
+                    id: true,
+                    productName: true,
+                    productSlug: true,
+                    size: true,
+                    quantity: true,
+                    price: true,
+                },
+            },
+        },
     })
 
     if (!order) return null

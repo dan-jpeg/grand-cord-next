@@ -3,11 +3,11 @@
 import { useState } from 'react'
 import { formatPrice } from '@/lib/utils'
 import { lookupOrder } from '@/app/(store)/cart/order-status/actions'
-import type { Order, OrderItem } from '@prisma/client'
 
-type OrderWithItems = Order & {
-    items: OrderItem[]
-}
+// Derived from the action rather than from the Prisma model: the action now
+// selects an explicit subset, and a wider type here would be a lie about what
+// actually reaches the browser.
+type OrderWithItems = NonNullable<Awaited<ReturnType<typeof lookupOrder>>>
 
 export function OrderStatusView() {
     const [orderNumber, setOrderNumber] = useState('')
