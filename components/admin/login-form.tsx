@@ -3,19 +3,21 @@
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { checkLoginThrottle } from '@/app/admin/login/actions'
 
 export function LoginForm() {
     const router = useRouter()
     const [identifier, setIdentifier] = useState('')
     const [password, setPassword] = useState('')
-    const [hasError, setHasError] = useState(false)
+    const [message, setMessage] = useState<string | null>(null)
     const [isLoading, setIsLoading] = useState(false)
     const canSubmit = identifier.trim().length > 0 && password.length > 0
+    const hasError = message !== null
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         if (!canSubmit || isLoading) return
-        setHasError(false)
+        setMessage(null)
         setIsLoading(true)
 
         try {
@@ -26,13 +28,23 @@ export function LoginForm() {
             })
 
             if (result?.error) {
-                setHasError(true)
+                // NextAuth does not carry authorize()'s message back here, so a
+                // lockout and a wrong password arrive identically. Ask the
+                // server which it was — telling someone to keep guessing when
+                // they are already locked out is the one unhelpful answer.
+                const state = await checkLoginThrottle(identifier).catch(() => null)
+                setMessage(
+                    state?.throttled
+                        ? `Too many failed attempts. Try again in ${state.retryAfterMinutes} ` +
+                          `minute${state.retryAfterMinutes === 1 ? '' : 's'}.`
+                        : 'Login or password not recognised.',
+                )
             } else {
                 router.push('/admin')
                 router.refresh()
             }
         } catch {
-            setHasError(true)
+            setMessage('Could not reach the server. Check your connection and try again.')
         } finally {
             setIsLoading(false)
         }
@@ -46,7 +58,10 @@ export function LoginForm() {
                     type="text"
                     aria-label="Login"
                     value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
+                    onChange={(e) => {
+                        setIdentifier(e.target.value)
+                        setMessage(null)
+                    }}
                     className={`w-full h-10 px-3 bg-neutral-200 text-[11px] tracking-[0.18em] border-0 rounded-none outline-none ${
                         hasError ? 'bg-neutral-300' : ''
                     }`}
@@ -57,12 +72,24 @@ export function LoginForm() {
                     type="password"
                     aria-label="Password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                        setPassword(e.target.value)
+                        setMessage(null)
+                    }}
                     className={`w-full h-10 px-3 bg-neutral-200 text-[11px] tracking-[0.18em] border-0 rounded-none outline-none ${
                         hasError ? 'bg-neutral-300' : ''
                     }`}
                     required
                 />
+                {message && (
+                    <p
+                        role="alert"
+                        aria-live="polite"
+                        className="px-3 pt-1 text-[11px] leading-[1.5] tracking-[0.14em] text-[#8a0000]"
+                    >
+                        {message}
+                    </p>
+                )}
             </div>
 
             {canSubmit && (

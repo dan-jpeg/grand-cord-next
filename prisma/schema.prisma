@@ -238,3 +238,20 @@ model InventoryChangeLog {
   @@index([createdAt])
   @@index([orderId])
 }
+
+/// Failed admin sign-in attempts, for throttling. Only failures are stored; a
+/// successful sign-in deletes the identifier's rows. Pruned on write, so this
+/// stays small without a scheduled job.
+model LoginAttempt {
+  id         String   @id @default(cuid())
+  /// The submitted login, lowercased. Not a foreign key — attempts against
+  /// addresses that do not exist have to be counted too, or the throttle
+  /// becomes a way to test which addresses are real.
+  identifier String
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([identifier, createdAt])
+  @@index([ip, createdAt])
+  @@index([createdAt])
+}
