@@ -154,6 +154,9 @@ function MemberRow({
     const [mode, setMode] = useState<'view' | 'rename' | 'password'>('view')
     const [name, setName] = useState(member.name ?? '')
     const [password, setPassword] = useState('')
+    // The acting admin's own password. Required for anything that could lock
+    // another member out, so a stolen session cookie is not enough on its own.
+    const [confirmPassword, setConfirmPassword] = useState('')
     const [error, setError] = useState<string | null>(null)
     const [pending, startTransition] = useTransition()
 
@@ -164,8 +167,9 @@ function MemberRow({
                 if (mode === 'rename') {
                     await updateMemberName(member.id, name)
                 } else if (mode === 'password') {
-                    await resetMemberPassword(member.id, password)
+                    await resetMemberPassword(member.id, password, confirmPassword)
                     setPassword('')
+                    setConfirmPassword('')
                 }
                 setMode('view')
             } catch (e) {
@@ -176,10 +180,14 @@ function MemberRow({
 
     function remove() {
         if (!confirm(`Remove ${member.email}?`)) return
+        const own = window.prompt(
+            `Removing ${member.email} is permanent. Enter your own password to confirm.`
+        )
+        if (own === null) return
         setError(null)
         startTransition(async () => {
             try {
-                await deleteMember(member.id)
+                await deleteMember(member.id, own)
             } catch (e) {
                 setError(e instanceof Error ? e.message : 'Delete failed')
             }
@@ -226,7 +234,7 @@ function MemberRow({
             </div>
 
             {mode === 'password' && (
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-2">
                     <input
                         type="password"
                         value={password}
@@ -235,6 +243,14 @@ function MemberRow({
                         autoComplete="new-password"
                         className={`${inputClass} max-w-[260px]`}
                         autoFocus
+                    />
+                    <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Your own password, to confirm"
+                        autoComplete="current-password"
+                        className={`${inputClass} max-w-[260px]`}
                     />
                 </div>
             )}

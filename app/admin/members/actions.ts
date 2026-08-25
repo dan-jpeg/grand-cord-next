@@ -1,7 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { auth } from '@/lib/auth'
+import { requireAdmin } from '@/lib/require-admin'
 import { revalidatePath } from 'next/cache'
 import bcrypt from 'bcryptjs'
 
@@ -9,9 +9,31 @@ function normalizeEmail(email: string) {
     return email.trim().toLowerCase()
 }
 
+/**
+ * Proves the caller is who their session says they are.
+ *
+ * A session cookie alone was enough to rewrite every other member's password
+ * and lock the team out — including a session someone else had got hold of.
+ * Re-entering the password is what separates "this browser has a cookie" from
+ * "this person is the admin".
+ */
+async function confirmActingAdminPassword(actorId: string, currentPassword: string) {
+    if (!currentPassword) {
+        throw new Error('Enter your own password to confirm this change')
+    }
+
+    const actor = await prisma.adminUser.findUnique({
+        where: { id: actorId },
+        select: { password: true },
+    })
+    if (!actor) throw new Error('Your account no longer exists')
+
+    const valid = await bcrypt.compare(currentPassword, actor.password)
+    if (!valid) throw new Error('That is not your current password')
+}
+
 export async function createMember(input: { email: string; password: string; name?: string }) {
-    const session = await auth()
-    if (!session?.user) throw new Error('Not authenticated')
+    await requireAdmin()
 
     const email = normalizeEmail(input.email)
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
@@ -38,8 +60,7 @@ export async function createMember(input: { email: string; password: string; nam
 }
 
 export async function updateMemberName(memberId: string, name: string) {
-    const session = await auth()
-    if (!session?.user) throw new Error('Not authenticated')
+    await requireAdmin()
 
     await prisma.adminUser.update({
         where: { id: memberId },
@@ -49,13 +70,18 @@ export async function updateMemberName(memberId: string, name: string) {
     return { ok: true as const }
 }
 
-export async function resetMemberPassword(memberId: string, newPassword: string) {
-    const session = await auth()
-    if (!session?.user) throw new Error('Not authenticated')
+export async function resetMemberPassword(
+    memberId: string,
+    newPassword: string,
+    currentPassword: string,
+) {
+    const actor = await requireAdmin()
 
     if (!newPassword || newPassword.length < 8) {
         throw new Error('Password must be at least 8 characters')
     }
+
+    await confirmActingAdminPassword(actor.id, currentPassword)
 
     const hashed = await bcrypt.hash(newPassword, 10)
     await prisma.adminUser.update({
@@ -66,11 +92,12 @@ export async function resetMemberPassword(memberId: string, newPassword: string)
     return { ok: true as const }
 }
 
-export async function deleteMember(memberId: string) {
-    const session = await auth()
-    if (!session?.user) throw new Error('Not authenticated')
+export async function deleteMember(memberId: string, currentPassword: string) {
+    const actor = await requireAdmin()
 
-    if (session.user.id === memberId) {
+    await confirmActingAdminPassword(actor.id, currentPassword)
+
+    if (actor.id === memberId) {
         throw new Error("You can't remove your own account")
     }
 
