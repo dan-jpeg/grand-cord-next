@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { stripe } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
 import { cancelOrder } from '@/lib/orders/cancel-order'
+import { sendOrderConfirmationEmail } from '@/lib/email/order-emails'
 import type { StockActor } from '@/lib/orders/stock'
 import Stripe from 'stripe'
 
@@ -75,6 +76,16 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     }
 
     console.log(`✅ Order ${order.orderNumber} marked as PAID`)
+
+    // Only on the call that actually moved the order, which the updateMany
+    // guard above already establishes — a replayed event returns before it.
+    //
+    // Must not throw. A failure here would return 500, Stripe would redeliver,
+    // and the redelivery would find the order no longer PENDING and return
+    // early — leaving the order correctly PAID and the customer never told.
+    // `sendOrderConfirmationEmail` swallows its own errors into a FAILED row
+    // for exactly this reason.
+    await sendOrderConfirmationEmail(orderId)
 }
 
 /**

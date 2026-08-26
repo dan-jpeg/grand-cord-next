@@ -1,17 +1,18 @@
 import 'dotenv/config'
 import { writeFileSync } from 'fs'
+import { orderConfirmedEmail } from '../lib/email/templates/order-confirmed'
 import { orderShippedEmail, type ShippedOrder } from '../lib/email/templates/order-shipped'
 import { prisma } from '../lib/prisma'
 
 /**
  * Render a customer email to an HTML file without sending anything.
  *
- * With no argument it uses fixture data, so the templates can be worked on
- * without a database. Pass an order number to render that order exactly as the
- * customer would receive it.
+ * With no order number it uses fixture data, so the templates can be worked on
+ * without a database. Pass one to render that order exactly as the customer
+ * would receive it.
  *
- *   npx tsx scripts/preview-order-email.ts            → out/order-shipped.html
- *   npx tsx scripts/preview-order-email.ts 0042
+ *   npx tsx scripts/preview-order-email.ts shipped
+ *   npx tsx scripts/preview-order-email.ts confirmed 0042 out.html
  */
 
 const FIXTURE: ShippedOrder = {
@@ -33,9 +34,16 @@ const FIXTURE: ShippedOrder = {
     },
 }
 
+const KINDS = ['shipped', 'confirmed'] as const
+type Kind = (typeof KINDS)[number]
+
 async function main() {
-    const orderNumber = process.argv[2]
-    const outPath = process.argv[3] ?? 'order-shipped.html'
+    const kind = (process.argv[2] || 'shipped') as Kind
+    if (!KINDS.includes(kind)) {
+        throw new Error(`Unknown email "${kind}". Choose one of: ${KINDS.join(', ')}`)
+    }
+    const orderNumber = process.argv[3]
+    const outPath = process.argv[4] ?? `order-${kind}.html`
 
     let data: ShippedOrder = FIXTURE
     if (orderNumber) {
@@ -54,7 +62,8 @@ async function main() {
         }
     }
 
-    const { subject, html, text } = orderShippedEmail(data)
+    const { subject, html, text } =
+        kind === 'confirmed' ? orderConfirmedEmail(data) : orderShippedEmail(data)
     writeFileSync(outPath, html)
 
     console.log(`Subject: ${subject}`)
