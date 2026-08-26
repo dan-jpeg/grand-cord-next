@@ -1,5 +1,6 @@
 import type { OrderEmailKind, Order, OrderItem } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { getRefundedCents, hasUsablePaymentIntent } from '@/lib/orders/refunds'
 import { isEmailConfigured, sendEmail, type EmailMessage } from '@/lib/email/send'
 import { orderCancelledEmail } from '@/lib/email/templates/order-cancelled'
 import { orderConfirmedEmail } from '@/lib/email/templates/order-confirmed'
@@ -134,4 +135,50 @@ export async function sendOrderCancelledEmail(
             supportEmail: process.env.EMAIL_REPLY_TO || null,
         }),
     }))
+}
+
+/**
+ * Send one order email again, discarding whatever the previous attempt
+ * recorded.
+ *
+ * The claim row is what stops an email sending twice, so a deliberate resend
+ * has to clear it first — there is no other way past a constraint whose whole
+ * job is to refuse the second send. Delete then dispatch is not atomic: if the
+ * process dies between the two, the slot is simply free and the next click
+ * sends. That is the harmless direction to fail in.
+ *
+ * The caller is responsible for deciding the kind makes sense for the order's
+ * current status; `app/admin/emails/actions.ts` holds that rule.
+ */
+export async function resendOrderEmail(
+    orderId: string,
+    kind: OrderEmailKind,
+): Promise<OrderEmailOutcome> {
+    await prisma.orderEmail.deleteMany({ where: { orderId, kind } })
+
+    if (kind === 'ORDER_CONFIRMED') return sendOrderConfirmationEmail(orderId)
+    if (kind === 'ORDER_SHIPPED') return sendOrderShippedEmail(orderId)
+
+    // A cancellation's refund figure was never stored — it is whatever Stripe
+    // actually returned, so Stripe is where it has to come from now.
+    const order = await prisma.order.findUnique({
+        where: { id: orderId },
+        select: { stripePaymentIntentId: true },
+    })
+    let refundedCents = 0
+    const intentId = order?.stripePaymentIntentId
+    if (hasUsablePaymentIntent(intentId)) {
+        try {
+            refundedCents = await getRefundedCents(intentId)
+        } catch (e) {
+            // Better to send with no refund line than to claim an amount we
+            // could not confirm, or to fail the resend outright.
+            console.error(
+                `Could not read the refunded amount for ${orderId}; ` +
+                    `sending the cancellation without a refund line: ` +
+                    `${e instanceof Error ? e.message : e}`,
+            )
+        }
+    }
+    return sendOrderCancelledEmail(orderId, { refundedCents })
 }

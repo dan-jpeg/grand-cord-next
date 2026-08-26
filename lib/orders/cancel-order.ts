@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { stripe } from '@/lib/stripe'
 import { applyOrderStockMove, type StockActor } from '@/lib/orders/stock'
+import { getRefundableCents, hasUsablePaymentIntent } from '@/lib/orders/refunds'
 import { sendOrderCancelledEmail } from '@/lib/email/order-emails'
 
 /**
@@ -20,37 +21,6 @@ export type CancelResult = {
     refundSkippedReason?: string
     /** Items whose stock could not be returned, by `productName (size)`. */
     unrestoredItems: string[]
-}
-
-/**
- * Whether the column actually holds a payment intent.
- *
- * It holds three different things across an order's life: the sentinel
- * `'pending'`, then the checkout session id (`cs_…`) once Stripe has a session,
- * and only after `checkout.session.completed` an actual payment intent.
- * Retrieving a session id as an intent throws, which is how cancelling a
- * not-yet-paid order from the pick flow used to fail outright and leave its
- * stock reserved.
- */
-function hasUsablePaymentIntent(id: string | null | undefined): id is string {
-    return !!id && id !== 'pending' && !id.startsWith('cs_')
-}
-
-/**
- * How much of the payment can still be handed back, in cents. Reads Stripe
- * rather than the order total so that partial refunds already issued from the
- * pick flow are accounted for.
- */
-export async function getRefundableCents(paymentIntentId: string): Promise<number> {
-    const intent = await stripe.paymentIntents.retrieve(paymentIntentId, {
-        expand: ['latest_charge'],
-    })
-    const charge =
-        intent.latest_charge && typeof intent.latest_charge !== 'string'
-            ? intent.latest_charge
-            : null
-    if (!charge) return 0
-    return Math.max(0, charge.amount_captured - charge.amount_refunded)
 }
 
 /**

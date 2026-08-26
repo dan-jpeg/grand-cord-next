@@ -23,7 +23,7 @@ function handleLogout() {
 }
 
 type AdminNavProps = {
-    active: 'orders' | 'inventory' | 'catalog' | 'manage-catalog' | 'more' | 'pick' | 'logs' | 'members'
+    active: 'orders' | 'inventory' | 'catalog' | 'manage-catalog' | 'more' | 'pick' | 'logs' | 'members' | 'emails'
     variant?: 'centered' | 'top-left'
     /**
      * Mobile presentation:
@@ -61,6 +61,7 @@ const PRIMARY_NAV_ITEMS = [
 
 const MORE_ITEMS = [
     { key: 'logs' as const, label: 'Logs', href: '/admin/logs' },
+    { key: 'emails' as const, label: 'Emails', href: '/admin/emails' },
     { key: 'members' as const, label: 'Members', href: '/admin/members' },
     { key: 'manage-catalog' as const, label: 'Manage Catalog', href: '/admin/manage-catalog' },
     { key: 'catalog' as const, label: 'Catalog', href: '/' },
