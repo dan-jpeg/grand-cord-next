@@ -1,6 +1,7 @@
 import type { OrderStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { applyOrderStockMove, type StockActor } from '@/lib/orders/stock'
+import { sendOrderShippedEmail } from '@/lib/email/order-emails'
 
 /**
  * Every status except CANCELLED, which carries a refund decision and goes
@@ -87,6 +88,13 @@ export async function transitionOrderStatus(
     if (previousStatus === status) {
         if (Object.keys(trackingData).length > 0) {
             await prisma.order.update({ where: { id: orderId }, data: trackingData })
+
+            // Covers the order marked shipped without a tracking number, whose
+            // tracking arrives afterwards. If the customer was already told,
+            // the OrderEmail slot is taken and this is a no-op.
+            if (status === 'SHIPPED') {
+                await sendOrderShippedEmail(orderId)
+            }
         }
         return { changed: false, warnings }
     }
@@ -173,6 +181,17 @@ export async function transitionOrderStatus(
             }
         }
     })
+
+    // Deliberately outside the transaction, and deliberately last.
+    //
+    // Inside it, a slow provider would hold locks on stock rows for the length
+    // of an HTTP round trip, and a rollback after a successful send would leave
+    // a customer told about a shipment that did not happen. `sendOrderShippedEmail`
+    // never throws, so a mail failure cannot undo a shipment that is already
+    // committed — it lands in OrderEmail as a FAILED row instead.
+    if (shipping) {
+        await sendOrderShippedEmail(orderId)
+    }
 
     return { changed: true, warnings }
 }

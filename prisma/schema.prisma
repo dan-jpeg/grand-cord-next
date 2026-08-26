@@ -94,7 +94,8 @@ model Order {
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
 
-  items OrderItem[]
+  items  OrderItem[]
+  emails OrderEmail[]
 
   @@index([email])
   @@index([status])
@@ -122,6 +123,54 @@ model OrderItem {
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
+}
+
+/** Which customer-facing email a row records. */
+enum OrderEmailKind {
+  ORDER_CONFIRMED
+  ORDER_SHIPPED
+  ORDER_CANCELLED
+}
+
+enum OrderEmailStatus {
+  /** The slot is claimed and a send is in flight. */
+  QUEUED
+  SENT
+  /** The provider refused or was unreachable. Safe to resend by hand. */
+  FAILED
+}
+
+/**
+ * One row per email we have decided to send a customer about an order.
+ *
+ * The unique constraint on (orderId, kind) is the whole point: it is claimed
+ * *before* the provider is called, so a replayed Stripe webhook, a
+ * double-clicked admin button, or an order reverted and re-shipped cannot mail
+ * the customer twice. A row that ends up FAILED stays visible rather than
+ * disappearing, so a failed send is something an admin can see and retry
+ * instead of a silence nobody notices.
+ */
+model OrderEmail {
+  id                String           @id @default(cuid())
+  orderId           String
+  // Denormalised so the log still reads sensibly next to InventoryChangeLog,
+  // which does the same.
+  orderNumber       String
+  kind              OrderEmailKind
+  /** The address as it stood when we sent, not as the order reads today. */
+  to                String
+  status            OrderEmailStatus @default(QUEUED)
+  providerMessageId String?
+  error             String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, kind])
+  @@index([orderId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model BlogPost {

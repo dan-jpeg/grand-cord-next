@@ -8,7 +8,7 @@ const FROM_ADDRESS = {
     zip: '60651',
     country: 'US',
     phone: '3125550100',
-    email: 'shipping@grandcord.com',
+    email: 'shipping@grand-cord.com',
 } as const
 
 // One default parcel for all demo orders. Adjust if/when we add real packing.
