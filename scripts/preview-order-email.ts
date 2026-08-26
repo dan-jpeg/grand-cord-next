@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import { writeFileSync } from 'fs'
+import { orderCancelledEmail } from '../lib/email/templates/order-cancelled'
 import { orderConfirmedEmail } from '../lib/email/templates/order-confirmed'
 import { orderShippedEmail, type ShippedOrder } from '../lib/email/templates/order-shipped'
 import { prisma } from '../lib/prisma'
@@ -34,7 +35,9 @@ const FIXTURE: ShippedOrder = {
     },
 }
 
-const KINDS = ['shipped', 'confirmed'] as const
+// 'cancelled' renders the refunded copy; 'cancelled-norefund' the variant an
+// admin cancelling without a refund produces.
+const KINDS = ['shipped', 'confirmed', 'cancelled', 'cancelled-norefund'] as const
 type Kind = (typeof KINDS)[number]
 
 async function main() {
@@ -63,7 +66,15 @@ async function main() {
     }
 
     const { subject, html, text } =
-        kind === 'confirmed' ? orderConfirmedEmail(data) : orderShippedEmail(data)
+        kind === 'confirmed'
+            ? orderConfirmedEmail(data)
+            : kind === 'cancelled' || kind === 'cancelled-norefund'
+              ? orderCancelledEmail({
+                    ...data,
+                    refundedCents: kind === 'cancelled' ? Math.round(data.total * 100) : 0,
+                    supportEmail: process.env.EMAIL_REPLY_TO || null,
+                })
+              : orderShippedEmail(data)
     writeFileSync(outPath, html)
 
     console.log(`Subject: ${subject}`)

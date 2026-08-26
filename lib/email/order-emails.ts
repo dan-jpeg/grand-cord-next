@@ -1,6 +1,7 @@
 import type { OrderEmailKind, Order, OrderItem } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { isEmailConfigured, sendEmail, type EmailMessage } from '@/lib/email/send'
+import { orderCancelledEmail } from '@/lib/email/templates/order-cancelled'
 import { orderConfirmedEmail } from '@/lib/email/templates/order-confirmed'
 import { orderShippedEmail } from '@/lib/email/templates/order-shipped'
 
@@ -102,6 +103,35 @@ export async function sendOrderShippedEmail(orderId: string): Promise<OrderEmail
             trackingUrl: order.trackingUrl,
             items: order.items,
             shippingAddress: order.shippingAddress,
+        }),
+    }))
+}
+
+/**
+ * A paid order has been cancelled.
+ *
+ * `refundedCents` is what Stripe actually returned, passed in rather than
+ * re-read: the refund happens before the status write in `cancelOrder`, and
+ * re-querying afterwards would report the same number at best and a stale one
+ * at worst.
+ *
+ * Not sent for orders cancelled out of PENDING — an expired checkout is an
+ * abandoned cart, and telling someone their order is cancelled when they never
+ * completed one is confusing. That gate lives at the call site, which is the
+ * only place that still knows the previous status.
+ */
+export async function sendOrderCancelledEmail(
+    orderId: string,
+    opts: { refundedCents: number },
+): Promise<OrderEmailOutcome> {
+    return dispatch(orderId, 'ORDER_CANCELLED', (order) => ({
+        to: order.email,
+        ...orderCancelledEmail({
+            orderNumber: order.orderNumber,
+            total: order.total,
+            items: order.items,
+            refundedCents: opts.refundedCents,
+            supportEmail: process.env.EMAIL_REPLY_TO || null,
         }),
     }))
 }

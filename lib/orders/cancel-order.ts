@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { stripe } from '@/lib/stripe'
 import { applyOrderStockMove, type StockActor } from '@/lib/orders/stock'
+import { sendOrderCancelledEmail } from '@/lib/email/order-emails'
 
 /**
  * What cancelling should do to the customer's money. There is no implicit
@@ -146,6 +147,18 @@ export async function cancelOrder(
             }
         }
     })
+
+    // Only orders the customer actually paid for. Cancelling out of PENDING is
+    // an expired or abandoned checkout — the Stripe webhook's own route into
+    // this function — and mailing "your order has been cancelled" to someone
+    // who never completed an order is confusing rather than helpful.
+    //
+    // Outside the transaction and last, like the other order emails, and
+    // `sendOrderCancelledEmail` never throws: the refund has already gone out
+    // by this point, so nothing here may undo a cancellation that is finished.
+    if (previousStatus !== 'PENDING') {
+        await sendOrderCancelledEmail(orderId, { refundedCents })
+    }
 
     return { cancelled: true, refundedCents, refundSkippedReason, unrestoredItems }
 }
