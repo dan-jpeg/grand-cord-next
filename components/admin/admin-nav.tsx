@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { signOut } from 'next-auth/react'
-import { toLayoutPx } from '@/lib/app-zoom'
+import { toLayoutPx, fixedOrigin } from '@/lib/app-zoom'
 import navFrame1 from '@/app/admin/nav-icon/frame00001.png'
 import navFrame2 from '@/app/admin/nav-icon/frame00002.png'
 import navFrame3 from '@/app/admin/nav-icon/frame00003.png'
@@ -96,14 +96,22 @@ function MobileHubNav({ active, pickUrgency, onClose }: { active: AdminNavProps[
         const labelEl = labelRefs.current[index]
         if (!labelEl) return
 
-        // getBoundingClientRect and e.clientX/Y are screen px, but these end up
-        // as SVG user units inside the zoomed <body>, which are layout px — so
-        // convert before storing. No-op when --app-zoom is 1.
+        // Two conversions, both no-ops in the common case.
+        //
+        // 1. fixedOrigin(): the <svg> below is `fixed inset-0`, so its user-unit
+        //    origin is the fixed containing block's top-left. Under the admin
+        //    letterbox that block is the transformed frame, not the viewport, so
+        //    raw client coords would land offset by the gutters. Returns (0,0)
+        //    when the frame is inactive.
+        // 2. toLayoutPx(): getBoundingClientRect and e.clientX/Y are screen px,
+        //    but these end up as SVG user units inside the zoomed <body>, which
+        //    are layout px. No-op when --app-zoom is 1.
+        const origin = fixedOrigin()
         const rect = labelEl.getBoundingClientRect()
-        const pointerX = toLayoutPx(e.clientX)
-        const pointerY = toLayoutPx(e.clientY)
-        const labelX = toLayoutPx(rect.left + rect.width / 2)
-        const labelY = toLayoutPx(rect.top + rect.height / 2)
+        const pointerX = toLayoutPx(e.clientX - origin.x)
+        const pointerY = toLayoutPx(e.clientY - origin.y)
+        const labelX = toLayoutPx(rect.left + rect.width / 2 - origin.x)
+        const labelY = toLayoutPx(rect.top + rect.height / 2 - origin.y)
 
         const dx = labelX - pointerX
         const dy = labelY - pointerY

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { formatPrice } from '@/lib/utils'
 import type { Order, OrderItem, OrderStatus } from '@prisma/client'
@@ -12,6 +12,8 @@ type OrderWithItems = Order & {
 type StatusFilter = 'ALL' | OrderStatus
 
 const ITEMS_PER_PAGE = 15
+
+const COMPACT_VIEW_KEY = 'admin-orders-compact'
 
 // Status colors - edit these to change the square colors
 const STATUS_COLORS = {
@@ -40,6 +42,7 @@ function MobileOrdersView({
     setStatusFilter,
     search,
     setSearch,
+    forced = false,
 }: {
     orders: OrderWithItems[]
     productImages: Record<string, string>
@@ -47,6 +50,8 @@ function MobileOrdersView({
     setStatusFilter: (s: StatusFilter) => void
     search: string
     setSearch: (s: string) => void
+    /** Render on desktop too — set by the compact-view toggle. */
+    forced?: boolean
 }) {
     const [showImages, setShowImages] = useState(false)
     const [sortDesc, setSortDesc] = useState(true)
@@ -76,7 +81,7 @@ function MobileOrdersView({
         // Top-anchored layout: the eye · Orders nav sits top-left with Sort /
         // Filter top-right, Search and Show Images right-aligned below, then the
         // order rows fill the rest. Matches Figma node 1718:2874.
-        <div className="lg:hidden fixed inset-0 z-[100] bg-white flex flex-col text-[12px] font-bold">
+        <div className={`${forced ? '' : 'lg:hidden'} fixed inset-0 z-[100] bg-white flex flex-col text-[12px] font-bold`}>
             {/* Header cluster. The eye · Orders nav on the left is supplied by
                 <AdminNav> (MobileEyeHub, top-left) — we only render the
                 right-aligned Sort / Filter controls here. */}
@@ -186,6 +191,24 @@ export function OrdersTable({
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
     const [currentPage, setCurrentPage] = useState(1)
 
+    // Compact view = render the mobile orders list on desktop as well. Starts
+    // false on both server and client so the markup matches, then the stored
+    // preference is applied after mount — reading localStorage during render
+    // would desync hydration.
+    const [compact, setCompact] = useState(false)
+
+    useEffect(() => {
+        setCompact(localStorage.getItem(COMPACT_VIEW_KEY) === '1')
+    }, [])
+
+    const toggleCompact = () => {
+        setCompact((v) => {
+            const next = !v
+            localStorage.setItem(COMPACT_VIEW_KEY, next ? '1' : '0')
+            return next
+        })
+    }
+
     const filteredOrders = useMemo(() => {
         let filtered = orders
 
@@ -219,8 +242,17 @@ export function OrdersTable({
             setStatusFilter={setStatusFilter}
             search={search}
             setSearch={setSearch}
+            forced={compact}
         />
-        <div className="hidden lg:block space-y-6 max-w-[1381px] mx-auto text-[8pt]">
+        {/* Table view dissolves the admin letterbox and takes the full screen;
+            compact view brings it back. Rendered from `!compact` rather than
+            set after mount so the server markup already matches the default
+            (table) — a stored compact preference is the only case that animates
+            on load. Navigating away unmounts this and the frame returns.
+            See the data-admin-expand block in app/globals.css. */}
+        {!compact && <span data-admin-expand className="hidden" aria-hidden="true" />}
+        <CompactViewToggle compact={compact} onToggle={toggleCompact} />
+        <div className={`${compact ? 'hidden' : 'hidden lg:block'} space-y-6 max-w-[1381px] mx-auto text-[8pt]`}>
             {/* Search */}
             <div className="flex items-center justify-between mb-4">
                 <div className="flex-1 relative">
@@ -360,5 +392,44 @@ export function OrdersTable({
             )}
         </div>
         </>
+    )
+}
+
+/**
+ * Desktop-only switch between the wide orders table and the compact (mobile)
+ * list. `hidden lg:block` because below lg the compact list is the only view
+ * there is, so the control would toggle nothing.
+ *
+ * z-[110] sits above the compact list's own z-[100] so the button stays
+ * reachable once that list covers the screen — and below AdminNav's z-[200]/
+ * z-[300] so the nav and its overlays still win.
+ */
+function CompactViewToggle({ compact, onToggle }: { compact: boolean; onToggle: () => void }) {
+    const label = compact ? 'Switch to table view' : 'Switch to compact view'
+
+    return (
+        <button
+            type="button"
+            onClick={onToggle}
+            title={label}
+            aria-label={label}
+            aria-pressed={compact}
+            className={`hidden lg:flex fixed bottom-5 right-5 z-[110] items-center justify-center rounded-full bg-neutral-200/30 p-2 hover:opacity-70 ${
+                compact ? 'opacity-70' : 'opacity-40'
+            }`}
+        >
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                {/* handle */}
+                <path
+                    d="M13.8 2.2a1.2 1.2 0 0 0-1.7 0L7.4 6.9l1.7 1.7 4.7-4.7a1.2 1.2 0 0 0 0-1.7z"
+                    fill="currentColor"
+                />
+                {/* splayed bristles */}
+                <path
+                    d="M6.6 7.7 3.9 10.4c-.9.9-.6 2.2-1.6 3.2 1.4.4 2.9.2 3.8-.7l2.7-2.7-2.2-2.5z"
+                    fill="currentColor"
+                />
+            </svg>
+        </button>
     )
 }

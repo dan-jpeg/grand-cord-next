@@ -180,3 +180,143 @@ html, body {
     overscroll-behavior: none;
   }
 }
+/* ── Admin letterbox ───────────────────────────────────────────────────────
+   The admin is a dense working UI that renders unscaled (data-app-zoom="off"),
+   so on a large display it just stretches and the eye has to travel. Past the
+   cap we hold it to a fixed square, centre it on both axes, and let the
+   surround show through.
+
+   The frame is `position: fixed` with `inset: 0` and `margin: auto`, which is
+   the centring trick that works on both axes at once for a definite-size box —
+   `margin-inline: auto` alone only handles the horizontal. min() does the
+   clamping, so a viewport smaller than the cap on either axis just gets the
+   full viewport on that axis rather than overflowing.
+
+   min-height: 0 is required, not tidying. Both layout branches carry Tailwind's
+   `min-h-[calc(100*var(--vh))]`, and min-height beats height regardless of
+   cascade order — without the reset the frame springs back to full viewport
+   height and the vertical letterbox silently never appears.
+
+   The transform is load-bearing too: nearly every admin view pins its chrome
+   with `position: fixed` (nav badges, bottom bars, full-screen sheets, the
+   grain overlay). A transformed ancestor becomes the containing block for
+   fixed descendants, so those resolve against the frame instead of the
+   viewport and stay inside the letterbox. The frame's own definite height is
+   what `fixed inset-0` and the `absolute inset-0` scroll viewports the pages
+   use were already assuming — the window itself never scrolls under /admin.
+
+   All of it lives behind the media query. Below the cap not one property
+   applies, so phone rendering is byte-identical to before — which also keeps
+   the transform away from iOS Safari, where a transformed ancestor breaks
+   fixed positioning (see the note in components/admin/products-table.tsx). */
+.admin-frame {
+  --admin-frame-size: 818px;
+}
+
+@media (min-width: 818px) {
+  body:has(.admin-frame) {
+    background: #FF0000;
+    transition: background-color 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .admin-frame {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    /* Raw vw/vh here, not the --vw/--vh helpers: this element redefines those
+       below, so using them for its own size would read back its own values.
+       Raw units are correct on the frame specifically because the admin runs
+       data-app-zoom="off", so body's zoom is 1 and there is nothing to
+       compensate for. Everything *inside* still uses the helpers. */
+    width: min(var(--admin-frame-size), 100vw);
+    height: min(var(--admin-frame-size), 100vh);
+    min-height: 0;
+    overflow: hidden;
+    transform: translateZ(0);
+
+    /* Declared on the base rule so it applies collapsing as well as expanding.
+       Only width/height are listed — transitioning `all` here would also animate
+       the transform, and the transform is what makes this element the containing
+       block for its fixed descendants. */
+    transition: width 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                height 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Re-point the viewport units at the frame. Admin pages are written against
+       the house convention of calc(100 * var(--vh)) rather than raw vh (see the
+       note above the utilities layer), so redefining --vh/--vw here makes every
+       one of them frame-relative for free — no page-by-page edits. Without this
+       the login page's own `min-h-[calc(100*var(--vh))]` measures the real
+       viewport, overflows an 818px frame, and paints white straight through the
+       letterbox. Same for app/admin/page.tsx and logs-view.tsx.
+
+       Declared on the frame rather than :root for the same reason body declares
+       them: a custom property's var()s are substituted on the element that
+       declares it, so the frame's own size has to be in scope here. */
+    --vh: calc(min(var(--admin-frame-size), 100vh) / 100);
+    --dvh: calc(min(var(--admin-frame-size), 100dvh) / 100);
+    --vw: calc(min(var(--admin-frame-size), 100vw) / 100);
+  }
+}
+
+/* ── Full-bleed opt-out ────────────────────────────────────────────────────
+   A route can dissolve the frame and take the whole screen by rendering an
+   element carrying data-admin-expand anywhere inside it (see the table/compact
+   toggle in components/admin/orders-table.tsx). Removing the marker — including
+   by navigating to a route that never renders one — brings the frame back, so
+   "switching pages restores it" needs no extra bookkeeping.
+
+   The transition lives on the base rule, not here, so it runs in BOTH
+   directions. width/height animate; the --vh/--vw redefinitions below cannot
+   (custom properties are not interpolable without @property) and snap at the
+   start. That is invisible on the orders route, whose views are all
+   `absolute/fixed inset-0` and therefore track the animating frame box rather
+   than the units — worth re-checking before marking a --vh-dependent route
+   expandable.
+
+   Specificity beats the base rules on its own ((0,2,0) and (0,2,1) against
+   (0,1,0) and (0,1,1)), so this does not depend on source order. */
+@media (min-width: 818px) {
+  body:has(.admin-frame [data-admin-expand]) {
+    background: transparent;
+  }
+
+  .admin-frame:has([data-admin-expand]) {
+    width: 100vw;
+    height: 100vh;
+    --vh: 1vh;
+    --dvh: 1dvh;
+    --vw: 1vw;
+  }
+}
+
+/* Admin opts out of scroll bounce entirely, at every width.
+
+   Two rules because the bounce has two sources. The document-level one has to
+   be answered on <html>/<body> — same lesson as the cart (see the note in
+   components/store/cart-view-ben.tsx); it cannot be set from a component div.
+   The second rule covers the ~24 inner `absolute inset-0 overflow-auto` scroll
+   viewports the admin pages actually scroll in: on iOS each of those
+   rubber-bands on its own once it hits its limit, and killing chaining at the
+   document doesn't stop that. There is no CSS selector for "is a scroll
+   container", so it goes on the whole subtree — inert on anything that doesn't
+   scroll, and nothing in the admin wants the bounce back (admin-nav's two
+   overlays already opted out by hand with `overscroll-none`).
+
+   Unlike the letterbox above, this is deliberately NOT gated to wide screens:
+   the pull-to-refresh and rubber-band on a phone are exactly what makes the
+   pick flow feel unsteady in the hand. */
+html:has(.admin-frame),
+body:has(.admin-frame),
+.admin-frame,
+.admin-frame * {
+  overscroll-behavior: none;
+}
+
+/* Honour the OS setting: the letterbox still appears and disappears, it just
+   does so instantly rather than sliding. */
+@media (prefers-reduced-motion: reduce) {
+  .admin-frame,
+  body:has(.admin-frame) {
+    transition: none;
+  }
+}

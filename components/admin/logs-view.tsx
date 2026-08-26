@@ -41,13 +41,16 @@ function LogRow({
     color: string | null
 }) {
     // Manual product-screen edits have no reason; order-driven rows name the order.
+    // The o- prefix marks the bare digits as an order number; the em-dash
+    // fallback stays unprefixed since there is no number to label.
+    const orderRef = log.orderNumber ? `o-${log.orderNumber}` : '—'
     const causeText =
         log.reason === 'ORDER_SHIPPED'
-            ? `Shipped: ${log.orderNumber ?? '—'}`
+            ? `Shipped: ${orderRef}`
             : log.reason === 'ORDER_CANCELLED'
-              ? `Cancelled: ${log.orderNumber ?? '—'}`
+              ? `Cancelled: ${orderRef}`
               : log.reason === 'ORDER_UNSHIPPED'
-                ? `Un-shipped: ${log.orderNumber ?? '—'}`
+                ? `Un-shipped: ${orderRef}`
                 : null
 
     const deltaText = (

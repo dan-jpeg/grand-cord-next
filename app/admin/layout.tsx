@@ -35,14 +35,14 @@ export default async function AdminLayout({
         }
 
         return (
-            <div data-app-zoom="off" className="min-h-[calc(100*var(--vh))] bg-white flex items-center justify-center">
+            <div data-app-zoom="off" className="admin-frame min-h-[calc(100*var(--vh))] bg-white flex items-center justify-center">
                 {children}
             </div>
         )
     }
 
     return (
-        <div data-app-zoom="off" className="relative min-h-[calc(100*var(--vh))] w-full bg-white">
+        <div data-app-zoom="off" className="admin-frame relative min-h-[calc(100*var(--vh))] w-full bg-white">
             {children}
         </div>
     )

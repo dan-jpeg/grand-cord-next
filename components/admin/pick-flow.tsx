@@ -365,7 +365,7 @@ export function PickFlow({ orders }: { orders: FlowOrder[] }) {
                                 </span>
                             </div>
                         )}
-                        <div className="flex flex-col bg-[#f3f3f3] w-full h-full md:max-w-screen-sm md:border md:border-black">
+                        <div className="flex flex-col bg-[#f3f3f3] w-full h-full md:max-w-screen-sm">
                             {orders.length === 0 ? (
                                 <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
                                     <span className="font-alte text-[36px] tracking-[-0.03em] leading-none opacity-20">Pick Session</span>

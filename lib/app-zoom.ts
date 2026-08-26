@@ -53,3 +53,32 @@ export function layoutViewport(): { width: number; height: number } {
     const z = getAppZoom()
     return { width: window.innerWidth / z, height: window.innerHeight / z }
 }
+
+/**
+ * Origin of the fixed-positioning containing block, in screen px.
+ *
+ * Normally `position: fixed` resolves against the viewport and this is (0,0).
+ * Under /admin it often isn't: the letterbox frame carries a transform (see the
+ * .admin-frame block in app/globals.css), and a transformed ancestor becomes the
+ * containing block for its fixed descendants — so a `fixed inset-0` overlay
+ * starts at the frame's top-left, not the screen's.
+ *
+ * This is a THIRD coordinate space on top of the screen/layout px split above.
+ * clientX/clientY and getBoundingClientRect() stay screen-relative regardless,
+ * so any absolute coordinate drawn into such an overlay has to have this
+ * subtracted first or it lands offset by the width of the letterbox gutters.
+ * Differences between two client rects are already offset-invariant and need
+ * nothing — this is only for coordinates used on their own.
+ *
+ * Keyed off the computed transform rather than a width breakpoint, so it
+ * returns (0,0) by itself whenever the frame is inactive and never has to
+ * restate the media query.
+ */
+export function fixedOrigin(): { x: number; y: number } {
+    if (typeof document === 'undefined') return { x: 0, y: 0 }
+    const frame = document.querySelector('.admin-frame')
+    if (!frame) return { x: 0, y: 0 }
+    if (getComputedStyle(frame).transform === 'none') return { x: 0, y: 0 }
+    const r = frame.getBoundingClientRect()
+    return { x: r.left, y: r.top }
+}
