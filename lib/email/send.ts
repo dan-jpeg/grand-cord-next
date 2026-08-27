@@ -19,15 +19,9 @@ export function isEmailConfigured(): boolean {
     return !!process.env.RESEND_API_KEY && !!process.env.EMAIL_FROM
 }
 
-/**
- * The public origin, for links inside emails. Unlike a page, an email cannot
- * use a relative URL, and it is read days later on a device that has never
- * touched the site.
- */
-export function siteUrl(): string {
-    const raw = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXTAUTH_URL ?? ''
-    return raw.replace(/\/+$/, '')
-}
+// Re-exported so the email templates keep one import, but the resolution lives
+// in lib/site-url.ts and is shared with checkout.
+export { siteUrl } from '@/lib/site-url'
 
 type ResendResponse = { id: string }
 
