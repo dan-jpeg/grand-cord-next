@@ -339,7 +339,42 @@ export async function deleteProduct(id: string) {
     // Get product to check for Stripe product ID
     const product = await prisma.product.findUnique({
         where: { id },
+        include: { sizes: true },
     })
+    if (!product) throw new Error('Product not found')
+
+    // commitInventoryChanges refuses to remove a single size that still holds
+    // stock, but that guard sat one level too low: sizes cascade from the
+    // product, so deleting the parent took every one of them regardless.
+    const withStock = product.sizes.filter((s) => s.available > 0 || s.committed > 0)
+    if (withStock.length > 0) {
+        const detail = withStock
+            .map((s) => `${s.size} (${s.available} avail, ${s.committed} reserved)`)
+            .join(', ')
+        throw new Error(
+            `${product.name} still has inventory: ${detail}. Zero out its stock before deleting it.`,
+        )
+    }
+
+    // OrderItem stores productId as a plain string with no foreign key, so
+    // nothing at the database level stops this delete from orphaning the items
+    // of a live order. An orphaned item can never ship: applyOrderStockMove
+    // finds no size row and the transition throws every time.
+    const openOrders = await prisma.order.findMany({
+        where: {
+            status: { in: ['PENDING', 'PAID'] },
+            items: { some: { productId: id } },
+        },
+        select: { orderNumber: true },
+        take: 5,
+    })
+    if (openOrders.length > 0) {
+        throw new Error(
+            `${product.name} is on open orders (${openOrders
+                .map((o) => `#${o.orderNumber}`)
+                .join(', ')}). Ship or cancel them before deleting it.`,
+        )
+    }
 
     // Archive product in Stripe (can't delete products with prices)
     if (product?.stripeProductId) {
