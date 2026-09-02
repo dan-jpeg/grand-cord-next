@@ -128,10 +128,22 @@ export async function transitionOrderStatus(
     }
 
     await prisma.$transaction(async (tx) => {
-        await tx.order.update({
-            where: { id: orderId },
+        // Conditional on the status this call validated against, not just the
+        // id. The read above happens outside the transaction, so two admins
+        // marking the same order shipped both saw PAID, both passed the
+        // transition table, and both ran the stock move — one shipment, two
+        // decrements. Postgres settles it here instead: the second write
+        // matches no row.
+        const { count } = await tx.order.updateMany({
+            where: { id: orderId, status: previousStatus },
             data: { status, ...trackingData },
         })
+        if (count === 0) {
+            throw new Error(
+                'This order changed while you were working on it — someone else may have ' +
+                    'just updated it. Reload the page and check its status before trying again.',
+            )
+        }
 
         if (unShipping) {
             for (const item of order.items) {
