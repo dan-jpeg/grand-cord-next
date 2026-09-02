@@ -36,21 +36,40 @@ export function normalizeIdentifier(identifier: string) {
 /**
  * Pulls the client address out of the sign-in request.
  *
- * Behind a proxy the socket address is the proxy's, so `x-forwarded-for` is what
- * matters — first entry, since later ones are appended by intermediaries and can
- * be spoofed by the client. Returns null when there is nothing trustworthy,
- * which simply means the per-IP limit does not apply to that attempt.
+ * The leftmost `x-forwarded-for` entry is the one value in this header a client
+ * can choose for itself: send `X-Forwarded-For: 1.2.3.4` and the proxy appends
+ * the real address to the *right* of it. Reading the leftmost entry — which
+ * this did — let anyone evade the per-IP limit by rotating a made-up value on
+ * every request.
+ *
+ * So the platform's own headers come first: Vercel sets both of these from the
+ * connection itself and overwrites whatever the client sent. `x-forwarded-for`
+ * is a last resort, and only its rightmost entry, which is the address the
+ * nearest proxy actually observed.
+ *
+ * Returns null when there is nothing trustworthy — locally, for instance, where
+ * none of these are set. That disables the per-IP limit for the attempt rather
+ * than inventing a value to count against; the per-identifier limit still
+ * applies.
  */
 export function clientIpFrom(request: unknown): string | null {
     const headers = (request as { headers?: Headers } | undefined)?.headers
     if (!headers || typeof headers.get !== 'function') return null
 
+    const platform =
+        headers.get('x-vercel-forwarded-for')?.trim() || headers.get('x-real-ip')?.trim()
+    if (platform) return platform
+
     const forwarded = headers.get('x-forwarded-for')
     if (forwarded) {
-        const first = forwarded.split(',')[0]?.trim()
-        if (first) return first
+        const hops = forwarded
+            .split(',')
+            .map((hop) => hop.trim())
+            .filter(Boolean)
+        const nearest = hops[hops.length - 1]
+        if (nearest) return nearest
     }
-    return headers.get('x-real-ip')?.trim() || null
+    return null
 }
 
 export class LoginThrottledError extends Error {
