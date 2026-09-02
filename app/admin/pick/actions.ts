@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/require-admin'
 import { cancelOrder as cancelOrderCore } from '@/lib/orders/cancel-order'
-import { getRefundableCents } from '@/lib/orders/refunds'
+import { getRefundableCents, hasUsablePaymentIntent } from '@/lib/orders/refunds'
 import { stripe } from '@/lib/stripe'
 import { transitionOrderStatus } from '@/lib/orders/transition'
 import { getCheapestQuote, buyLabel, type ShippoQuote } from '@/lib/shippo'
@@ -88,7 +88,14 @@ export async function partialRefundItem(orderId: string, amountCents: number) {
         where: { id: orderId },
         select: { stripePaymentIntentId: true },
     })
-    if (!order?.stripePaymentIntentId || order.stripePaymentIntentId === 'pending') return
+    // Not just the 'pending' sentinel: between checkout and the completion
+    // webhook this column holds a checkout session id, and retrieving one of
+    // those as a payment intent throws a raw Stripe error at the admin.
+    if (!hasUsablePaymentIntent(order?.stripePaymentIntentId)) {
+        throw new Error(
+            'This order has no completed payment, so there is nothing to refund.',
+        )
+    }
 
     if (!Number.isInteger(amountCents) || amountCents <= 0) {
         throw new Error('Refund amount must be a positive whole number of cents.')
