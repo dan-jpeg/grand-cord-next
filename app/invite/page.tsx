@@ -34,7 +34,7 @@ const HERO = '/invite/test-hero.jpg'
 // Cream bands pinned to the top of the viewport.
 // Desktop has a 50px half-strength strip at the very top; mobile mirrors it
 // with a 20px white gap above its solid band.
-const DESKTOP_BAND_HEIGHT = 50
+const DESKTOP_BAND_HEIGHT = 42
 const HEADER_HEIGHT = 206 // desktop: space above the photo, fixed px
 const MOBILE_BAND_TOP = 20
 const MOBILE_BAND_HEIGHT = 300
@@ -42,7 +42,7 @@ const MOBILE_BAND_HEIGHT = 300
 function Desktop() {
     // Only the photo scales on desktop. The text, the top strip and the photo's
     // top edge stay at fixed pixel sizes so the text never shrinks or collides.
-    const t = type(10, px)
+    const t = type(8.5, px)
     const at = (left: number, top: number, width?: number) => box(left, top, width, undefined, px)
 
     return (
