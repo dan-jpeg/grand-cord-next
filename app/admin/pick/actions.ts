@@ -3,8 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/require-admin'
 import { cancelOrder as cancelOrderCore } from '@/lib/orders/cancel-order'
-import { getRefundableCents, hasUsablePaymentIntent } from '@/lib/orders/refunds'
-import { stripe } from '@/lib/stripe'
+import { getRefundableCents, hasUsablePaymentIntent, issueRefund } from '@/lib/orders/refunds'
 import { transitionOrderStatus } from '@/lib/orders/transition'
 import { getCheapestQuote, buyLabel, type ShippoQuote } from '@/lib/shippo'
 import { revalidatePath } from 'next/cache'
@@ -82,11 +81,11 @@ export async function purchaseShippoLabel(orderId: string, rateId: string): Prom
 }
 
 export async function partialRefundItem(orderId: string, amountCents: number) {
-    await requireAdmin()
+    const actor = await requireAdmin()
 
     const order = await prisma.order.findUnique({
         where: { id: orderId },
-        select: { stripePaymentIntentId: true },
+        select: { id: true, orderNumber: true, stripePaymentIntentId: true },
     })
     // Not just the 'pending' sentinel: between checkout and the completion
     // webhook this column holds a checkout session id, and retrieving one of
@@ -112,9 +111,12 @@ export async function partialRefundItem(orderId: string, amountCents: number) {
         )
     }
 
-    await stripe.refunds.create({
-        payment_intent: order.stripePaymentIntentId,
-        amount: amountCents,
+    await issueRefund({
+        paymentIntentId: order.stripePaymentIntentId,
+        amountCents,
+        kind: 'PARTIAL',
+        order,
+        actor,
     })
 }
 

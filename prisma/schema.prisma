@@ -125,7 +125,9 @@ model OrderItem {
   @@index([orderId])
 }
 
-/** Which customer-facing email a row records. */
+/**
+ * Which customer-facing email a row records.
+ */
 enum OrderEmailKind {
   ORDER_CONFIRMED
   ORDER_SHIPPED
@@ -133,16 +135,19 @@ enum OrderEmailKind {
 }
 
 enum OrderEmailStatus {
-  /** The slot is claimed and a send is in flight. */
+  /**
+   * The slot is claimed and a send is in flight.
+   */
   QUEUED
   SENT
-  /** The provider refused or was unreachable. Safe to resend by hand. */
+  /**
+   * The provider refused or was unreachable. Safe to resend by hand.
+   */
   FAILED
 }
 
 /**
  * One row per email we have decided to send a customer about an order.
- *
  * The unique constraint on (orderId, kind) is the whole point: it is claimed
  * *before* the provider is called, so a replayed Stripe webhook, a
  * double-clicked admin button, or an order reverted and re-shipped cannot mail
@@ -157,7 +162,9 @@ model OrderEmail {
   // which does the same.
   orderNumber       String
   kind              OrderEmailKind
-  /** The address as it stood when we sent, not as the order reads today. */
+  /**
+   * The address as it stood when we sent, not as the order reads today.
+   */
   to                String
   status            OrderEmailStatus @default(QUEUED)
   providerMessageId String?
@@ -198,6 +205,7 @@ model AdminUser {
   updatedAt DateTime @updatedAt
 
   inventoryChanges InventoryChangeLog[]
+  refunds          RefundLog[]
 
   @@index([email])
 }
@@ -248,13 +256,14 @@ model ProductSizeMeasurement {
 
 model SiteSettings {
   // Single-row table — `id` is fixed to "default".
-  id                              String   @id @default("default")
-  showSearchInNav                 Boolean  @default(true)
-  showSampleInNav                 Boolean  @default(true)
-  scrollToTopOnCatalogTapMobile   Boolean  @default(false)
-  scrollToTopOnCatalogTapDesktop  Boolean  @default(false)
-  welcomeMessage                  String?
-  updatedAt                       DateTime @updatedAt
+  id                             String   @id @default("default")
+  showSearchInNav                Boolean  @default(true)
+  showSampleInNav                Boolean  @default(true)
+  scrollToTopOnCatalogTapMobile  Boolean  @default(false)
+  scrollToTopOnCatalogTapDesktop Boolean  @default(false)
+  welcomeMessage                 String?
+  adminFrameColor                String?
+  updatedAt                      DateTime @updatedAt
 }
 
 model InventoryChangeLog {
@@ -302,5 +311,33 @@ model LoginAttempt {
 
   @@index([identifier, createdAt])
   @@index([ip, createdAt])
+  @@index([createdAt])
+}
+
+enum RefundKind {
+  FULL
+  PARTIAL
+}
+
+/// Every refund issued from the admin, attributed to the admin who issued it.
+/// `orderId` is not a foreign key so the record survives the order being deleted;
+/// `orderNumber` is kept alongside it for the same reason.
+model RefundLog {
+  id                    String     @id @default(cuid())
+  orderId               String?
+  orderNumber           String
+  amountCents           Int
+  kind                  RefundKind
+  stripeRefundId        String?
+  stripePaymentIntentId String?
+  adminUserId           String?
+  adminEmail            String
+  adminName             String?
+  createdAt             DateTime   @default(now())
+
+  adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([adminUserId])
   @@index([createdAt])
 }

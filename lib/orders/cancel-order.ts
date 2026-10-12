@@ -1,7 +1,6 @@
 import { prisma } from '@/lib/prisma'
-import { stripe } from '@/lib/stripe'
 import { applyOrderStockMove, type StockActor } from '@/lib/orders/stock'
-import { getRefundableCents, hasUsablePaymentIntent } from '@/lib/orders/refunds'
+import { getRefundableCents, hasUsablePaymentIntent, issueRefund } from '@/lib/orders/refunds'
 import { sendOrderCancelledEmail } from '@/lib/email/order-emails'
 
 /**
@@ -70,9 +69,12 @@ export async function cancelOrder(
                 refundSkippedReason = 'This payment has already been fully refunded.'
             } else {
                 // Deliberately before the status write — see the note above.
-                await stripe.refunds.create({
-                    payment_intent: order.stripePaymentIntentId,
-                    amount: refundable,
+                await issueRefund({
+                    paymentIntentId: order.stripePaymentIntentId,
+                    amountCents: refundable,
+                    kind: 'FULL',
+                    order,
+                    actor,
                 })
                 refundedCents = refundable
             }
