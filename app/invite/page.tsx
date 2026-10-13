@@ -29,7 +29,7 @@ const type = (size: number, unit: Unit = u): CSSProperties => ({ fontSize: unit(
 // Title row is Inter at 550 (between Medium and SemiBold); everything else is Inter Regular.
 const MEDIUM: CSSProperties = { fontWeight: 550 }
 
-const HERO = '/invite/test-hero.jpg'
+const HERO = '/invite/invite-hero.jpg'
 
 // Cream bands pinned to the top of the viewport.
 // Desktop has a 50px half-strength strip at the very top; mobile mirrors it
@@ -58,7 +58,7 @@ function Desktop() {
                 Friday Nov 20th<br />Saturday Nov 21st
             </p>
             <p className={styles.text} style={{ ...at(254, 118, 78), ...t, textAlign: 'right' }}>
-                5pm-9pm<br />11am-7pm
+                11am-9pm<br />11am-7pm
             </p>
             <p className={styles.text} style={{ ...at(344, 118), ...t }}>
                 /
