@@ -96,7 +96,7 @@ function Mobile() {
                 Friday Nov 20th<br />Saturday Nov 21st
             </p>
             <p className={styles.text} style={{ ...box(143.4, 111.4, 40), ...t, textAlign: 'right' }}>
-                5pm-9pm<br />11am-7pm
+                11am-9pm<br />11am-7pm
             </p>
             <p className={styles.text} style={{ ...box(194.6, 111.4), ...t }}>
                 /
