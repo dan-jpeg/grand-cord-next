@@ -4,11 +4,17 @@
  * Each layout is designed at a set artboard width. `--u` is one artboard pixel,
  * expressed in container-query units, so everything sized with `u(n)` scales
  * linearly with the viewport width. No JS, no layout shift on load.
+ *
+ * Container units need Safari 16+. On older Safari (iOS 15) a cqw value is
+ * invalid, which zeroes every position and collapses the photo and band, so
+ * --u starts in vw and switches to cqw only where cqw is supported. The stage
+ * is full width with no scrollbar, so the two agree.
  */
 
 .stage {
     container-type: inline-size;
     width: 100%;
+    height: 100vh; /* fallback: dvh needs Safari 15.4+ */
     height: 100dvh;
     background: #ffffff;
     color: #111111;
@@ -38,12 +44,22 @@
 }
 
 .desktop {
-    --u: calc(100cqw / 1440);
+    --u: calc(100vw / 1440);
 }
 
 .mobile {
-    --u: calc(100cqw / 393);
+    --u: calc(100vw / 393);
     display: none;
+}
+
+@supports (width: 1cqw) {
+    .desktop {
+        --u: calc(100cqw / 1440);
+    }
+
+    .mobile {
+        --u: calc(100cqw / 393);
+    }
 }
 
 @media (max-width: 767px) {
